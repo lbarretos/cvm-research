@@ -23,6 +23,13 @@ def main():
                 "observacao": r["observacao"] or None,
             })
 
+    # Deduplicate by CNPJ — POMO3/POMO4 and RAPT3/RAPT4 share a CNPJ;
+    # Postgres rejects two rows with the same conflict key in one batch.
+    seen: dict[str, dict] = {}
+    for row in rows:
+        seen[row["cnpj"]] = row
+    rows = list(seen.values())
+
     result = sb.table("companies").upsert(rows, on_conflict="cnpj").execute()
     print(f"Upserted {len(rows)} empresas")
 

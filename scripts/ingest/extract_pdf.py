@@ -11,6 +11,7 @@ Uso:
 import argparse
 import io
 import time
+from datetime import datetime, timezone
 import httpx
 import pdfplumber
 from utils import get_supabase, watchlist_cnpjs
@@ -31,7 +32,9 @@ def fetch_pdf_text(url: str) -> str | None:
     try:
         r = httpx.get(url, headers=HEADERS, timeout=60, follow_redirects=True)
         r.raise_for_status()
-        if "application/pdf" not in r.headers.get("content-type", ""):
+        ct = r.headers.get("content-type", "")
+        if "text/html" in ct:
+            # portal retornou página HTML em vez de PDF — link inválido
             return None
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]
@@ -72,7 +75,7 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200):
             sb.table("ipe_docs").update({
                 "texto_extraido": texto,
                 "chars_extraidos": len(texto),
-                "extraido_em": "NOW()",
+                "extraido_em": datetime.now(timezone.utc).isoformat(),
                 "extracao_falhou": False,
             }).eq("protocolo_entrega", doc["protocolo_entrega"]).execute()
             ok += 1

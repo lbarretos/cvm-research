@@ -56,7 +56,15 @@ def process(df: pd.DataFrame, cnpjs: set[str]) -> list[dict]:
         })
     return rows
 
+def _sanitize(rows: list[dict]) -> list[dict]:
+    def clean(val):
+        if isinstance(val, float) and val != val:
+            return None
+        return val
+    return [{k: clean(v) for k, v in row.items()} for row in rows]
+
 def upsert_batch(sb, rows: list[dict], batch=500):
+    rows = _sanitize(rows)
     for i in range(0, len(rows), batch):
         sb.table("ipe_docs").upsert(
             rows[i:i+batch],

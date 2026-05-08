@@ -23,12 +23,23 @@ def download() -> dict[str, pd.DataFrame]:
     return dfs
 
 def _int(v):
-    try: return int(float(str(v).replace(",", ".")))
+    try:
+        f = float(str(v).replace(",", "."))
+        return None if f != f else int(f)
     except: return None
 
 def _float(v):
-    try: return float(str(v).replace(",", "."))
+    try:
+        f = float(str(v).replace(",", "."))
+        return None if f != f else f
     except: return None
+
+def _sanitize(rows: list[dict]) -> list[dict]:
+    def clean(val):
+        if isinstance(val, float) and val != val:
+            return None
+        return val
+    return [{k: clean(v) for k, v in row.items()} for row in rows]
 
 def process_programas(df: pd.DataFrame, cnpjs: set) -> list[dict]:
     df = df[df["CNPJ_Companhia"].isin(cnpjs)].copy()
@@ -54,7 +65,7 @@ def main():
     dfs   = download()
 
     if "programas" in dfs:
-        rows = process_programas(dfs["programas"], cnpjs)
+        rows = _sanitize(process_programas(dfs["programas"], cnpjs))
         for i in range(0, len(rows), 500):
             sb.table("recompra_programas").upsert(
                 rows[i:i+500], on_conflict="id_programa"

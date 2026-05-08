@@ -2,7 +2,7 @@ name: Ingest Diário (Recompra)
 
 on:
   schedule:
-    - cron: '0 12 * * 1-5'  # dias úteis 12:00 UTC (09:00 BRT)
+    - cron: '0 11 * * 1-5'  # dias úteis 11:00 UTC (08:00 BRT)
   workflow_dispatch:
 
 jobs:

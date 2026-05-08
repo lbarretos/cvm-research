@@ -32,9 +32,9 @@ def fetch_pdf_text(url: str) -> str | None:
     try:
         r = httpx.get(url, headers=HEADERS, timeout=60, follow_redirects=True)
         r.raise_for_status()
-        ct = r.headers.get("content-type", "")
-        if "text/html" in ct:
-            # portal retornou página HTML em vez de PDF — link inválido
+        # Portal CVM envia Content-Type: text/html mesmo para PDFs —
+        # verificar pelos magic bytes em vez do header
+        if not r.content.startswith(b"%PDF"):
             return None
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]

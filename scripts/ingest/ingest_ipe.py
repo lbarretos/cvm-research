@@ -61,7 +61,6 @@ def upsert_batch(sb, rows: list[dict], batch=500):
         sb.table("ipe_docs").upsert(
             rows[i:i+batch],
             on_conflict="protocolo_entrega",
-            ignoreDuplicates=False,   # atualiza em reapresentações
         ).execute()
     print(f"  Upserted {len(rows)} docs")
 

@@ -114,14 +114,26 @@ def _date(v):
     except: return None
 
 def _int(v):
-    try: return int(float(str(v).replace(",", ".")))
+    try:
+        f = float(str(v).replace(",", "."))
+        return None if f != f else int(f)
     except: return None
 
 def _float(v):
-    try: return float(str(v).replace(",", "."))
+    try:
+        f = float(str(v).replace(",", "."))
+        return None if f != f else f
     except: return None
 
+def _sanitize(rows: list[dict]) -> list[dict]:
+    def clean(val):
+        if isinstance(val, float) and val != val:
+            return None
+        return val
+    return [{k: clean(v) for k, v in row.items()} for row in rows]
+
 def upsert(sb, table, rows, conflict, batch=500):
+    rows = _sanitize(rows)
     for i in range(0, len(rows), batch):
         sb.table(table).upsert(rows[i:i+batch], on_conflict=conflict).execute()
     print(f"  {table}: {len(rows)} rows")

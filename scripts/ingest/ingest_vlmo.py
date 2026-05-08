@@ -72,14 +72,27 @@ def process_movimentacoes(df: pd.DataFrame, cnpjs: set) -> list[dict]:
     return rows
 
 def _int(v):
-    try: return int(float(str(v).replace(",", ".")))
+    try:
+        f = float(str(v).replace(",", "."))
+        return None if f != f else int(f)  # f != f is True only for NaN
     except: return None
 
 def _float(v):
-    try: return float(str(v).replace(",", "."))
+    try:
+        f = float(str(v).replace(",", "."))
+        return None if f != f else f
     except: return None
 
+def _sanitize(rows: list[dict]) -> list[dict]:
+    """Replace any remaining float NaN with None (not valid JSON)."""
+    def clean(val):
+        if isinstance(val, float) and val != val:
+            return None
+        return val
+    return [{k: clean(v) for k, v in row.items()} for row in rows]
+
 def upsert_batch(sb, table, rows, batch=500):
+    rows = _sanitize(rows)
     for i in range(0, len(rows), batch):
         sb.table(table).upsert(rows[i:i+batch]).execute()
     print(f"  {table}: {len(rows)} rows")

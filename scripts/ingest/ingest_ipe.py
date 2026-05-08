@@ -65,6 +65,15 @@ def _sanitize(rows: list[dict]) -> list[dict]:
 
 def upsert_batch(sb, rows: list[dict], batch=500):
     rows = _sanitize(rows)
+    # drop rows without a protocolo (NOT NULL PK) and deduplicate
+    seen: dict = {}
+    for row in rows:
+        if row.get("protocolo_entrega"):
+            seen[row["protocolo_entrega"]] = row
+    rows = list(seen.values())
+    if not rows:
+        print("  0 docs (todos sem protocolo)")
+        return
     for i in range(0, len(rows), batch):
         sb.table("ipe_docs").upsert(
             rows[i:i+batch],

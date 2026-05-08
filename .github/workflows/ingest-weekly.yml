@@ -2,7 +2,7 @@ name: Ingest Semanal (IPE + VLMO)
 
 on:
   schedule:
-    - cron: '0 11 * * 1'  # segunda 11:00 UTC (08:00 BRT)
+    - cron: '30 11 * * 1'  # segunda 11:30 UTC (08:30 BRT)
   workflow_dispatch:        # permite rodar manualmente
 
 jobs:

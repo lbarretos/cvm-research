@@ -1,0 +1,30 @@
+name: Ingest Diário (Recompra)
+
+on:
+  schedule:
+    - cron: '0 12 * * 1-5'  # dias úteis 12:00 UTC (09:00 BRT)
+  workflow_dispatch:
+
+jobs:
+  ingest-recompra:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/ingest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r ../../requirements.txt
+
+      - name: Ingest recompra
+        run: python ingest_recompra.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

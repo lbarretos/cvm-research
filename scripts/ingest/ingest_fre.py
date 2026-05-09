@@ -32,7 +32,7 @@ def download_year(year: int) -> dict[str, pd.DataFrame]:
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         for suffix in TABELAS:
             fname = f"fre_cia_aberta_{suffix}_{year}.csv"
-            if fname in z.namelist():
+            if fname in z.namelist() and ".." not in fname and not fname.startswith("/"):
                 with z.open(fname) as f:
                     dfs[suffix] = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
     return dfs
@@ -73,7 +73,6 @@ def process_posicao_acionaria(df: pd.DataFrame, cnpjs: set) -> list[dict]:
             "id_acionista":                               _int(r.get("ID_Acionista")),
             "acionista":                                  r.get("Acionista"),
             "tipo_pessoa_acionista":                      r.get("Tipo_Pessoa_Acionista"),
-            "cpf_cnpj_acionista":                         r.get("CPF_CNPJ_Acionista"),
             "quantidade_acao_ordinaria_circulacao":       _int(r.get("Quantidade_Acao_Ordinaria_Circulacao")),
             "percentual_acao_ordinaria_circulacao":       _float(r.get("Percentual_Acao_Ordinaria_Circulacao")),
             "quantidade_acao_preferencial_circulacao":    _int(r.get("Quantidade_Acao_Preferencial_Circulacao")),

@@ -32,6 +32,14 @@ def fetch_pdf_text(url: str) -> str | None:
     try:
         r = httpx.get(url, headers=HEADERS, timeout=60, follow_redirects=True)
         r.raise_for_status()
+        final_host = str(r.url.host)
+        if not (final_host.endswith(".cvm.gov.br") or final_host == "cvm.gov.br"):
+            print(f"    SKIP: redirect para domínio não-CVM: {final_host}")
+            return None
+        content_length = int(r.headers.get("content-length", 0))
+        if content_length > 50 * 1024 * 1024:
+            print(f"    SKIP: PDF muito grande ({content_length // 1024 // 1024}MB)")
+            return None
         # Portal CVM envia Content-Type: text/html mesmo para PDFs —
         # verificar pelos magic bytes em vez do header
         if not r.content.startswith(b"%PDF"):

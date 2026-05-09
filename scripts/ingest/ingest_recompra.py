@@ -15,11 +15,12 @@ def download() -> dict[str, pd.DataFrame]:
     dfs = {}
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         for name in z.namelist():
-            if name.endswith(".csv"):
-                key = "quantidades" if "quantidades" in name else \
-                      "intermediarios" if "intermediarios" in name else "programas"
-                with z.open(name) as f:
-                    dfs[key] = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
+            if not name.endswith(".csv") or ".." in name or name.startswith("/"):
+                continue
+            key = "quantidades" if "quantidades" in name else \
+                  "intermediarios" if "intermediarios" in name else "programas"
+            with z.open(name) as f:
+                dfs[key] = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
     return dfs
 
 def _int(v):

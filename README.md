@@ -22,9 +22,11 @@ supabase/migrations/002_ipe.sql
 supabase/migrations/003_vlmo.sql
 supabase/migrations/004_recompra.sql
 supabase/migrations/005_fre.sql
+supabase/migrations/006_rls.sql
+supabase/migrations/007_drop_cpf_acionista.sql
 ```
 
-3. Copie a **Project URL** e a **service_role key** (Settings → API)
+3. Copie a **Project URL**, a **service_role key** e a **anon key** (Settings → API)
 
 ### 2. Variáveis de ambiente
 
@@ -40,7 +42,7 @@ No repositório: **Settings → Secrets → Actions → New repository secret**
 | Secret | Valor |
 |--------|-------|
 | `SUPABASE_URL` | URL do projeto Supabase |
-| `SUPABASE_KEY` | service_role key |
+| `SUPABASE_KEY` | **service_role key** (necessária para o CI escrever no banco) |
 
 ### 4. Primeira carga (manual)
 
@@ -95,12 +97,14 @@ Configure o Supabase MCP no Claude Code (`~/.claude/settings.json`):
       "args": [
         "-y", "@supabase/mcp-server-supabase@latest",
         "--supabase-url", "https://SEU-PROJETO.supabase.co",
-        "--supabase-key", "SUA-SERVICE-ROLE-KEY"
+        "--supabase-key", "SUA-ANON-KEY"
       ]
     }
   }
 }
 ```
+
+> **Importante:** use a **anon key** (não a service_role key) no MCP do Claude. Com o RLS configurado (migration 006), a anon key tem permissão somente de SELECT — leitura segura sem risco de escrita acidental.
 
 Com o MCP ativo, abra Claude Code neste diretório. O `CLAUDE.md` já documenta o schema e os padrões de query — Claude saberá como pesquisar sem instruções adicionais.
 

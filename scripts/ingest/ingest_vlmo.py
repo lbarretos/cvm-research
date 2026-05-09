@@ -16,7 +16,7 @@ def download_year(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     posicao = movimentacoes = None
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         for name in z.namelist():
-            if not name.endswith(".csv"):
+            if not name.endswith(".csv") or ".." in name or name.startswith("/"):
                 continue
             with z.open(name) as f:
                 df = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)

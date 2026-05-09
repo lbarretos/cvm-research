@@ -1,5 +1,6 @@
 import csv
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -30,4 +31,11 @@ def get_supabase():
     from supabase import create_client
     url = os.environ["SUPABASE_URL"]
     key = os.environ["SUPABASE_KEY"]
-    return create_client(url, key)
+    client = create_client(url, key)
+    try:
+        client.table("companies").select("cnpj").limit(1).execute()
+    except Exception as e:
+        if "401" in str(e) or "403" in str(e) or "Unauthorized" in str(e):
+            print(f"ERRO DE AUTENTICAÇÃO: chave Supabase inválida — {e}", file=sys.stderr)
+            sys.exit(1)
+    return client

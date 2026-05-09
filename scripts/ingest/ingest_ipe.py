@@ -26,7 +26,10 @@ def download_year(year: int) -> pd.DataFrame:
     r = httpx.get(url, timeout=120, follow_redirects=True)
     r.raise_for_status()
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
-        csv_name = next(n for n in z.namelist() if n.endswith(".csv"))
+        csv_name = next(
+            n for n in z.namelist()
+            if n.endswith(".csv") and ".." not in n and not n.startswith("/")
+        )
         with z.open(csv_name) as f:
             df = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
     return df

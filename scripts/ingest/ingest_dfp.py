@@ -41,8 +41,13 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
     Nota: DFP não tem DT_INI_EXERC — armazenado como NULL.
     """
     df = df[df["CNPJ_CIA"].isin(cnpjs)]
-    # CVM publica linhas duplicadas em alguns anos/tipos — deduplicar pela chave UNIQUE
-    df = df.drop_duplicates(subset=["CNPJ_CIA", "DT_REFER", "VERSAO", "CD_CONTA", "ORDEM_EXERC"])
+    # CVM publica linhas genuinamente repetidas (mesmo valor) em alguns anos/tipos.
+    # Deduplicamos apenas linhas 100% idênticas (chave + VL_CONTA).
+    # Se a chave se repetir com VL_CONTA diferente, mantemos ambas → o upsert do
+    # Postgres vai falhar com 21000, sinalizando um conflito real que precisa de
+    # investigação em vez de ser silenciado.
+    KEY_COLS = ["CNPJ_CIA", "DT_REFER", "VERSAO", "CD_CONTA", "ORDEM_EXERC"]
+    df = df.drop_duplicates(subset=KEY_COLS + ["VL_CONTA"])
     rows = []
     for _, r in df.iterrows():
         escala = r.get("ESCALA_MOEDA", "")

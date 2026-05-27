@@ -23,6 +23,9 @@ TIPOS = ["BPA", "BPP", "DRE", "DFC_MI", "DVA"]
 SCALE = {"MIL": 1000, "UNIDADE": 1}
 CONFLICT = "cnpj_companhia,fonte,tipo_doc,data_referencia,versao,cd_conta,ordem_exercicio"
 
+# CVM grava ORDEM_EXERC em caixa alta; normaliza para o valor do CHECK constraint
+ORDEM_MAP = {"ÚLTIMO": "Último", "PENÚLTIMO": "Penúltimo"}
+
 
 def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
     """
@@ -31,17 +34,18 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
     Fluxo:
       CSV (dtype=str) → filtrar watchlist → normalizar escala → list[dict]
 
-    Campos CVM mapeados:
-      CNPJ_Companhia, DT_REFER, VERSAO, ORDEM_EXERC,
-      DT_INI_EXERC, DT_FIM_EXERC, CD_CONTA, DS_CONTA,
+    Campos CVM mapeados (nomes reais no CSV):
+      CNPJ_CIA, DT_REFER, VERSAO, ORDEM_EXERC,
+      DT_FIM_EXERC, CD_CONTA, DS_CONTA,
       VL_CONTA, ESCALA_MOEDA
+    Nota: DFP não tem DT_INI_EXERC — armazenado como NULL.
     """
-    df = df[df["CNPJ_Companhia"].isin(cnpjs)]
+    df = df[df["CNPJ_CIA"].isin(cnpjs)]
     rows = []
     for _, r in df.iterrows():
         escala = r.get("ESCALA_MOEDA", "")
         if escala not in SCALE:
-            raise ValueError(f"Escala desconhecida: {escala!r} — CNPJ {r.get('CNPJ_Companhia')} tipo {tipo_doc}")
+            raise ValueError(f"Escala desconhecida: {escala!r} — CNPJ {r.get('CNPJ_CIA')} tipo {tipo_doc}")
 
         # VL_CONTA pode ser string vazia em contas estruturais (pai) → None, não crash
         vl_raw = _float(r.get("VL_CONTA"))
@@ -50,14 +54,16 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
         versao_raw = _int(r.get("VERSAO"))
         versao = versao_raw if versao_raw is not None else 1
 
+        ordem_raw = (r.get("ORDEM_EXERC") or "").strip().upper()
+
         rows.append({
-            "cnpj_companhia":  r.get("CNPJ_Companhia"),
+            "cnpj_companhia":  r.get("CNPJ_CIA"),
             "fonte":           FONTE,
             "tipo_doc":        tipo_doc,
             "data_referencia": _date(r.get("DT_REFER")),
             "versao":          versao,
-            "ordem_exercicio": r.get("ORDEM_EXERC"),
-            "dt_ini_exerc":    _date(r.get("DT_INI_EXERC")),
+            "ordem_exercicio": ORDEM_MAP.get(ordem_raw, ordem_raw),
+            "dt_ini_exerc":    None,  # DFP não publica DT_INI_EXERC
             "dt_fim_exerc":    _date(r.get("DT_FIM_EXERC")),
             "cd_conta":        r.get("CD_CONTA"),
             "ds_conta":        r.get("DS_CONTA"),

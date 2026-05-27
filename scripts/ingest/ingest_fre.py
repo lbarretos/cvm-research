@@ -12,7 +12,7 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs
+from utils import get_supabase, watchlist_cnpjs, _date, _int, _float, _sanitize, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/FRE/DADOS"
 
@@ -105,37 +105,8 @@ def process_remuneracao(df: pd.DataFrame, cnpjs: set) -> list[dict]:
         })
     return rows
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-def _date(v):
-    if not v or str(v).strip() in ("", "nan"): return None
-    try: return pd.to_datetime(str(v)).date().isoformat()
-    except: return None
-
-def _int(v):
-    try:
-        f = float(str(v).replace(",", "."))
-        return None if f != f else int(f)
-    except: return None
-
-def _float(v):
-    try:
-        f = float(str(v).replace(",", "."))
-        return None if f != f else f
-    except: return None
-
-def _sanitize(rows: list[dict]) -> list[dict]:
-    def clean(val):
-        if isinstance(val, float) and val != val:
-            return None
-        return val
-    return [{k: clean(v) for k, v in row.items()} for row in rows]
-
-def upsert(sb, table, rows, conflict, batch=500):
-    rows = _sanitize(rows)
-    for i in range(0, len(rows), batch):
-        sb.table(table).upsert(rows[i:i+batch], on_conflict=conflict).execute()
-    print(f"  {table}: {len(rows)} rows")
+# ── helpers e upsert ─────────────────────────────────────────────────────────
+# _date, _int, _float, _sanitize, upsert importados de utils.py
 
 # ── main ─────────────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-name: Ingest Semanal (IPE + VLMO)
+name: Ingest Semanal (IPE + VLMO + DFP + ITR)
 
 on:
   schedule:
@@ -23,6 +23,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r ../../requirements.txt
 
+      - name: Run tests
+        run: python -m pytest ../../tests/ -v
+
       - name: Ingest companies (watchlist)
         run: python ingest_companies.py
         env:
@@ -43,6 +46,18 @@ jobs:
 
       - name: Ingest FRE
         run: python ingest_fre.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+      - name: Ingest DFP (demonstrativos anuais)
+        run: python ingest_dfp.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+      - name: Ingest ITR (demonstrativos trimestrais)
+        run: python ingest_itr.py
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

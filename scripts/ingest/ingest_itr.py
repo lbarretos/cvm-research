@@ -79,7 +79,7 @@ def main():
     sb    = get_supabase()
     cnpjs = watchlist_cnpjs()
 
-    for ano in range(2021, date.today().year + 1):
+    for ano in [date.today().year]:
         print(f"\n── ITR {ano} ──")
         try:
             dfs = download_year(ano, FONTE, TIPOS)

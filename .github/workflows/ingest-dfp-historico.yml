@@ -1,0 +1,33 @@
+name: DFP Histórico (revisão manual)
+
+# Disparar manualmente quando quiser reprocessar toda a série histórica de DFP (2021→hoje).
+# Use caso: reapresentações tardias, adição de empresas à watchlist, investigação de dados.
+on:
+  workflow_dispatch:
+
+jobs:
+  ingest-historico:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/ingest
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r ../../requirements.txt
+
+      - name: Run tests
+        run: python -m pytest ../../tests/ -v
+
+      - name: Ingest DFP histórico (2021 → hoje)
+        run: python ingest_dfp.py --historico
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}

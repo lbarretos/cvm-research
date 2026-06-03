@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import sys
+import time
 import zipfile
 from pathlib import Path
 from dotenv import load_dotenv
@@ -53,13 +54,20 @@ def get_supabase():
 # Extraídos de ingest_fre.py — compartilhados por todos os ingestores.
 
 def _date(v):
-    """Converte string de data para ISO 8601 ou None se ausente/inválida."""
+    """Converte string de data para ISO 8601 ou None se ausente/inválida.
+
+    Tenta ISO 8601 (YYYY-MM-DD) primeiro, depois DD/MM/YYYY (padrão CVM).
+    Evita a heurística ambígua do pandas para datas como 03/06/2026.
+    """
     if not v or str(v).strip() in ("", "nan"):
         return None
-    try:
-        return pd.to_datetime(str(v)).date().isoformat()
-    except Exception:
-        return None
+    s = str(v).strip()
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return pd.to_datetime(s, format=fmt).date().isoformat()
+        except Exception:
+            continue
+    return None
 
 def _int(v):
     """Converte string para int ou None se ausente/inválida."""
@@ -94,6 +102,28 @@ def upsert(sb, table: str, rows: list[dict], conflict: str, batch: int = 500) ->
         sb.table(table).upsert(rows[i:i + batch], on_conflict=conflict).execute()
     print(f"  {table}: {len(rows)} rows")
 
+# ── HTTP com retry ────────────────────────────────────────────────────────────
+
+def _http_get(url: str, timeout: int = 120, retries: int = 3) -> httpx.Response:
+    """GET com retry exponencial para erros de rede transitórios.
+
+    Apenas ConnectError e TimeoutException disparam retry — erros HTTP (4xx/5xx)
+    propagam imediatamente, pois retry não resolve problema de dados ou autenticação.
+    """
+    for attempt in range(retries):
+        try:
+            r = httpx.get(url, timeout=timeout, follow_redirects=True)
+            r.raise_for_status()
+            return r
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            if attempt == retries - 1:
+                raise
+            wait = 2 ** attempt  # 1s, 2s, 4s, ...
+            print(f"  Tentativa {attempt + 1}/{retries} falhou ({exc}). Aguardando {wait}s...")
+            time.sleep(wait)
+    raise RuntimeError("unreachable")  # satisfaz type checker
+
+
 # ── Download ZIP CVM (DFP / ITR) ─────────────────────────────────────────────
 
 def download_year(year: int, fonte: str, tipos: list[str]) -> dict[str, pd.DataFrame]:
@@ -119,8 +149,7 @@ def download_year(year: int, fonte: str, tipos: list[str]) -> dict[str, pd.DataF
         f"{source}_cia_aberta_{year}.zip"
     )
     print(f"Baixando {url}...")
-    r = httpx.get(url, timeout=300, follow_redirects=True)
-    r.raise_for_status()
+    r = _http_get(url, timeout=300)
 
     dfs: dict[str, pd.DataFrame] = {}
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:

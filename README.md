@@ -2,9 +2,9 @@
 
 Base de dados de documentos e eventos de empresas abertas brasileiras, organizada para pesquisa via Claude.
 
-**Fontes:** IPE · VLMO · Recompra de Ações · FRE  
-**Cobertura:** 55 empresas da watchlist (B3)  
-**Atualização:** semanal (IPE/VLMO/FRE) e diária (Recompra)  
+**Fontes:** IPE · VLMO · Recompra de Ações · FRE · DFP/ITR (demonstrativos contábeis)  
+**Cobertura:** 56 empresas da watchlist (B3)  
+**Atualização:** semanal (IPE/VLMO/FRE/DFP/ITR) e diária (Recompra)  
 **Storage:** Supabase PostgreSQL (free tier ~370MB estimado)
 
 ---
@@ -24,6 +24,7 @@ supabase/migrations/004_recompra.sql
 supabase/migrations/005_fre.sql
 supabase/migrations/006_rls.sql
 supabase/migrations/007_drop_cpf_acionista.sql
+supabase/migrations/008_demonstrativos.sql
 ```
 
 3. Copie a **Project URL**, a **service_role key** e a **anon key** (Settings → API)

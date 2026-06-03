@@ -12,7 +12,7 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _date, _int, _float, _sanitize, upsert
+from utils import get_supabase, watchlist_cnpjs, _date, _http_get, _int, _float, _sanitize, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/FRE/DADOS"
 
@@ -26,8 +26,7 @@ TABELAS = {
 def download_year(year: int) -> dict[str, pd.DataFrame]:
     url = f"{BASE_URL}/fre_cia_aberta_{year}.zip"
     print(f"Baixando {url}...")
-    r = httpx.get(url, timeout=180, follow_redirects=True)
-    r.raise_for_status()
+    r = _http_get(url, timeout=180)
     dfs = {}
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         for suffix in TABELAS:

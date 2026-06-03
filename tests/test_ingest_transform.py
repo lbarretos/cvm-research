@@ -10,7 +10,7 @@ Cobre:
 import math
 import sys
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import httpx
 import pytest
@@ -18,7 +18,7 @@ import pytest
 # Adiciona scripts/ingest ao path para importar utils sem instalar o pacote
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 
-from utils import _date, _float, _http_get, _int, _sanitize
+from utils import _date, _float, _http_get, _int, _sanitize, _upsert_pg, upsert, get_supabase
 
 # Constante local que replica a lógica dos ingestores DFP/ITR
 SCALE = {"MIL": 1000, "UNIDADE": 1}
@@ -192,3 +192,202 @@ def test_http_get_erro_http_nao_retryta(mock_get, mock_sleep):
 
     mock_get.assert_called_once()  # sem retry para erros HTTP
     mock_sleep.assert_not_called()
+
+
+# ── _upsert_pg / upsert dispatch ─────────────────────────────────────────────
+# Usa MagicMock para simular conexão psycopg2 sem banco real.
+# psycopg2.extras.execute_values é patchado para evitar import real do driver.
+
+def _make_pg_conn():
+    """Cria um mock de conexão psycopg2 com context-manager cursor."""
+    conn = MagicMock()
+    cur = MagicMock()
+    # conn.cursor() retorna um context manager que devolve cur
+    conn.cursor.return_value.__enter__ = MagicMock(return_value=cur)
+    conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+    return conn, cur
+
+
+@patch("psycopg2.extras.execute_values")
+def test_upsert_pg_lista_vazia_retorna_sem_usar_cursor(mock_ev):
+    """Rows vazio → early return; cursor e execute_values nunca são chamados."""
+    conn, cur = _make_pg_conn()
+    _upsert_pg(conn, "companies", [], "cnpj", batch=500)
+    conn.cursor.assert_not_called()
+    mock_ev.assert_not_called()
+    conn.commit.assert_not_called()
+
+
+@patch("psycopg2.extras.execute_values")
+def test_upsert_pg_conflict_coluna_unica(mock_ev):
+    """Coluna de conflito simples → ON CONFLICT (cnpj) sem NULLS NOT DISTINCT."""
+    conn, cur = _make_pg_conn()
+    rows = [{"cnpj": "00.000.000/0001-00", "ticker": "TEST3"}]
+
+    _upsert_pg(conn, "companies", rows, "cnpj", batch=500)
+
+    assert mock_ev.call_count == 1
+    sql_used = mock_ev.call_args[0][1]
+    assert "ON CONFLICT (cnpj)" in sql_used
+    assert "NULLS NOT DISTINCT" not in sql_used
+    conn.commit.assert_called_once()
+
+
+@patch("psycopg2.extras.execute_values")
+def test_upsert_pg_conflict_multiplas_colunas(mock_ev):
+    """Conflito multi-coluna (csv) → ON CONFLICT (col1,col2) sem NULLS NOT DISTINCT."""
+    conn, cur = _make_pg_conn()
+    rows = [{"cnpj_companhia": "00.000.000/0001-00", "data_referencia": "2024-01-01", "versao": 1}]
+
+    _upsert_pg(conn, "ipe_docs", rows, "cnpj_companhia,data_referencia", batch=500)
+
+    sql_used = mock_ev.call_args[0][1]
+    assert "ON CONFLICT (cnpj_companhia,data_referencia)" in sql_used
+    assert "NULLS NOT DISTINCT" not in sql_used
+    conn.commit.assert_called_once()
+
+
+@patch("psycopg2.extras.execute_values")
+def test_upsert_pg_named_index_vlmo_mov_uniq(mock_ev):
+    """Índice nomeado 'vlmo_mov_uniq' é resolvido para lista de colunas + NULLS NOT DISTINCT."""
+    conn, cur = _make_pg_conn()
+    rows = [{
+        "cnpj_companhia": "00.000.000/0001-00",
+        "data_referencia": "2024-01-01",
+        "versao": 1,
+        "empresa": "Test",
+        "tipo_cargo": "Diretor",
+        "tipo_movimentacao": "Compra",
+        "tipo_ativo": "Ação",
+        "caracteristica": "ON",
+        "data_movimentacao": "2024-01-05",
+        "quantidade": 100,
+    }]
+
+    _upsert_pg(conn, "vlmo_movimentacoes", rows, "vlmo_mov_uniq", batch=500)
+
+    sql_used = mock_ev.call_args[0][1]
+    # Deve expandir para lista de colunas do índice, não o nome literal
+    assert "vlmo_mov_uniq" not in sql_used
+    assert "ON CONFLICT (cnpj_companhia,data_referencia,versao,empresa," in sql_used
+    # NULLS NOT DISTINCT é da definição do índice (migration), não da cláusula ON CONFLICT
+    assert "NULLS NOT DISTINCT" not in sql_used
+    conn.commit.assert_called_once()
+
+
+@patch("psycopg2.extras.execute_values")
+def test_upsert_pg_batching_multiplos_lotes(mock_ev):
+    """Rows > batch → execute_values chamado uma vez por lote."""
+    conn, cur = _make_pg_conn()
+    rows = [{"cnpj": f"cnpj_{i}", "ticker": f"T{i}"} for i in range(7)]
+
+    _upsert_pg(conn, "companies", rows, "cnpj", batch=3)
+
+    # 7 rows / batch=3 → 3 lotes (3 + 3 + 1)
+    assert mock_ev.call_count == 3
+    conn.commit.assert_called_once()
+
+
+@patch("psycopg2.extras.execute_values")
+def test_upsert_pg_exclui_id_e_created_at_do_update_set(mock_ev):
+    """Colunas 'id' e 'created_at' não devem aparecer no DO UPDATE SET."""
+    conn, cur = _make_pg_conn()
+    rows = [{"id": 1, "created_at": "2024-01-01", "cnpj": "00.000.000/0001-00", "ticker": "X3"}]
+
+    _upsert_pg(conn, "companies", rows, "cnpj", batch=500)
+
+    sql_used = mock_ev.call_args[0][1]
+    update_part = sql_used.split("DO UPDATE SET")[1]
+    assert "id=EXCLUDED.id" not in update_part
+    assert "created_at=EXCLUDED.created_at" not in update_part
+    assert "ticker=EXCLUDED.ticker" in update_part
+
+
+def test_upsert_despacha_para_pg_quando_sb_tem_cursor():
+    """upsert() usa _upsert_pg quando o objeto 'sb' tem atributo cursor (psycopg2)."""
+    conn = MagicMock(spec=["cursor", "commit"])  # spec garante hasattr(sb, 'cursor') == True
+
+    with patch("utils._upsert_pg") as mock_pg:
+        sb_mock = MagicMock(spec=["table"])  # sem cursor — garante que o ramo Supabase NÃO foi chamado
+        upsert(conn, "companies", [{"cnpj": "x"}], conflict="cnpj", batch=500)
+        mock_pg.assert_called_once()
+        args = mock_pg.call_args[0]
+        assert args[0] is conn
+        assert args[1] == "companies"
+        assert args[3] == "cnpj"
+        sb_mock.table.assert_not_called()  # ramo Supabase não deve ter sido acionado
+
+
+def test_upsert_despacha_para_supabase_quando_sb_sem_cursor():
+    """upsert() usa sb.table().upsert() quando 'sb' não tem cursor (supabase-py)."""
+    # Usamos spec para forçar ausência do atributo 'cursor'
+    sb = MagicMock(spec=["table"])  # sem 'cursor' no spec
+
+    with patch("utils._upsert_pg") as mock_pg:
+        upsert(sb, "companies", [{"cnpj": "x"}], conflict="cnpj", batch=500)
+        mock_pg.assert_not_called()  # ramo psycopg2 não deve ter sido acionado
+
+    sb.table.assert_called_once_with("companies")
+    sb.table.return_value.upsert.assert_called_once()
+    call_kwargs = sb.table.return_value.upsert.call_args
+    assert call_kwargs[1]["on_conflict"] == "cnpj"
+
+
+@patch("psycopg2.extras.execute_values")
+def test_upsert_sanitiza_nan_antes_de_chamar_upsert_pg(mock_ev):
+    """upsert() aplica _sanitize (NaN→None) antes de despachar para _upsert_pg."""
+    import math
+    conn, cur = _make_pg_conn()
+    rows = [{"cnpj": "00.000.000/0001-00", "valor": math.nan}]
+
+    upsert(conn, "companies", rows, "cnpj", batch=500)
+
+    captured_rows = mock_ev.call_args[0][2]  # terceiro arg de execute_values = list of tuples
+    # valor deve ser None, não NaN
+    for row_tuple in captured_rows:
+        assert all(v is None or v == v for v in row_tuple), "NaN sobreviveu ao _sanitize"
+
+
+@patch("psycopg2.connect")
+def test_get_supabase_usa_psycopg2_quando_database_url_definido(mock_connect):
+    """get_supabase() retorna conexão psycopg2 quando DATABASE_URL está definido."""
+    fake_conn = MagicMock()
+    mock_connect.return_value = fake_conn
+
+    with patch.dict(os.environ, {"DATABASE_URL": "postgresql://localhost/test"}, clear=False):
+        result = get_supabase()
+
+    mock_connect.assert_called_once_with("postgresql://localhost/test")
+    assert result is fake_conn
+
+
+def test_get_supabase_usa_supabase_quando_database_url_ausente():
+    """get_supabase() usa supabase-py quando DATABASE_URL não está definido."""
+    import sys
+    import types
+
+    fake_client = MagicMock()
+    fake_client.table.return_value.select.return_value.limit.return_value.execute.return_value = None
+    mock_create = MagicMock(return_value=fake_client)
+
+    # Injeta módulo supabase falso para não depender do pacote real estar instalado
+    fake_supabase_mod = types.ModuleType("supabase")
+    fake_supabase_mod.create_client = mock_create
+
+    env_sem_db_url = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
+    env_sem_db_url["SUPABASE_URL"] = "https://fake.supabase.co"
+    env_sem_db_url["SUPABASE_KEY"] = "fake-key"
+
+    original_mod = sys.modules.get("supabase")
+    sys.modules["supabase"] = fake_supabase_mod
+    try:
+        with patch.dict(os.environ, env_sem_db_url, clear=True):
+            result = get_supabase()
+    finally:
+        if original_mod is None:
+            sys.modules.pop("supabase", None)
+        else:
+            sys.modules["supabase"] = original_mod
+
+    mock_create.assert_called_once_with("https://fake.supabase.co", "fake-key")
+    assert result is fake_client

@@ -1,7 +1,8 @@
-# CVM Research Database
+# CVM Research — Base Local
 
-Base de dados de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Cobertura: 56 empresas da watchlist, fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
+Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
+Banco: PostgreSQL 16 local · 56 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
+Atualização: manual via scripts de ingestão (ver seção "Conexão e atualização manual").
 
 ## Como identificar uma empresa
 
@@ -243,6 +244,33 @@ ORDER BY relevancia DESC;
 ```sql
 SELECT pg_size_pretty(pg_database_size(current_database())) AS tamanho_db;
 ```
+
+## Conexão e atualização manual
+
+**Banco:** PostgreSQL 16 local, MCP `postgres-local` conectado via `claude mcp add`.
+
+**Atualização manual** (rodar periodicamente para manter a base em dia):
+```bash
+cd scripts/ingest
+source ../../.venv/bin/activate
+
+python ingest_ipe.py        # metadados de documentos
+python ingest_vlmo.py       # insider trading
+python ingest_recompra.py   # programas de recompra
+python ingest_fre.py        # dados de capital, acionistas, remuneração
+python ingest_dfp.py        # demonstrativos anuais (ano corrente e anterior)
+python ingest_itr.py        # demonstrativo trimestral (ano corrente)
+
+# Trimestral — reprocessa toda a série histórica
+python ingest_dfp.py --historico
+```
+
+O `.env` na raiz do projeto deve ter:
+```
+DATABASE_URL=postgresql://localhost/cvm_research
+```
+
+**Nota:** `extract_pdf.py` extrai texto dos PDFs e requer uma conexão Supabase — não funciona com o banco local (usa API REST do cliente Supabase).
 
 ## Skill routing
 

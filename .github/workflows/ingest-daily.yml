@@ -1,8 +1,7 @@
 name: Ingest Diário (Recompra)
 
+# Ingestão desativada — banco migrado para PostgreSQL local (sem Supabase).
 on:
-  schedule:
-    - cron: '30 11 * * 1-5'  # dias úteis 11:30 UTC (08:30 BRT)
   workflow_dispatch:
 
 jobs:

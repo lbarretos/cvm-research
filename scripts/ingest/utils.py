@@ -35,9 +35,37 @@ def load_watchlist() -> dict[str, dict]:
 def watchlist_cnpjs() -> set[str]:
     return set(load_watchlist().keys())
 
-# ── Supabase client ───────────────────────────────────────────────────────────
+# ── Mapeamento de índice nomeado → colunas (para ON CONFLICT sem CONSTRAINT) ──
+# vlmo_mov_uniq é um CREATE UNIQUE INDEX (não uma CONSTRAINT nomeada),
+# portanto ON CONFLICT ON CONSTRAINT não funciona — precisamos das colunas.
+
+EXCLUDED_FROM_UPDATE: frozenset = frozenset({'id', 'created_at'})
+
+_INDEX_COLUMNS: dict[str, str] = {
+    # nome_index -> colunas_csv para ON CONFLICT (col1,col2,...)
+    # NULLS NOT DISTINCT está na definição do índice (migration 009), não aqui.
+    "vlmo_mov_uniq": (
+        "cnpj_companhia,data_referencia,versao,empresa,"
+        "tipo_cargo,tipo_movimentacao,tipo_ativo,caracteristica,"
+        "data_movimentacao,quantidade"
+    ),
+}
+
+# ── Conexão de banco de dados ─────────────────────────────────────────────────
+
+def get_db():
+    """Retorna conexão psycopg2 para PostgreSQL local."""
+    import psycopg2
+    return psycopg2.connect(os.environ["DATABASE_URL"])
 
 def get_supabase():
+    """Retorna cliente Supabase (nuvem) ou conexão psycopg2 (local).
+
+    Modo dual: quando DATABASE_URL estiver no .env, usa psycopg2.
+    Quando SUPABASE_URL + SUPABASE_KEY estiverem definidos, usa supabase-py.
+    """
+    if os.environ.get("DATABASE_URL"):
+        return get_db()
     from supabase import create_client
     url = os.environ["SUPABASE_URL"]
     key = os.environ["SUPABASE_KEY"]
@@ -48,6 +76,7 @@ def get_supabase():
         if "401" in str(e) or "403" in str(e) or "Unauthorized" in str(e):
             print(f"ERRO DE AUTENTICAÇÃO: chave Supabase inválida — {e}", file=sys.stderr)
             sys.exit(1)
+        raise  # re-raise erros de rede ou outros (não autenticação)
     return client
 
 # ── Helpers de conversão de tipo ─────────────────────────────────────────────
@@ -93,14 +122,53 @@ def _sanitize(rows: list[dict]) -> list[dict]:
         return val
     return [{k: clean(v) for k, v in row.items()} for row in rows]
 
-# ── Upsert Supabase ───────────────────────────────────────────────────────────
+# ── Upsert (Supabase ou psycopg2) ────────────────────────────────────────────
 
 def upsert(sb, table: str, rows: list[dict], conflict: str, batch: int = 500) -> None:
-    """Faz upsert em lotes no Supabase, sanitizando NaN antes."""
+    """Faz upsert em lotes (Supabase ou psycopg2), sanitizando NaN antes."""
     rows = _sanitize(rows)
-    for i in range(0, len(rows), batch):
-        sb.table(table).upsert(rows[i:i + batch], on_conflict=conflict).execute()
+    if hasattr(sb, 'cursor'):   # psycopg2 connection
+        _upsert_pg(sb, table, rows, conflict, batch)
+    else:                        # supabase-py client
+        for i in range(0, len(rows), batch):
+            sb.table(table).upsert(rows[i:i + batch], on_conflict=conflict).execute()
     print(f"  {table}: {len(rows)} rows")
+
+def _upsert_pg(conn, table: str, rows: list[dict], conflict: str, batch: int) -> None:
+    """INSERT ... ON CONFLICT DO UPDATE via psycopg2."""
+    import psycopg2.extras
+    if not rows:
+        return
+    cols = list(rows[0].keys())
+
+    # Resolve named index → column list; caso contrário usa conflict direto
+    conflict_cols = _INDEX_COLUMNS.get(conflict, conflict)
+    conflict_clause = f"ON CONFLICT ({conflict_cols})"
+
+    # Deduplica por chave de conflito — psycopg2 rejeita dois DO UPDATE na
+    # mesma linha num único comando ("cannot affect row a second time").
+    key_cols = [c.strip() for c in conflict_cols.split(",")]
+    seen_keys: dict = {}
+    for row in rows:
+        key = tuple(row.get(c) for c in key_cols)
+        seen_keys[key] = row
+    rows = list(seen_keys.values())
+
+    update_set = ", ".join(f"{c}=EXCLUDED.{c}" for c in cols if c not in EXCLUDED_FROM_UPDATE)
+    sql = (
+        f"INSERT INTO {table} ({','.join(cols)}) VALUES %s "
+        f"{conflict_clause} DO UPDATE SET {update_set}"
+    )
+    try:
+        with conn.cursor() as cur:
+            for i in range(0, len(rows), batch):
+                psycopg2.extras.execute_values(
+                    cur, sql, [tuple(r[c] for c in cols) for r in rows[i:i + batch]]
+                )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 # ── HTTP com retry ────────────────────────────────────────────────────────────
 

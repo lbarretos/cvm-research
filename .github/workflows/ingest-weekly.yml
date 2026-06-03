@@ -1,9 +1,9 @@
 name: Ingest Semanal (IPE + VLMO + DFP + ITR)
 
+# Ingestão desativada — banco migrado para PostgreSQL local (sem Supabase).
+# Manter como referência para eventual reativação. Só disparo manual disponível.
 on:
-  schedule:
-    - cron: '30 11 * * 1'  # segunda 11:30 UTC (08:30 BRT)
-  workflow_dispatch:        # permite rodar manualmente
+  workflow_dispatch:
 
 jobs:
   ingest:

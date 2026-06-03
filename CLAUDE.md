@@ -4,6 +4,28 @@ Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM
 Banco: PostgreSQL 16 local · 56 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
 Atualização: manual via scripts de ingestão (ver seção "Conexão e atualização manual").
 
+## Configuração do MCP (ler antes de começar)
+
+Para o Claude acessar o banco, o MCP `postgres-local` precisa estar conectado.
+Setup completo em `README.md`. Resumo rápido:
+
+```bash
+# 1. PostgreSQL rodando?
+brew services list | grep postgresql   # se "stopped": brew services start postgresql@16
+
+# 2. MCP no Claude Code
+claude mcp add postgres-local -s user -- $(which npx) \
+  -y @modelcontextprotocol/server-postgres postgresql://localhost/cvm_research
+
+# 3. MCP no Claude desktop app
+# Editar: ~/Library/Application Support/Claude/claude_desktop_config.json
+# Adicionar "mcpServers": { "postgres-local": { "command": "$(which npx)", "args": [...] } }
+# Reiniciar o app após editar.
+```
+
+**Verificar conexão** — peça ao Claude: *"Quantas linhas tem a tabela ipe_docs?"*
+Se responder com número, o MCP está funcionando.
+
 ## Como identificar uma empresa
 
 Sempre use CNPJ como chave. Para buscar pelo ticker ou nome:
@@ -247,9 +269,40 @@ SELECT pg_size_pretty(pg_database_size(current_database())) AS tamanho_db;
 
 ## Conexão e atualização manual
 
-**Banco:** PostgreSQL 16 local, MCP `postgres-local` conectado via `claude mcp add`.
+**Banco:** PostgreSQL 16 local, MCP `postgres-local` conectado.
+**Setup completo:** ver `README.md`.
 
-**Atualização manual** (rodar periodicamente para manter a base em dia):
+### MCP — Claude Code (terminal)
+
+```bash
+claude mcp add postgres-local -s user -- $(which npx) \
+  -y @modelcontextprotocol/server-postgres postgresql://localhost/cvm_research
+
+# Verificar:
+claude mcp list   # deve mostrar ✓ Connected
+```
+
+### MCP — Claude desktop app (chat visual)
+
+Editar `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "postgres-local": {
+      "command": "/caminho/absoluto/do/npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/cvm_research"]
+    }
+  }
+}
+```
+
+Obter o caminho do npx: `which npx`. Reiniciar o app após salvar.
+
+### Atualização manual dos dados
+
+Rodar periodicamente para manter a base em dia:
+
 ```bash
 cd scripts/ingest
 source ../../.venv/bin/activate
@@ -263,6 +316,7 @@ python ingest_itr.py        # demonstrativo trimestral (ano corrente)
 
 # Trimestral — reprocessa toda a série histórica
 python ingest_dfp.py --historico
+python ingest_itr.py --desde 2016
 ```
 
 O `.env` na raiz do projeto deve ter:
@@ -270,7 +324,7 @@ O `.env` na raiz do projeto deve ter:
 DATABASE_URL=postgresql://localhost/cvm_research
 ```
 
-**Nota:** `extract_pdf.py` extrai texto dos PDFs e requer uma conexão Supabase — não funciona com o banco local (usa API REST do cliente Supabase).
+**Nota:** `extract_pdf.py` requer Supabase — não funciona com banco local.
 
 ## Skill routing
 

@@ -1,7 +1,7 @@
 """Popula a tabela companies a partir do watchlist.csv."""
 import csv
 from pathlib import Path
-from utils import get_supabase
+from utils import get_supabase, upsert
 
 WATCHLIST = Path(__file__).parents[2] / "watchlist.csv"
 
@@ -30,7 +30,7 @@ def main():
         seen[row["cnpj"]] = row
     rows = list(seen.values())
 
-    result = sb.table("companies").upsert(rows, on_conflict="cnpj").execute()
+    upsert(sb, "companies", rows, "cnpj")
     print(f"Upserted {len(rows)} empresas")
 
 if __name__ == "__main__":

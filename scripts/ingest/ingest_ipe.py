@@ -7,7 +7,7 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _http_get
+from utils import get_supabase, watchlist_cnpjs, _http_get, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/IPE/DADOS"
 
@@ -58,15 +58,7 @@ def process(df: pd.DataFrame, cnpjs: set[str]) -> list[dict]:
         })
     return rows
 
-def _sanitize(rows: list[dict]) -> list[dict]:
-    def clean(val):
-        if isinstance(val, float) and val != val:
-            return None
-        return val
-    return [{k: clean(v) for k, v in row.items()} for row in rows]
-
-def upsert_batch(sb, rows: list[dict], batch=500):
-    rows = _sanitize(rows)
+def upsert_batch(sb, rows: list[dict]):
     # drop rows without a protocolo (NOT NULL PK) and deduplicate
     seen: dict = {}
     for row in rows:
@@ -76,11 +68,7 @@ def upsert_batch(sb, rows: list[dict], batch=500):
     if not rows:
         print("  0 docs (todos sem protocolo)")
         return
-    for i in range(0, len(rows), batch):
-        sb.table("ipe_docs").upsert(
-            rows[i:i+batch],
-            on_conflict="protocolo_entrega",
-        ).execute()
+    upsert(sb, "ipe_docs", rows, "protocolo_entrega")
     print(f"  Upserted {len(rows)} docs")
 
 def main():

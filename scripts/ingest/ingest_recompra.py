@@ -2,7 +2,7 @@
 import io
 import zipfile
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _http_get, _int, _float, _sanitize
+from utils import get_supabase, watchlist_cnpjs, _http_get, _int, _float, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/EVENTOS/RECOMPRA_ACOES/DADOS"
 
@@ -45,12 +45,8 @@ def main():
     dfs   = download()
 
     if "programas" in dfs:
-        rows = _sanitize(process_programas(dfs["programas"], cnpjs))
-        for i in range(0, len(rows), 500):
-            sb.table("recompra_programas").upsert(
-                rows[i:i+500], on_conflict="id_programa"
-            ).execute()
-        print(f"recompra_programas: {len(rows)} rows")
+        rows = process_programas(dfs["programas"], cnpjs)
+        upsert(sb, "recompra_programas", rows, "id_programa")
 
 if __name__ == "__main__":
     main()

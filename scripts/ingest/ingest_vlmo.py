@@ -4,15 +4,14 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs
+from utils import get_supabase, watchlist_cnpjs, _http_get
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/VLMO/DADOS"
 
 def download_year(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     url = f"{BASE_URL}/vlmo_cia_aberta_{year}.zip"
     print(f"Baixando {url}...")
-    r = httpx.get(url, timeout=120, follow_redirects=True)
-    r.raise_for_status()
+    r = _http_get(url, timeout=120)
     posicao = movimentacoes = None
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         for name in z.namelist():

@@ -5,17 +5,20 @@ Cobre:
   - Normalização ESCALA_MOEDA (MIL×1000, UNIDADE×1, escala desconhecida)
   - VL_CONTA vazio / NaN → None (bug fix: float('') levanta ValueError sem _float())
   - _date, _int, _float, _sanitize (helpers compartilhados via utils.py)
+  - _http_get: retry em ConnectError/Timeout, falha rápida em erro HTTP
 """
 import math
 import sys
 import os
+from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
 
 # Adiciona scripts/ingest ao path para importar utils sem instalar o pacote
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 
-from utils import _date, _float, _int, _sanitize
+from utils import _date, _float, _http_get, _int, _sanitize
 
 # Constante local que replica a lógica dos ingestores DFP/ITR
 SCALE = {"MIL": 1000, "UNIDADE": 1}
@@ -127,3 +130,65 @@ def test_sanitize_preserva_zero():
 
 def test_sanitize_lista_vazia():
     assert _sanitize([]) == []
+
+
+# ── _http_get retry ───────────────────────────────────────────────────────────
+
+@patch("utils.time.sleep")
+@patch("utils.httpx.get")
+def test_http_get_sucesso_direto(mock_get, mock_sleep):
+    """Resposta 200 na primeira tentativa — sem retry."""
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    mock_get.return_value = resp
+
+    result = _http_get("http://exemplo.com", timeout=5)
+
+    assert result is resp
+    mock_get.assert_called_once()
+    mock_sleep.assert_not_called()
+
+
+@patch("utils.time.sleep")
+@patch("utils.httpx.get")
+def test_http_get_retry_sucesso_na_segunda(mock_get, mock_sleep):
+    """Falha de rede na primeira tentativa, sucesso na segunda — sem raise."""
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    mock_get.side_effect = [httpx.ConnectError("timeout"), resp]
+
+    result = _http_get("http://exemplo.com", timeout=5, retries=3)
+
+    assert result is resp
+    assert mock_get.call_count == 2
+    mock_sleep.assert_called_once_with(1)  # backoff: 2^0 = 1s
+
+
+@patch("utils.time.sleep")
+@patch("utils.httpx.get")
+def test_http_get_esgota_retries(mock_get, mock_sleep):
+    """Todas as tentativas falham — ConnectError deve propagar."""
+    mock_get.side_effect = httpx.ConnectError("unreachable")
+
+    with pytest.raises(httpx.ConnectError):
+        _http_get("http://exemplo.com", timeout=5, retries=3)
+
+    assert mock_get.call_count == 3
+    assert mock_sleep.call_count == 2  # 2 esperas entre 3 tentativas
+
+
+@patch("utils.time.sleep")
+@patch("utils.httpx.get")
+def test_http_get_erro_http_nao_retryta(mock_get, mock_sleep):
+    """Erro HTTP (4xx/5xx) não é erro de rede — deve falhar imediatamente."""
+    resp = MagicMock()
+    resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "404", request=MagicMock(), response=MagicMock()
+    )
+    mock_get.return_value = resp
+
+    with pytest.raises(httpx.HTTPStatusError):
+        _http_get("http://exemplo.com", timeout=5, retries=3)
+
+    mock_get.assert_called_once()  # sem retry para erros HTTP
+    mock_sleep.assert_not_called()

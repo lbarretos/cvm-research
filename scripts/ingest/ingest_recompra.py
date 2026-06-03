@@ -1,17 +1,15 @@
 """Baixa programas de recompra de ações e faz upsert no Supabase."""
 import io
 import zipfile
-import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs
+from utils import get_supabase, watchlist_cnpjs, _http_get, _int, _float, _sanitize
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/EVENTOS/RECOMPRA_ACOES/DADOS"
 
 def download() -> dict[str, pd.DataFrame]:
     url = f"{BASE_URL}/cia_aberta_recompra_acoes.zip"
     print(f"Baixando {url}...")
-    r = httpx.get(url, timeout=120, follow_redirects=True)
-    r.raise_for_status()
+    r = _http_get(url, timeout=120)
     dfs = {}
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         for name in z.namelist():
@@ -22,25 +20,6 @@ def download() -> dict[str, pd.DataFrame]:
             with z.open(name) as f:
                 dfs[key] = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
     return dfs
-
-def _int(v):
-    try:
-        f = float(str(v).replace(",", "."))
-        return None if f != f else int(f)
-    except: return None
-
-def _float(v):
-    try:
-        f = float(str(v).replace(",", "."))
-        return None if f != f else f
-    except: return None
-
-def _sanitize(rows: list[dict]) -> list[dict]:
-    def clean(val):
-        if isinstance(val, float) and val != val:
-            return None
-        return val
-    return [{k: clean(v) for k, v in row.items()} for row in rows]
 
 def process_programas(df: pd.DataFrame, cnpjs: set) -> list[dict]:
     df = df[df["CNPJ_Companhia"].isin(cnpjs)].copy()

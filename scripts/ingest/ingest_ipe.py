@@ -7,7 +7,7 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs
+from utils import get_supabase, watchlist_cnpjs, _http_get
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/IPE/DADOS"
 
@@ -23,8 +23,7 @@ CATEGORIAS_EXTRAIR = {
 def download_year(year: int) -> pd.DataFrame:
     url = f"{BASE_URL}/ipe_cia_aberta_{year}.zip"
     print(f"Baixando {url}...")
-    r = httpx.get(url, timeout=120, follow_redirects=True)
-    r.raise_for_status()
+    r = _http_get(url, timeout=120)
     with zipfile.ZipFile(io.BytesIO(r.content)) as z:
         csv_name = next(
             n for n in z.namelist()

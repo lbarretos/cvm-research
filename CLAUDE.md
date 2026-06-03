@@ -1,7 +1,7 @@
 # CVM Research Database
 
 Base de dados de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Cobertura: 56 empresas da watchlist, fontes IPE + VLMO + Recompra + FRE.
+Cobertura: 56 empresas da watchlist, fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
 
 ## Como identificar uma empresa
 
@@ -38,27 +38,35 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 **tipo_cargo relevantes:** `'Conselho de Administração ou Vinculado'`, `'Diretoria ou Vinculado'`, `'Controlador ou Vinculado'`
 **tipo_movimentacao:** `'Compra'`, `'Venda'`, `'Saldo Inicial'`, `'Saldo Final'`
 
+### `vlmo_posicao` — posição consolidada de valores mobiliários (por documento)
+`protocolo_entrega (PK), cnpj_companhia, data_referencia, categoria, tipo, link_download`
+
 ### `recompra_programas` — programas de recompra de ações
 `id_programa (PK), cnpj_companhia, finalidade_compra, data_deliberacao,`
 `motivo, data_final_prazo, situacao ('Vigente'/'Encerrado')`
 
-### `fre_capital` — composição do capital social (histórico)
-`cnpj_companhia, data_referencia_doc, tipo_acao (ON/PN/Units), quantidade`
+### `fre_capital_social` — composição do capital social (histórico)
+`cnpj_companhia, data_referencia, tipo_capital, data_autorizacao_aprovacao,`
+`valor_capital, quantidade_acoes_ordinarias, quantidade_acoes_preferenciais, quantidade_total_acoes`
 
-### `fre_remuneracao` — remuneração dos administradores
-`cnpj_companhia, data_referencia_doc, orgao, num_membros,`
-`remuneracao_fixa, remuneracao_variavel, total_remuneracao`
+### `fre_remuneracao_orgao` — remuneração dos administradores por órgão
+`cnpj_companhia, data_referencia, orgao_administracao, numero_membros,`
+`numero_membros_remunerados, valor_maior_remuneracao, valor_menor_remuneracao, valor_medio_remuneracao`
 
-### `fre_composicao_acionaria` — principais acionistas
-`cnpj_companhia, data_referencia_doc, nome_acionista, pct_on, pct_pn, pct_total`
+### `fre_posicao_acionaria` — principais acionistas
+`cnpj_companhia, data_referencia, acionista, acionista_controlador,`
+`percentual_acao_ordinaria_circulacao, percentual_acao_preferencial_circulacao, percentual_total_acoes_circulacao`
 
-### `fre_dividendos` — histórico de dividendos e JCP
-`cnpj_companhia, data_referencia_doc, tipo_evento, tipo_acao,`
-`data_aprovacao, data_pagamento, valor_por_acao`
+### `demonstrativos_contabeis` — DFP (anual) e ITR (trimestral) estruturados
+`cnpj_companhia, fonte ('DFP'/'ITR'), tipo_doc ('BPA'/'BPP'/'DRE'/'DFC_MI'/'DVA'),`
+`data_referencia, versao, ordem_exercicio ('Último'/'Penúltimo'),`
+`dt_ini_exerc, dt_fim_exerc, cd_conta, ds_conta, vl_conta (em R$ — já normalizado MIL×1000)`
 
-### `fre_endividamento` — dívida estruturada
-`cnpj_companhia, data_referencia_doc, tipo_divida, moeda, valor,`
-`taxa_juros, data_vencimento`
+**Views prontas (preferir sobre query direta):**
+- `vw_dre` — DRE resumida: `receita_liquida, custo_bens_servicos, resultado_bruto, ebit, resultado_financeiro, ebt, lucro_liquido`
+- `vw_balanco` — BPA + BPP: `ativo_total, ativo_circulante, caixa, divida_curto_prazo, divida_longo_prazo, patrimonio_liquido`
+
+⚠️ Bancos e seguradoras usam plano COSIF — retornarão NULL nas views. Diagnóstico: `SELECT cnpj_companhia FROM vw_dre WHERE receita_liquida IS NULL GROUP BY 1`
 
 ---
 
@@ -139,12 +147,67 @@ ORDER BY data_deliberacao DESC;
 
 ### Histórico de remuneração dos administradores
 ```sql
-SELECT data_referencia_doc, orgao, num_membros,
-       total_remuneracao,
-       ROUND(total_remuneracao / NULLIF(num_membros, 0), 0) AS media_por_membro
-FROM fre_remuneracao
+SELECT data_referencia, orgao_administracao, numero_membros,
+       valor_medio_remuneracao,
+       valor_maior_remuneracao,
+       valor_menor_remuneracao
+FROM fre_remuneracao_orgao
 WHERE cnpj_companhia = '<CNPJ>'
-ORDER BY data_referencia_doc DESC;
+ORDER BY data_referencia DESC;
+```
+
+### Composição acionária (principais acionistas)
+```sql
+SELECT data_referencia, acionista, acionista_controlador,
+       percentual_acao_ordinaria_circulacao  AS pct_on,
+       percentual_acao_preferencial_circulacao AS pct_pn,
+       percentual_total_acoes_circulacao     AS pct_total
+FROM fre_posicao_acionaria
+WHERE cnpj_companhia = '<CNPJ>'
+ORDER BY data_referencia DESC, percentual_total_acoes_circulacao DESC NULLS LAST
+LIMIT 20;
+```
+
+### DRE trimestral (últimos 8 trimestres) via view
+```sql
+SELECT fonte, data_referencia, dt_ini_exerc, dt_fim_exerc,
+       receita_liquida, ebit, lucro_liquido,
+       ROUND(ebit / NULLIF(receita_liquida, 0) * 100, 1) AS margem_ebit_pct
+FROM vw_dre
+WHERE cnpj_companhia = '<CNPJ>'
+  AND fonte = 'ITR'
+ORDER BY data_referencia DESC
+LIMIT 8;
+```
+
+### Balanço anual (DFP) — últimos 5 anos
+```sql
+SELECT data_referencia, dt_fim_exerc,
+       ativo_total, caixa, ativo_circulante,
+       divida_curto_prazo, divida_longo_prazo,
+       divida_curto_prazo + COALESCE(divida_longo_prazo, 0) AS divida_total,
+       patrimonio_liquido
+FROM vw_balanco
+WHERE cnpj_companhia = '<CNPJ>'
+  AND fonte = 'DFP'
+ORDER BY data_referencia DESC
+LIMIT 5;
+```
+
+### DRE linha a linha (quando a view não tiver a conta que você quer)
+```sql
+SELECT data_referencia, cd_conta, ds_conta, vl_conta
+FROM demonstrativos_contabeis
+WHERE cnpj_companhia = '<CNPJ>'
+  AND tipo_doc = 'DRE'
+  AND fonte = 'DFP'
+  AND ordem_exercicio = 'Último'
+  AND versao = (
+      SELECT MAX(versao) FROM demonstrativos_contabeis
+      WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DRE' AND fonte = 'DFP'
+        AND data_referencia = '<DATA>'
+  )
+ORDER BY cd_conta;
 ```
 
 ### Busca full-text no conteúdo de documentos
@@ -168,7 +231,8 @@ ORDER BY relevancia DESC;
 3. **Para resumir assembleias**: leia `texto_extraido` e destaque deliberações sobre remuneração, mudanças estatutárias, eleição de conselho, aprovação de contas.
 4. **Para fatos relevantes**: classifique o impacto — M&A, guidance, regulatório, operacional, financeiro.
 5. **Para insider trading**: correlacione compras/vendas com fatos relevantes próximos e recompras vigentes.
-6. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
+6. **Para financeiros (DRE/Balanço)**: use `vw_dre` e `vw_balanco` primeiro. Se NULL nos campos chave, verifique se a empresa é banco/seguradora (COSIF). Para contas específicas não nas views, consulte `demonstrativos_contabeis` diretamente filtrando por `cd_conta`.
+7. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
 
 ## Monitorar uso do banco
 ```sql

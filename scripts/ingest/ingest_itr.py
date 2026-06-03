@@ -76,10 +76,20 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--desde", type=int, default=None, metavar="ANO",
+                        help="Ano inicial para processar múltiplos anos (ex: --desde 2016)")
+    args = parser.parse_args()
+
     sb    = get_supabase()
     cnpjs = watchlist_cnpjs()
+    hoje  = date.today()
+    anos  = range(args.desde, hoje.year + 1) if args.desde else [hoje.year]
+    if args.desde:
+        print(f"Modo histórico: processando {args.desde} → {hoje.year}")
 
-    for ano in [date.today().year]:
+    for ano in anos:
         print(f"\n── ITR {ano} ──")
         try:
             dfs = download_year(ano, FONTE, TIPOS)

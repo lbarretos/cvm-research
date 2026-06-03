@@ -74,9 +74,15 @@ def upsert_batch(sb, rows: list[dict]):
     print(f"  Upserted {len(rows)} docs")
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--desde", type=int, default=2021, metavar="ANO",
+                        help="Ano inicial (padrão: 2021)")
+    args = parser.parse_args()
+
     sb     = get_supabase()
     cnpjs  = watchlist_cnpjs()
-    anos   = range(2021, date.today().year + 1)
+    anos   = range(args.desde, date.today().year + 1)
 
     for ano in anos:
         try:

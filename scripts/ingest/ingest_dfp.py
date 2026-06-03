@@ -82,18 +82,17 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--historico",
-        action="store_true",
-        help="Reprocessa todos os anos desde 2021 (para revisão anual manual)",
-    )
+    parser.add_argument("--historico", action="store_true",
+                        help="Reprocessa todos os anos desde --desde até hoje")
+    parser.add_argument("--desde", type=int, default=2021, metavar="ANO",
+                        help="Ano inicial para --historico (padrão: 2021)")
     args = parser.parse_args()
 
     hoje = date.today()
     if args.historico:
         # Revisão completa: 2021 até ano corrente
-        anos = range(2021, hoje.year + 1)
-        print("Modo histórico: processando 2021 →", hoje.year)
+        anos = range(args.desde, hoje.year + 1)
+        print(f"Modo histórico: processando {args.desde} → {hoje.year}")
     else:
         # Semanal: ano anterior (DFP divulgado até abril do ano corrente)
         # + ano corrente (fallback: se existir ZIP antecipado, captura; 404 é silencioso)

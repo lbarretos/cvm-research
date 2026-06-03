@@ -84,10 +84,16 @@ def process_movimentacoes(df: pd.DataFrame, cnpjs: set) -> list[dict]:
     return rows
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--desde", type=int, default=2021, metavar="ANO",
+                        help="Ano inicial (padrão: 2021)")
+    args = parser.parse_args()
+
     sb    = get_supabase()
     cnpjs = watchlist_cnpjs()
 
-    for ano in range(2021, date.today().year + 1):
+    for ano in range(args.desde, date.today().year + 1):
         posicao, movs = download_year(ano)
         if posicao is not None:
             upsert(sb, "vlmo_posicao", process_posicao(posicao, cnpjs),

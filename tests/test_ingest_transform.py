@@ -270,7 +270,8 @@ def test_upsert_pg_named_index_vlmo_mov_uniq(mock_ev):
     # Deve expandir para lista de colunas do índice, não o nome literal
     assert "vlmo_mov_uniq" not in sql_used
     assert "ON CONFLICT (cnpj_companhia,data_referencia,versao,empresa," in sql_used
-    assert "NULLS NOT DISTINCT" in sql_used
+    # NULLS NOT DISTINCT é da definição do índice (migration), não da cláusula ON CONFLICT
+    assert "NULLS NOT DISTINCT" not in sql_used
     conn.commit.assert_called_once()
 
 

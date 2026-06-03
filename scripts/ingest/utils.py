@@ -41,13 +41,13 @@ def watchlist_cnpjs() -> set[str]:
 
 EXCLUDED_FROM_UPDATE: frozenset = frozenset({'id', 'created_at'})
 
-_INDEX_COLUMNS: dict[str, tuple[str, bool]] = {
-    # nome_index -> (colunas_csv, nulls_not_distinct)
+_INDEX_COLUMNS: dict[str, str] = {
+    # nome_index -> colunas_csv para ON CONFLICT (col1,col2,...)
+    # NULLS NOT DISTINCT está na definição do índice (migration 009), não aqui.
     "vlmo_mov_uniq": (
         "cnpj_companhia,data_referencia,versao,empresa,"
         "tipo_cargo,tipo_movimentacao,tipo_ativo,caracteristica,"
-        "data_movimentacao,quantidade",
-        True,
+        "data_movimentacao,quantidade"
     ),
 }
 
@@ -142,14 +142,18 @@ def _upsert_pg(conn, table: str, rows: list[dict], conflict: str, batch: int) ->
     cols = list(rows[0].keys())
 
     # Resolve named index → column list; caso contrário usa conflict direto
-    nulls_not_distinct = False
-    if conflict in _INDEX_COLUMNS:
-        conflict_cols, nulls_not_distinct = _INDEX_COLUMNS[conflict]
-    else:
-        conflict_cols = conflict  # coluna única ou "col1,col2,..." separado por vírgula
+    conflict_cols = _INDEX_COLUMNS.get(conflict, conflict)
+    conflict_clause = f"ON CONFLICT ({conflict_cols})"
 
-    nnd = " NULLS NOT DISTINCT" if nulls_not_distinct else ""
-    conflict_clause = f"ON CONFLICT ({conflict_cols}){nnd}"
+    # Deduplica por chave de conflito — psycopg2 rejeita dois DO UPDATE na
+    # mesma linha num único comando ("cannot affect row a second time").
+    key_cols = [c.strip() for c in conflict_cols.split(",")]
+    seen_keys: dict = {}
+    for row in rows:
+        key = tuple(row.get(c) for c in key_cols)
+        seen_keys[key] = row
+    rows = list(seen_keys.values())
+
     update_set = ", ".join(f"{c}=EXCLUDED.{c}" for c in cols if c not in EXCLUDED_FROM_UPDATE)
     sql = (
         f"INSERT INTO {table} ({','.join(cols)}) VALUES %s "

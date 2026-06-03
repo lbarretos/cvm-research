@@ -7,7 +7,7 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _http_get, upsert
+from utils import get_supabase, watchlist_cnpjs, _http_get, _sanitize, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/IPE/DADOS"
 
@@ -59,6 +59,8 @@ def process(df: pd.DataFrame, cnpjs: set[str]) -> list[dict]:
     return rows
 
 def upsert_batch(sb, rows: list[dict]):
+    # sanitize antes do dedup: NaN → None para que o filtro abaixo os exclua
+    rows = _sanitize(rows)
     # drop rows without a protocolo (NOT NULL PK) and deduplicate
     seen: dict = {}
     for row in rows:

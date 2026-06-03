@@ -1,7 +1,8 @@
-# CVM Research Database
+# CVM Research — Base Local
 
-Base de dados de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Cobertura: 56 empresas da watchlist, fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
+Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
+Banco: PostgreSQL 16 local · 56 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
+Atualização: manual via scripts de ingestão (ver seção "Conexão e atualização manual").
 
 ## Como identificar uma empresa
 
@@ -244,59 +245,32 @@ ORDER BY relevancia DESC;
 SELECT pg_size_pretty(pg_database_size(current_database())) AS tamanho_db;
 ```
 
-## Conexão: PostgreSQL local vs. Supabase na nuvem
+## Conexão e atualização manual
 
-**Pesquisa via Claude Code (local):** usa o MCP `postgres-local` configurado em
-`~/.claude/settings.json`. Conecta direto ao PostgreSQL 16 local — sem limite de
-tamanho, sem latência de rede, sem custo.
+**Banco:** PostgreSQL 16 local, MCP `postgres-local` conectado via `claude mcp add`.
 
-**Ingestão de dados (CI/CD):** GitHub Actions (`ingest-daily.yml`, `ingest-weekly.yml`)
-continuam apontando para Supabase na nuvem via `SUPABASE_URL` + `SUPABASE_KEY`.
-
-**Configurar MCP local** — adicionar em `~/.claude/settings.json`:
-```json
-{
-  "mcpServers": {
-    "postgres-local": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/cvm_research"]
-    }
-  }
-}
-```
-
-**Setup inicial do banco local** (uma vez, sem Docker):
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-createdb cvm_research
-psql cvm_research < supabase/migrations/001_companies.sql
-psql cvm_research < supabase/migrations/002_ipe.sql
-psql cvm_research < supabase/migrations/003_vlmo.sql
-psql cvm_research < supabase/migrations/004_recompra.sql
-psql cvm_research < supabase/migrations/005_fre.sql
-# 006_rls.sql pula — RLS não é necessário localmente
-psql cvm_research < supabase/migrations/007_drop_cpf_acionista.sql
-psql cvm_research < supabase/migrations/008_demonstrativos.sql
-psql cvm_research < supabase/migrations/009_vlmo_mov_uniq.sql
-```
-
-**Carga inicial de dados** (com `DATABASE_URL=postgresql://localhost/cvm_research` no `.env`):
+**Atualização manual** (rodar periodicamente para manter a base em dia):
 ```bash
 cd scripts/ingest
-python ingest_companies.py
-python ingest_ipe.py
-python ingest_vlmo.py
-python ingest_recompra.py
-python ingest_fre.py
-python ingest_dfp.py
-python ingest_itr.py
-# extract_pdf.py: requer Supabase na nuvem (usa .select() e .update() do cliente)
+source ../../.venv/bin/activate
+
+python ingest_ipe.py        # metadados de documentos
+python ingest_vlmo.py       # insider trading
+python ingest_recompra.py   # programas de recompra
+python ingest_fre.py        # dados de capital, acionistas, remuneração
+python ingest_dfp.py        # demonstrativos anuais (ano corrente e anterior)
+python ingest_itr.py        # demonstrativo trimestral (ano corrente)
+
+# Trimestral — reprocessa toda a série histórica
+python ingest_dfp.py --historico
 ```
 
-**Modo dual dos ingestores:** quando `DATABASE_URL` estiver no `.env`, `get_supabase()`
-retorna uma conexão psycopg2 e a função `upsert()` usa SQL nativo. Quando `DATABASE_URL`
-estiver ausente, usa supabase-py (comportamento padrão do CI).
+O `.env` na raiz do projeto deve ter:
+```
+DATABASE_URL=postgresql://localhost/cvm_research
+```
+
+**Nota:** `extract_pdf.py` extrai texto dos PDFs e requer uma conexão Supabase — não funciona com o banco local (usa API REST do cliente Supabase).
 
 ## Skill routing
 

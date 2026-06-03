@@ -262,6 +262,17 @@ ORDER BY relevancia DESC;
 6. **Para financeiros (DRE/Balanço)**: use `vw_dre` e `vw_balanco` primeiro. Se NULL nos campos chave, verifique se a empresa é banco/seguradora (COSIF). Para contas específicas não nas views, consulte `demonstrativos_contabeis` diretamente filtrando por `cd_conta`.
 7. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
 
+## Defasagem dos dados
+
+**IPE (documentos corporativos):** a CVM atualiza os ZIPs anuais **semanalmente, toda segunda-feira entre 8h00 e 8h30**. Documentos divulgados após a última atualização (ex: fatos relevantes publicados durante a semana) só estarão disponíveis na base após a próxima segunda-feira.
+
+Se um documento recente não aparecer na base, informar ao usuário:
+- A base tem delay de até 7 dias para metadados do IPE
+- O documento pode ser consultado diretamente no portal da CVM: `https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx`
+- Rodar `python ingest_ipe.py` após a segunda-feira atualiza a base
+
+**VLMO / FRE / Recompra / DFP / ITR:** sem atualização automática — rodar manualmente quando necessário.
+
 ## Monitorar uso do banco
 ```sql
 SELECT pg_size_pretty(pg_database_size(current_database())) AS tamanho_db;

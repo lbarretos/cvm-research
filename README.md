@@ -214,7 +214,9 @@ $(which npx) -y @modelcontextprotocol/server-postgres postgresql://localhost/cvm
 
 ## Atualização manual da base
 
-Rodar periodicamente para manter os dados em dia:
+> **Cadência da CVM:** os ZIPs do IPE (documentos corporativos) são atualizados **toda segunda-feira entre 8h00 e 8h30**. Documentos publicados durante a semana só ficam disponíveis após essa janela. Para documentos mais recentes, consulte diretamente o portal RAD: `rad.cvm.gov.br`.
+
+Rodar após cada segunda-feira para manter os dados em dia:
 
 ```bash
 cd scripts/ingest

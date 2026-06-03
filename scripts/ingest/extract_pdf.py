@@ -10,6 +10,8 @@ Uso:
 """
 import argparse
 import io
+import os
+import sys
 import time
 from datetime import datetime, timezone
 import httpx
@@ -52,6 +54,10 @@ def fetch_pdf_text(url: str) -> str | None:
         return None
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200):
+    if os.environ.get("DATABASE_URL"):
+        print("extract_pdf.py requer Supabase na nuvem — usa .select()/.update() do cliente REST.\n"
+              "Remova DATABASE_URL do .env e configure SUPABASE_URL + SUPABASE_KEY.", file=sys.stderr)
+        sys.exit(1)
     sb    = get_supabase()
     cnpjs = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
 

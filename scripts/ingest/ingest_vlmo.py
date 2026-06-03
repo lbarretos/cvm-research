@@ -2,13 +2,20 @@
 import io
 import zipfile
 from datetime import date
-import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _http_get
+from utils import get_supabase, watchlist_cnpjs, _http_get, _int, _float, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/VLMO/DADOS"
 
-def download_year(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+# Colunas que compõem a chave única de movimentações (vlmo_mov_uniq).
+# O CSV da CVM contém linhas duplicadas sob essa chave — deduplica-se antes do upsert.
+_MOV_KEY_COLS = [
+    "CNPJ_Companhia", "Data_Referencia", "Versao", "Empresa",
+    "Tipo_Cargo", "Tipo_Movimentacao", "Tipo_Ativo",
+    "Caracteristica_Valor_Mobiliario", "Data_Movimentacao", "Quantidade",
+]
+
+def download_year(year: int) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
     url = f"{BASE_URL}/vlmo_cia_aberta_{year}.zip"
     print(f"Baixando {url}...")
     r = _http_get(url, timeout=120)
@@ -20,6 +27,12 @@ def download_year(year: int) -> tuple[pd.DataFrame, pd.DataFrame]:
             with z.open(name) as f:
                 df = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
             if "_con_" in name:
+                # CVM publica linhas duplicadas sob vlmo_mov_uniq — remove antes de processar
+                before = len(df)
+                df = df.drop_duplicates(subset=_MOV_KEY_COLS)
+                dropped = before - len(df)
+                if dropped:
+                    print(f"  {name}: {dropped} duplicatas removidas do CSV")
                 movimentacoes = df
             else:
                 posicao = df
@@ -30,18 +43,18 @@ def process_posicao(df: pd.DataFrame, cnpjs: set) -> list[dict]:
     rows = []
     for _, r in df.iterrows():
         rows.append({
-            "protocolo_entrega":    r.get("Protocolo_Entrega"),
-            "cnpj_companhia":       r["CNPJ_Companhia"],
-            "nome_companhia":       r.get("Nome_Companhia"),
-            "data_referencia":      r.get("Data_Referencia"),
-            "versao":               _int(r.get("Versao")),
-            "codigo_cvm":           r.get("Codigo_CVM"),
-            "categoria":            r.get("Categoria"),
-            "tipo":                 r.get("Tipo"),
-            "data_entrega":         r.get("Data_Entrega"),
-            "tipo_apresentacao":    r.get("Tipo_Apresentacao"),
-            "motivo_reapresentacao":r.get("Motivo_Reapresentacao"),
-            "link_download":        r.get("Link_Download"),
+            "protocolo_entrega":     r.get("Protocolo_Entrega"),
+            "cnpj_companhia":        r["CNPJ_Companhia"],
+            "nome_companhia":        r.get("Nome_Companhia"),
+            "data_referencia":       r.get("Data_Referencia"),
+            "versao":                _int(r.get("Versao")),
+            "codigo_cvm":            r.get("Codigo_CVM"),
+            "categoria":             r.get("Categoria"),
+            "tipo":                  r.get("Tipo"),
+            "data_entrega":          r.get("Data_Entrega"),
+            "tipo_apresentacao":     r.get("Tipo_Apresentacao"),
+            "motivo_reapresentacao": r.get("Motivo_Reapresentacao"),
+            "link_download":         r.get("Link_Download"),
         })
     return rows
 
@@ -70,45 +83,18 @@ def process_movimentacoes(df: pd.DataFrame, cnpjs: set) -> list[dict]:
         })
     return rows
 
-def _int(v):
-    try:
-        f = float(str(v).replace(",", "."))
-        return None if f != f else int(f)  # f != f is True only for NaN
-    except: return None
-
-def _float(v):
-    try:
-        f = float(str(v).replace(",", "."))
-        return None if f != f else f
-    except: return None
-
-def _sanitize(rows: list[dict]) -> list[dict]:
-    """Replace any remaining float NaN with None (not valid JSON)."""
-    def clean(val):
-        if isinstance(val, float) and val != val:
-            return None
-        return val
-    return [{k: clean(v) for k, v in row.items()} for row in rows]
-
-def upsert_batch(sb, table, rows, batch=500):
-    rows = _sanitize(rows)
-    for i in range(0, len(rows), batch):
-        sb.table(table).upsert(rows[i:i+batch]).execute()
-    print(f"  {table}: {len(rows)} rows")
-
 def main():
     sb    = get_supabase()
     cnpjs = watchlist_cnpjs()
 
     for ano in range(2021, date.today().year + 1):
-        try:
-            posicao, movs = download_year(ano)
-            if posicao is not None:
-                upsert_batch(sb, "vlmo_posicao", process_posicao(posicao, cnpjs))
-            if movs is not None:
-                upsert_batch(sb, "vlmo_movimentacoes", process_movimentacoes(movs, cnpjs))
-        except Exception as e:
-            print(f"  ERRO {ano}: {e}")
+        posicao, movs = download_year(ano)
+        if posicao is not None:
+            upsert(sb, "vlmo_posicao", process_posicao(posicao, cnpjs),
+                   conflict="protocolo_entrega")
+        if movs is not None:
+            upsert(sb, "vlmo_movimentacoes", process_movimentacoes(movs, cnpjs),
+                   conflict="vlmo_mov_uniq")
 
 if __name__ == "__main__":
     main()

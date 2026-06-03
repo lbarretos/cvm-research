@@ -35,15 +35,16 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 `cnpj_companhia, data_referencia, tipo_cargo, tipo_movimentacao,`
 `tipo_ativo, caracteristica (ON/PN), quantidade, preco_unitario, volume`
 
-**tipo_cargo relevantes:** `'Conselho de Administração ou Vinculado'`, `'Diretoria ou Vinculado'`, `'Controlador ou Vinculado'`
-**tipo_movimentacao:** `'Compra'`, `'Venda'`, `'Saldo Inicial'`, `'Saldo Final'`
+**tipo_cargo relevantes:** `'Conselho de Administração ou Vinculado'`, `'Diretor ou Vinculado'`, `'Controlador ou Vinculado'`
+**tipo_movimentacao compras:** `'Compra à vista'`, `'Compra à termo'`, `'Compra'`, `'Posse'`, `'Saldo Inicial'`
+**tipo_movimentacao vendas:** `'Venda à vista'`, `'Venda à termo'`, `'Venda'`, `'Desligamento/saída'`, `'Saldo Final'`
 
 ### `vlmo_posicao` — posição consolidada de valores mobiliários (por documento)
 `protocolo_entrega (PK), cnpj_companhia, data_referencia, categoria, tipo, link_download`
 
 ### `recompra_programas` — programas de recompra de ações
 `id_programa (PK), cnpj_companhia, finalidade_compra, data_deliberacao,`
-`motivo, data_final_prazo, situacao ('Vigente'/'Encerrado')`
+`motivo, data_final_prazo, situacao ('Em Andamento'/'Encerrado')`
 
 ### `fre_capital_social` — composição do capital social (histórico)
 `cnpj_companhia, data_referencia, tipo_capital, data_autorizacao_aprovacao,`
@@ -108,12 +109,15 @@ LIMIT 30;
 
 ### Movimentações de insiders (compras e vendas)
 ```sql
-SELECT data_referencia, tipo_cargo, tipo_movimentacao,
-       tipo_ativo, caracteristica, quantidade, volume
+SELECT data_referencia, data_movimentacao, tipo_cargo, tipo_movimentacao,
+       tipo_ativo, caracteristica, quantidade, preco_unitario, volume
 FROM vlmo_movimentacoes
 WHERE cnpj_companhia = '<CNPJ>'
-  AND tipo_movimentacao IN ('Compra', 'Venda')
-ORDER BY data_referencia DESC
+  AND tipo_movimentacao IN (
+      'Compra à vista', 'Compra à termo', 'Compra',
+      'Venda à vista', 'Venda à termo', 'Venda'
+  )
+ORDER BY data_movimentacao DESC
 LIMIT 30;
 ```
 
@@ -131,7 +135,8 @@ JOIN vlmo_movimentacoes v
  AND v.data_referencia BETWEEN i.data_referencia - 7 AND i.data_referencia + 7
 WHERE i.cnpj_companhia = '<CNPJ>'
   AND i.categoria = 'Fato Relevante'
-  AND v.tipo_movimentacao IN ('Compra', 'Venda')
+  AND v.tipo_movimentacao IN ('Compra à vista', 'Compra à termo', 'Compra',
+                             'Venda à vista', 'Venda à termo', 'Venda')
 ORDER BY i.data_referencia DESC;
 ```
 

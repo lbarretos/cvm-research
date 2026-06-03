@@ -1,13 +1,13 @@
 # TODOS
 
-## [PRIORIDADE ALTA] PostgreSQL local — sem Docker, sem Supabase
+## [SETUP MANUAL PENDENTE] PostgreSQL local — sem Docker, sem Supabase
 
 **Contexto:** o banco na nuvem (Supabase free tier) atingiu 546 MB / 500 MB de limite.
 A alternativa é rodar PostgreSQL direto no Mac (sem Docker) e conectar o Claude via MCP.
 Os GitHub Actions continuam apontando para o Supabase na nuvem para ingestão automática.
 O uso local é só para pesquisa via Claude Code.
 
-**O que precisa ser construído:**
+**Código já implementado (passos 3, 4, 5, 8). Passos 1, 2, 6, 7 são setup manual.**
 
 ### Passo 1 — Instalar e configurar PostgreSQL local
 
@@ -37,7 +37,7 @@ psql cvm_research < supabase/migrations/009_vlmo_mov_uniq.sql
 
 Obs: as migrations usam `CREATE TABLE IF NOT EXISTS` — rodam limpo.
 
-### Passo 3 — Adicionar suporte a PostgreSQL direto em utils.py
+### ✅ Passo 3 — Adicionar suporte a PostgreSQL direto em utils.py (FEITO)
 
 Hoje o `utils.py` usa `supabase-py` (REST API). Para PostgreSQL local, precisa de
 `psycopg2` com INSERT ... ON CONFLICT.
@@ -102,7 +102,7 @@ def _upsert_pg(conn, table: str, rows: list[dict], conflict: str, batch: int) ->
 **Nota sobre demonstrativos_contabeis:** sem nome de constraint — usar coluna UNIQUE implícita ou
 criar constraint nomeada. Checar com `\d demonstrativos_contabeis` no psql.
 
-### Passo 4 — Adicionar psycopg2 ao requirements.txt
+### ✅ Passo 4 — Adicionar psycopg2 ao requirements.txt (FEITO)
 
 ```
 psycopg2-binary==2.9.10
@@ -110,7 +110,7 @@ psycopg2-binary==2.9.10
 
 Usar `psycopg2-binary` (sem compilação C). Não remover `supabase` — GitHub Actions ainda usa.
 
-### Passo 5 — Criar .env local para uso com psycopg2
+### ✅ Passo 5 — Criar .env local para uso com psycopg2 (FEITO — .env.example atualizado)
 
 ```bash
 # .env (não commitado)
@@ -159,7 +159,7 @@ Validar que funciona:
 npx -y @modelcontextprotocol/server-postgres postgresql://localhost/cvm_research
 ```
 
-### Passo 8 — Atualizar CLAUDE.md para uso local
+### ✅ Passo 8 — Atualizar CLAUDE.md para uso local (FEITO)
 
 Adicionar seção explicando como conectar via MCP local vs. nuvem.
 

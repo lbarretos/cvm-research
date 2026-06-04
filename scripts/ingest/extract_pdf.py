@@ -58,15 +58,19 @@ def fetch_pdf_text(url: str) -> str | None:
 
 # ── backend psycopg2 ──────────────────────────────────────────────────────────
 
-def _fetch_pendentes_pg(conn, cnpjs: set, categorias: set, limite: int) -> list[dict]:
+def _fetch_pendentes_pg(conn, cnpjs: set, categorias: set, limite: int,
+                        retry_failed: bool = False) -> list[dict]:
     cnpjs_list = list(cnpjs)
     cats_list  = list(categorias)
+    # retry_failed=True: re-tenta docs que falharam antes (ex: timeout transitório)
+    # retry_failed=False: só docs nunca tentados
+    falhou_filter = "TRUE"  if retry_failed else "FALSE"
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(f"""
             SELECT protocolo_entrega, cnpj_companhia, categoria, assunto, link_download
             FROM ipe_docs
             WHERE texto_extraido IS NULL
-              AND extracao_falhou = FALSE
+              AND extracao_falhou = {falhou_filter}
               AND cnpj_companhia = ANY(%s)
               AND categoria      = ANY(%s)
             ORDER BY data_entrega DESC
@@ -129,16 +133,17 @@ def _salvar_sb(sb, protocolo: str, texto: str | None) -> None:
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def main(cnpj_filter=None, categoria_filter=None, limite=200):
+def main(cnpj_filter=None, categoria_filter=None, limite=200, retry_failed=False):
     db     = get_supabase()   # retorna psycopg2 conn ou supabase client
     is_pg  = hasattr(db, "cursor")
     cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
     cats   = {categoria_filter} if categoria_filter else CATEGORIAS_PRIORITARIAS
 
     backend = "PostgreSQL local" if is_pg else "Supabase"
-    print(f"Backend: {backend}")
+    modo    = " [retry falhas anteriores]" if retry_failed else ""
+    print(f"Backend: {backend}{modo}")
 
-    docs = _fetch_pendentes_pg(db, cnpjs, cats, limite) if is_pg \
+    docs = _fetch_pendentes_pg(db, cnpjs, cats, limite, retry_failed) if is_pg \
            else _fetch_pendentes_sb(db, cnpjs, cats, limite)
     print(f"Pendentes para extração: {len(docs)}")
 
@@ -172,8 +177,10 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--cnpj",      help="Filtrar por CNPJ")
-    p.add_argument("--categoria", help="Filtrar por categoria")
-    p.add_argument("--limite",    type=int, default=200)
+    p.add_argument("--cnpj",         help="Filtrar por CNPJ")
+    p.add_argument("--categoria",    help="Filtrar por categoria")
+    p.add_argument("--limite",       type=int, default=200)
+    p.add_argument("--retry-failed", action="store_true",
+                   help="Re-tentar docs marcados como falha (útil para erros transitórios)")
     args = p.parse_args()
-    main(args.cnpj, args.categoria, args.limite)
+    main(args.cnpj, args.categoria, args.limite, args.retry_failed)

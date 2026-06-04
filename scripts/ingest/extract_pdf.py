@@ -1,12 +1,15 @@
 """
 Extrai texto de PDFs do IPE para documentos da watchlist sem texto_extraido.
-Fluxo: baixa PDF em memória → extrai texto → salva no Supabase → descarta PDF.
+Fluxo: baixa PDF em memória → extrai texto → salva no banco → descarta PDF.
 Nenhum byte de PDF é persistido em disco ou storage.
 
 Uso:
-  python extract_pdf.py                        # processa todos pendentes da watchlist
+  python extract_pdf.py                              # processa todos pendentes da watchlist
   python extract_pdf.py --cnpj 02.286.479/0001-08   # só uma empresa
   python extract_pdf.py --categoria "Fato Relevante" --limite 100
+  python extract_pdf.py --categoria "Resultado" --cnpj 16.670.085/0001-55 --limite 50
+
+Funciona com banco local (DATABASE_URL) ou Supabase (SUPABASE_URL + SUPABASE_KEY).
 """
 import argparse
 import io
@@ -30,6 +33,7 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; CVM-Research-Bot/1.0)",
 }
 
+
 def fetch_pdf_text(url: str) -> str | None:
     try:
         r = httpx.get(url, headers=HEADERS, timeout=60, follow_redirects=True)
@@ -42,8 +46,6 @@ def fetch_pdf_text(url: str) -> str | None:
         if content_length > 50 * 1024 * 1024:
             print(f"    SKIP: PDF muito grande ({content_length // 1024 // 1024}MB)")
             return None
-        # Portal CVM envia Content-Type: text/html mesmo para PDFs —
-        # verificar pelos magic bytes em vez do header
         if not r.content.startswith(b"%PDF"):
             return None
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
@@ -53,25 +55,91 @@ def fetch_pdf_text(url: str) -> str | None:
         print(f"    ERRO fetch: {e}")
         return None
 
-def main(cnpj_filter=None, categoria_filter=None, limite=200):
-    if os.environ.get("DATABASE_URL"):
-        print("extract_pdf.py requer Supabase na nuvem — usa .select()/.update() do cliente REST.\n"
-              "Remova DATABASE_URL do .env e configure SUPABASE_URL + SUPABASE_KEY.", file=sys.stderr)
-        sys.exit(1)
-    sb    = get_supabase()
-    cnpjs = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
 
-    query = (
+# ── backend psycopg2 ──────────────────────────────────────────────────────────
+
+def _fetch_pendentes_pg(conn, cnpjs: set, categorias: set, limite: int) -> list[dict]:
+    cnpjs_list = list(cnpjs)
+    cats_list  = list(categorias)
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT protocolo_entrega, cnpj_companhia, categoria, assunto, link_download
+            FROM ipe_docs
+            WHERE texto_extraido IS NULL
+              AND extracao_falhou = FALSE
+              AND cnpj_companhia = ANY(%s)
+              AND categoria      = ANY(%s)
+            ORDER BY data_entrega DESC
+            LIMIT %s
+        """, (cnpjs_list, cats_list, limite))
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def _salvar_pg(conn, protocolo: str, texto: str | None) -> None:
+    if texto:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE ipe_docs
+                SET texto_extraido  = %s,
+                    chars_extraidos = %s,
+                    extraido_em     = %s,
+                    extracao_falhou = FALSE
+                WHERE protocolo_entrega = %s
+            """, (texto, len(texto), datetime.now(timezone.utc), protocolo))
+    else:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE ipe_docs SET extracao_falhou = TRUE
+                WHERE protocolo_entrega = %s
+            """, (protocolo,))
+    conn.commit()
+
+
+# ── backend Supabase ──────────────────────────────────────────────────────────
+
+def _fetch_pendentes_sb(sb, cnpjs: set, categorias: set, limite: int) -> list[dict]:
+    return (
         sb.table("ipe_docs")
           .select("protocolo_entrega, cnpj_companhia, categoria, assunto, link_download")
           .is_("texto_extraido", "null")
           .eq("extracao_falhou", False)
           .in_("cnpj_companhia", list(cnpjs))
-          .in_("categoria", list(CATEGORIAS_PRIORITARIAS if not categoria_filter else {categoria_filter}))
+          .in_("categoria", list(categorias))
           .order("data_entrega", desc=True)
           .limit(limite)
+          .execute()
+          .data
     )
-    docs = query.execute().data
+
+
+def _salvar_sb(sb, protocolo: str, texto: str | None) -> None:
+    if texto:
+        sb.table("ipe_docs").update({
+            "texto_extraido": texto,
+            "chars_extraidos": len(texto),
+            "extraido_em": datetime.now(timezone.utc).isoformat(),
+            "extracao_falhou": False,
+        }).eq("protocolo_entrega", protocolo).execute()
+    else:
+        sb.table("ipe_docs").update({
+            "extracao_falhou": True,
+        }).eq("protocolo_entrega", protocolo).execute()
+
+
+# ── main ──────────────────────────────────────────────────────────────────────
+
+def main(cnpj_filter=None, categoria_filter=None, limite=200):
+    db     = get_supabase()   # retorna psycopg2 conn ou supabase client
+    is_pg  = hasattr(db, "cursor")
+    cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
+    cats   = {categoria_filter} if categoria_filter else CATEGORIAS_PRIORITARIAS
+
+    backend = "PostgreSQL local" if is_pg else "Supabase"
+    print(f"Backend: {backend}")
+
+    docs = _fetch_pendentes_pg(db, cnpjs, cats, limite) if is_pg \
+           else _fetch_pendentes_sb(db, cnpjs, cats, limite)
     print(f"Pendentes para extração: {len(docs)}")
 
     ok = fail = skip = 0
@@ -81,25 +149,26 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200):
             skip += 1
             continue
 
-        print(f"  [{doc['cnpj_companhia']}] {doc['categoria']} — {doc['assunto'][:60] if doc['assunto'] else ''}...")
+        assunto = (doc.get("assunto") or "")[:60]
+        print(f"  [{doc['cnpj_companhia']}] {doc['categoria']} — {assunto}...")
         texto = fetch_pdf_text(url)
         time.sleep(0.5)  # respeita rate limit do portal CVM
 
         if texto and len(texto) > 100:
-            sb.table("ipe_docs").update({
-                "texto_extraido": texto,
-                "chars_extraidos": len(texto),
-                "extraido_em": datetime.now(timezone.utc).isoformat(),
-                "extracao_falhou": False,
-            }).eq("protocolo_entrega", doc["protocolo_entrega"]).execute()
+            if is_pg:
+                _salvar_pg(db, doc["protocolo_entrega"], texto)
+            else:
+                _salvar_sb(db, doc["protocolo_entrega"], texto)
             ok += 1
         else:
-            sb.table("ipe_docs").update({
-                "extracao_falhou": True,
-            }).eq("protocolo_entrega", doc["protocolo_entrega"]).execute()
+            if is_pg:
+                _salvar_pg(db, doc["protocolo_entrega"], None)
+            else:
+                _salvar_sb(db, doc["protocolo_entrega"], None)
             fail += 1
 
     print(f"\nResultado: {ok} extraídos | {fail} falhas | {skip} sem link")
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()

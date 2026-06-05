@@ -50,7 +50,9 @@ def fetch_pdf_text(url: str) -> str | None:
             return None
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]
-        return "\n\n".join(p for p in pages if p.strip())
+        texto = "\n\n".join(p for p in pages if p.strip())
+        # Remove NUL bytes (0x00) — PostgreSQL rejeita strings com NUL
+        return texto.replace("\x00", "")
     except Exception as e:
         print(f"    ERRO fetch: {e}")
         return None

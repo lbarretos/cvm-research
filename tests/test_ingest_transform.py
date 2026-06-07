@@ -384,3 +384,41 @@ def test_get_supabase_usa_supabase_quando_database_url_ausente():
 
     mock_create.assert_called_once_with("https://fake.supabase.co", "fake-key")
     assert result is fake_client
+
+
+# ── extract_pdf.py fail-fast guard ───────────────────────────────────────────
+
+def test_extract_pdf_failfast_com_sqlite_sem_supabase_url():
+    """extract_pdf.main() deve sair com código 1 quando DATABASE_URL=sqlite://... e SUPABASE_URL ausente."""
+    import importlib
+    import types
+
+    env_sqlite_sem_supabase = {
+        k: v for k, v in os.environ.items() if k not in ("DATABASE_URL", "SUPABASE_URL")
+    }
+    env_sqlite_sem_supabase["DATABASE_URL"] = "sqlite:///test.db"
+
+    extract_pdf_path = os.path.join(
+        os.path.dirname(__file__), "..", "scripts", "ingest", "extract_pdf.py"
+    )
+    spec = importlib.util.spec_from_file_location("extract_pdf_test", extract_pdf_path)
+    extract_pdf = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(extract_pdf)
+
+    with patch.dict(os.environ, env_sqlite_sem_supabase, clear=True):
+        with pytest.raises(SystemExit) as exc_info:
+            extract_pdf.main()
+    assert exc_info.value.code == 1
+
+
+# ── _upsert_sqlite rollback on exception ─────────────────────────────────────
+
+def test_upsert_sqlite_rollback_em_excecao():
+    """_upsert_sqlite deve fazer rollback e re-raise quando executemany falha."""
+    conn = _make_sqlite_conn()
+    bad_rows = [{"cnpj": "x", "ticker": None}]  # ticker TEXT NOT NULL → IntegrityError
+    with pytest.raises(Exception):
+        _upsert_sqlite(conn, "companies", bad_rows, "cnpj")
+    # Conexão deve estar usável após rollback
+    count = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
+    assert count == 0

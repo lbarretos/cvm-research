@@ -136,16 +136,25 @@ def _salvar_sb(sb, protocolo: str, texto: str | None) -> None:
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200, retry_failed=False):
-    db     = get_supabase()   # retorna psycopg2 conn ou supabase client
-    is_pg  = hasattr(db, "cursor")
+    if os.environ.get("DATABASE_URL") and not os.environ.get("SUPABASE_URL"):
+        print(
+            "ERRO: extract_pdf.py requer Supabase. Defina SUPABASE_URL e SUPABASE_KEY no .env.\n"
+            "       O banco local (SQLite) não suporta extração de PDF.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    db     = get_supabase()   # retorna sqlite3 conn ou supabase client
+    is_sqlite = __import__('sqlite3').Connection
+    is_local  = isinstance(db, is_sqlite)
     cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
     cats   = {categoria_filter} if categoria_filter else CATEGORIAS_PRIORITARIAS
 
-    backend = "PostgreSQL local" if is_pg else "Supabase"
+    backend = "local (SQLite)" if is_local else "Supabase"
     modo    = " [retry falhas anteriores]" if retry_failed else ""
     print(f"Backend: {backend}{modo}")
 
-    docs = _fetch_pendentes_pg(db, cnpjs, cats, limite, retry_failed) if is_pg \
+    docs = _fetch_pendentes_pg(db, cnpjs, cats, limite, retry_failed) if is_local \
            else _fetch_pendentes_sb(db, cnpjs, cats, limite)
     print(f"Pendentes para extração: {len(docs)}")
 
@@ -162,13 +171,13 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200, retry_failed=False
         time.sleep(0.5)  # respeita rate limit do portal CVM
 
         if texto and len(texto) > 100:
-            if is_pg:
+            if is_local:
                 _salvar_pg(db, doc["protocolo_entrega"], texto)
             else:
                 _salvar_sb(db, doc["protocolo_entrega"], texto)
             ok += 1
         else:
-            if is_pg:
+            if is_local:
                 _salvar_pg(db, doc["protocolo_entrega"], None)
             else:
                 _salvar_sb(db, doc["protocolo_entrega"], None)

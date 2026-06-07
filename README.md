@@ -111,8 +111,8 @@ pwd                # raiz do projeto → append /cvm_research.db
 ```bash
 claude mcp add postgres-local -s user -- \
   $(which npx) \
-  -y @modelcontextprotocol/server-sqlite \
-  $(pwd)/cvm_research.db
+  -y mcp-server-sqlite \
+  --db $(pwd)/cvm_research.db
 ```
 
 Verificar se conectou:
@@ -138,7 +138,8 @@ Adicionar a chave `mcpServers` ao JSON existente:
       "command": "/CAMINHO/COMPLETO/DO/npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-sqlite",
+        "mcp-server-sqlite",
+        "--db",
         "/CAMINHO/ABSOLUTO/cvm_research.db"
       ]
     }
@@ -169,8 +170,8 @@ ls -lh cvm_research.db
 npx --version
 
 # 3. MCP server funciona?
-npx -y @modelcontextprotocol/server-sqlite ./cvm_research.db
-# Deve imprimir mensagem de startup sem erro
+npx -y mcp-server-sqlite --db ./cvm_research.db
+# Deve imprimir: SQLite MCP Server running on stdio
 ```
 
 ---

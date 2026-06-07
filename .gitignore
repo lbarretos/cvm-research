@@ -5,3 +5,7 @@ __pycache__/
 venv/
 *.zip
 *.csv.bak
+cvm_research.db
+cvm_research.db-shm
+cvm_research.db-wal
+.DS_Store

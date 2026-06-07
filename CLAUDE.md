@@ -16,8 +16,8 @@ echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 
 # 2. MCP no Claude Code
 claude mcp add postgres-local -s user -- $(which npx) \
-  -y @modelcontextprotocol/server-sqlite \
-  $(pwd)/cvm_research.db
+  -y mcp-server-sqlite \
+  --db $(pwd)/cvm_research.db
 
 # 3. MCP no Claude desktop app
 # Editar: ~/Library/Application Support/Claude/claude_desktop_config.json
@@ -25,7 +25,7 @@ claude mcp add postgres-local -s user -- $(which npx) \
 # "mcpServers": {
 #   "postgres-local": {
 #     "command": "/caminho/absoluto/do/npx",
-#     "args": ["-y", "@modelcontextprotocol/server-sqlite", "/caminho/absoluto/cvm_research.db"]
+#     "args": ["-y", "mcp-server-sqlite", "--db", "/caminho/absoluto/cvm_research.db"]
 #   }
 # }
 # Reiniciar o app após editar.
@@ -300,8 +300,8 @@ SELECT COUNT(*) AS total_docs FROM ipe_docs;
 
 ```bash
 claude mcp add postgres-local -s user -- $(which npx) \
-  -y @modelcontextprotocol/server-sqlite \
-  $(pwd)/cvm_research.db
+  -y mcp-server-sqlite \
+  --db $(pwd)/cvm_research.db
 
 # Verificar:
 claude mcp list   # deve mostrar ✓ Connected
@@ -318,7 +318,8 @@ Editar `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "/caminho/absoluto/do/npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-sqlite",
+        "mcp-server-sqlite",
+        "--db",
         "/caminho/absoluto/para/cvm_research.db"
       ]
     }

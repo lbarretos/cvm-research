@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marcopolo (POMO3/4) — EPS & DPS Histórico</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 24px;
+  }
+  .header { text-align: center; margin-bottom: 32px; }
+  .header h1 { font-size: 22px; font-weight: 600; color: #f8fafc; letter-spacing: -0.3px; }
+  .header p { font-size: 13px; color: #64748b; margin-top: 6px; }
+  .card {
+    background: #1e2130;
+    border: 1px solid #2d3348;
+    border-radius: 12px;
+    padding: 28px 32px;
+    width: 100%;
+    max-width: 860px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 20px;
+  }
+  .chart-wrap { position: relative; height: 320px; }
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    width: 100%;
+    max-width: 860px;
+    margin-bottom: 20px;
+  }
+  .metric {
+    background: #1e2130;
+    border: 1px solid #2d3348;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .metric-label { font-size: 11px; color: #64748b; margin-bottom: 6px; }
+  .metric-value { font-size: 20px; font-weight: 700; color: #f8fafc; }
+  .metric-sub { font-size: 11px; color: #64748b; margin-top: 3px; }
+  .metric-value.green { color: #34d399; }
+  .metric-value.blue { color: #60a5fa; }
+  .note {
+    font-size: 11px;
+    color: #475569;
+    text-align: center;
+    max-width: 860px;
+    line-height: 1.6;
+  }
+  .legend-row {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Marcopolo SA — POMO3 / POMO4</h1>
+  <p>EPS e DPS histórico · 2016–2025 · Base: DFP CVM (consolidado)</p>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="metric-label">EPS 2025</div>
+    <div class="metric-value green">R$ 1,08</div>
+    <div class="metric-sub">+2% vs 2024</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">DPS 2025</div>
+    <div class="metric-value blue">R$ 0,87</div>
+    <div class="metric-sub">JCP + Dividendos</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Payout 2025</div>
+    <div class="metric-value">81%</div>
+    <div class="metric-sub">vs 30% em 2024</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">CAGR EPS</div>
+    <div class="metric-value green">19%</div>
+    <div class="metric-sub">2016–2025</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Ações</div>
+    <div class="metric-value" style="font-size:14px">946M→1,136B</div>
+    <div class="metric-sub">aumento mai/2023</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">EPS vs DPS — R$ por ação</div>
+  <div class="legend-row">
+    <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div>EPS (Lucro por ação)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#60a5fa"></div>DPS — JCP</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#818cf8"></div>DPS — Dividendos</div>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="mainChart"></canvas>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Payout ratio — % do lucro distribuído</div>
+  <div class="chart-wrap" style="height:180px">
+    <canvas id="payoutChart"></canvas>
+  </div>
+</div>
+
+<div class="note">
+  EPS = Lucro líquido atribuído a controladores (cd_conta 3.11.01) ÷ total de ações (ON+PN) do exercício.<br>
+  DPS = (JCP + Dividendos pagos) ÷ ações — fonte: DVA consolidada (cd_conta 7.08.04.01 + 7.08.04.02).<br>
+  <strong>Ações:</strong> 946.892.882 (2016–2022, proxy FRE mais antigo disponível) → 1.136.271.458 a partir de 2023 (aumento de capital NFI em mai/2023).<br>
+  2016–2020: FRE não ingerido para esses anos — número de ações estimado pelo mais antigo disponível (2021-01-01).<br>
+  2025: payout elevado por distribuição extraordinária (dividendos R$692M + JCP R$299M = R$991M sobre lucro de R$1.223M).
+</div>
+
+<script>
+const anos = ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025'];
+
+// Shares por ano — fonte: FRE CVM (Capital Integralizado)
+// 2016–2022: 946.892.882 (FRE disponível a partir de 2021-01-01; usado como proxy para anos anteriores)
+// 2023: 1.136.271.458 (aumento de capital NFI em mai/2023; usando posição de dez/23 — proxy conservador)
+// 2024–2025: 1.136.271.458
+const sharesByYear = [946892882, 946892882, 946892882, 946892882, 946892882,
+                      946892882, 946892882, 1136271458, 1136271458, 1136271458];
+
+const lucro = [219388000, 72170000, 186730000, 201387000, 103863000,
+               366623000, 449114000, 816159000, 1200019000, 1223349000];
+
+const jcp   = [118432000, 17028000,  82909000, 56609000, 42261000,
+               82264000,  99227000, 175168000, 364124000,  298736000];
+
+const div   = [0, 112000, 0, 0, 0, 0, 0, 0, 0, 692929000];
+
+const eps    = lucro.map((v, i) => +(v / sharesByYear[i]).toFixed(3));
+const dpsJcp = jcp.map((v, i) => +(v / sharesByYear[i]).toFixed(3));
+const dpsDiv = div.map((v, i) => +(v / sharesByYear[i]).toFixed(3));
+const payout = anos.map((_, i) => +(((jcp[i] + div[i]) / lucro[i]) * 100).toFixed(1));
+
+// Main chart
+new Chart(document.getElementById('mainChart'), {
+  type: 'bar',
+  data: {
+    labels: anos,
+    datasets: [
+      {
+        label: 'EPS',
+        data: eps,
+        backgroundColor: '#34d39933',
+        borderColor: '#34d399',
+        borderWidth: 2,
+        borderRadius: 4,
+        type: 'line',
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: '#34d399',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        yAxisID: 'y',
+        order: 1,
+      },
+      {
+        label: 'DPS — JCP',
+        data: dpsJcp,
+        backgroundColor: '#60a5fa',
+        borderColor: '#60a5fa',
+        borderRadius: 4,
+        yAxisID: 'y',
+        stack: 'dps',
+        order: 2,
+      },
+      {
+        label: 'DPS — Dividendos',
+        data: dpsDiv,
+        backgroundColor: '#818cf8',
+        borderColor: '#818cf8',
+        borderRadius: 4,
+        yAxisID: 'y',
+        stack: 'dps',
+        order: 2,
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1e2130',
+        borderColor: '#2d3348',
+        borderWidth: 1,
+        titleColor: '#f8fafc',
+        bodyColor: '#94a3b8',
+        padding: 12,
+        callbacks: {
+          label: ctx => {
+            const val = ctx.parsed.y;
+            if (ctx.dataset.label === 'EPS') return ` EPS: R$ ${val.toFixed(3)}`;
+            if (ctx.dataset.label === 'DPS — JCP') return ` JCP/ação: R$ ${val.toFixed(3)}`;
+            return ` Div/ação: R$ ${val.toFixed(3)}`;
+          },
+          afterBody: (items) => {
+            const i = items[0].dataIndex;
+            const totalDps = (dpsJcp[i] + dpsDiv[i]).toFixed(3);
+            return [``, ` DPS total: R$ ${totalDps}`, ` Payout: ${payout[i]}%`];
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: '#2d3348' },
+        ticks: { color: '#64748b', font: { size: 12 } }
+      },
+      y: {
+        grid: { color: '#2d334880' },
+        ticks: {
+          color: '#64748b',
+          font: { size: 12 },
+          callback: v => 'R$ ' + v.toFixed(2)
+        },
+        title: { display: true, text: 'R$ por ação', color: '#475569', font: { size: 11 } }
+      }
+    }
+  }
+});
+
+// Payout chart
+new Chart(document.getElementById('payoutChart'), {
+  type: 'bar',
+  data: {
+    labels: anos,
+    datasets: [{
+      label: 'Payout %',
+      data: payout,
+      backgroundColor: payout.map(v => v > 70 ? '#f59e0b' : '#3b82f6'),
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1e2130',
+        borderColor: '#2d3348',
+        borderWidth: 1,
+        callbacks: { label: ctx => ` Payout: ${ctx.parsed.y}%` }
+      },
+      annotation: {}
+    },
+    scales: {
+      x: { grid: { color: '#2d3348' }, ticks: { color: '#64748b', font: { size: 11 } } },
+      y: {
+        grid: { color: '#2d334880' },
+        ticks: { color: '#64748b', font: { size: 11 }, callback: v => v + '%' },
+        max: 100
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

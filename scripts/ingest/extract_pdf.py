@@ -136,7 +136,7 @@ def _salvar_sb(sb, protocolo: str, texto: str | None) -> None:
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200, retry_failed=False):
-    if os.environ.get("DATABASE_URL") and not os.environ.get("SUPABASE_URL"):
+    if (os.environ.get("DATABASE_URL") or "").startswith("sqlite:"):
         print(
             "ERRO: extract_pdf.py requer Supabase. Defina SUPABASE_URL e SUPABASE_KEY no .env.\n"
             "       O banco local (SQLite) não suporta extração de PDF.",

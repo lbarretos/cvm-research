@@ -24,155 +24,61 @@ Base de dados local de documentos e eventos de empresas abertas brasileiras, org
 
 ---
 
-## Setup completo (primeira vez)
+## Setup completo
 
-### 1. Clonar o repositório
+> **Recomendado:** veja o [INSTALL.md](INSTALL.md) para o guia passo a passo com suporte ao Claude Code — do clone ao primeiro SELECT em menos de 5 minutos de trabalho seu.
+
+### Resumo rápido (manual)
 
 ```bash
 git clone https://github.com/lbarretos/cvm-research.git
 cd cvm-research
-```
-
-### 2. Criar o banco SQLite
-
-```bash
 bash setup.sh
-# Saída esperada:
-# === CVM Research — Setup do banco SQLite ===
-# Banco 'cvm_research.db' criado.
-# === Tabelas criadas ===
-# companies  demonstrativos_contabeis  fre_capital_social  ipe_docs  ...
-# ✅ Banco pronto.
-```
-
-### 3. Configurar ambiente Python
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Criar o arquivo `.env` na raiz do projeto:
-
-```bash
+python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
 echo "DATABASE_URL=sqlite:///cvm_research.db" > .env
 ```
 
-### 4. Carga inicial dos dados (~30–40 min)
-
+Carga inicial (~30–40 min):
 ```bash
 cd scripts/ingest
-
-python ingest_companies.py          # watchlist (~5s)
-python ingest_ipe.py                # metadados IPE 2021–hoje (~5 min)
-python ingest_vlmo.py               # insider trading 2021–hoje (~3 min)
-python ingest_recompra.py           # programas de recompra (~30s)
-python ingest_fre.py                # capital, acionistas, remuneração (~8 min)
-python ingest_dfp.py --historico    # demonstrativos anuais 2016–hoje (~10 min)
-python ingest_itr.py --desde 2016   # trimestrais 2016–hoje (~15 min)
-```
-
-Para verificar a carga:
-```bash
-sqlite3 cvm_research.db "
-SELECT name AS tabela FROM sqlite_master WHERE type='table' ORDER BY name;
-SELECT COUNT(*) AS total_docs FROM ipe_docs;
-"
+python ingest_companies.py && python ingest_ipe.py && python ingest_vlmo.py
+python ingest_recompra.py && python ingest_fre.py
+python ingest_dfp.py --historico && python ingest_itr.py --desde 2016
 ```
 
 ---
 
 ## Configurar MCP no Claude
 
-O MCP (Model Context Protocol) permite ao Claude acessar o banco diretamente durante a conversa. Precisa ser configurado uma vez em cada interface.
+O MCP permite ao Claude consultar o banco diretamente durante a conversa.
 
-### Encontrar o caminho do npx
+> **Atenção:** o Claude.app (interface visual) usa um sandbox que impede o `mcp-server-sqlite` (npm) de abrir arquivos. Use o servidor HTTP Python descrito abaixo. Veja a explicação completa em [INSTALL.md — Arquitetura do MCP](INSTALL.md#arquitetura-do-mcp).
 
-```bash
-which npx
-# Exemplos comuns:
-# /usr/local/bin/npx           (instalação padrão Node)
-# ~/.fnm/node-versions/v24.14.0/installation/bin/npx  (fnm)
-# ~/.nvm/versions/node/v20.0.0/bin/npx                (nvm)
-# /opt/homebrew/bin/npx        (Homebrew)
-```
-
-Guarde esse caminho e o caminho absoluto do banco:
-```bash
-which npx          # caminho do npx
-pwd                # raiz do projeto → append /cvm_research.db
-```
-
----
-
-### Opção A — Claude Code (terminal)
+### Setup do MCP (Claude Code + Claude.app)
 
 ```bash
-claude mcp add postgres-local -s user -- \
-  $(which npx) \
-  -y mcp-server-sqlite \
-  --db $(pwd)/cvm_research.db
+# 1. Instalar o MCP SDK Python
+pip3 install "mcp[cli]"
+
+# 2. Iniciar o servidor HTTP (porta 8765)
+bash scripts/mcp/start_mcp.sh
+
+# 3. Configurar o ~/.claude.json para HTTP
+claude mcp remove postgres-local 2>/dev/null || true
+claude mcp add postgres-local -s user --transport http http://localhost:8765/mcp
+
+# 4. (Opcional) Auto-iniciar no login do Mac
+launchctl load ~/Library/LaunchAgents/com.cvm-research.mcp.plist
 ```
 
-Verificar se conectou:
-```bash
-claude mcp list
-# Deve mostrar: postgres-local: ... ✓ Connected
-```
-
----
-
-### Opção B — Claude desktop app (chat visual)
-
-Editar o arquivo de configuração do app:
-
-**Localização:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-Adicionar a chave `mcpServers` ao JSON existente:
-
-```json
-{
-  "mcpServers": {
-    "postgres-local": {
-      "command": "/CAMINHO/COMPLETO/DO/npx",
-      "args": [
-        "-y",
-        "mcp-server-sqlite",
-        "--db",
-        "/CAMINHO/ABSOLUTO/cvm_research.db"
-      ]
-    }
-  }
-}
-```
-
-> **Importante:** use caminhos absolutos. O Claude desktop não herda o PATH do shell.
-> Exemplo: `"/Users/seu-usuario/cvm-research/cvm_research.db"` — nunca `~` ou caminhos relativos.
-
-Após editar, **reinicie o Claude desktop** (Cmd+Q → reabrir).
-
----
-
-### Verificar se o MCP está funcionando
-
-Tanto no Claude Code quanto no Claude desktop, faça uma pergunta de teste:
-
-> *"Quais tabelas existem no banco e quantas linhas tem cada uma?"*
-
-O Claude deve responder com a lista de tabelas e contagens diretamente do banco. Se não aparecer:
+### Verificar
 
 ```bash
-# 1. Banco existe?
-ls -lh cvm_research.db
-
-# 2. npx funciona?
-npx --version
-
-# 3. MCP server funciona?
-npx -y mcp-server-sqlite --db ./cvm_research.db
-# Deve imprimir: SQLite MCP Server running on stdio
+curl -s http://localhost:8765/mcp   # servidor respondendo
+claude mcp list                     # postgres-local: ✓ Connected
 ```
+
+Ou pergunte ao Claude: *"Quantas linhas tem a tabela ipe_docs?"* — deve responder ~35.000.
 
 ---
 
@@ -299,11 +205,11 @@ python ingest_companies.py && python ingest_ipe.py
 # ... (ver seção "Carga inicial" acima)
 ```
 
-**MCP não conecta no Claude desktop**
-- Confirme que os caminhos são absolutos (sem `~`)
-- Confirme que `cvm_research.db` existe: `ls -lh cvm_research.db`
-- Confirme que o JSON está válido (sem vírgulas extras)
-- Reinicie o Claude desktop completamente (Cmd+Q → reabrir)
+**MCP não conecta**
+- Confirme que o servidor HTTP está rodando: `curl http://localhost:8765/mcp`
+- Se não estiver: `bash scripts/mcp/start_mcp.sh`
+- Confirme que o `~/.claude.json` aponta para HTTP (não stdio): `claude mcp list`
+- Veja troubleshooting completo em [INSTALL.md](INSTALL.md#troubleshooting-do-mcp)
 
 **`extract_pdf.py` falha com erro sobre SQLite**
 ```

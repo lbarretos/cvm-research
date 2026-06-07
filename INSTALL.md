@@ -176,7 +176,27 @@ python ingest_itr.py --desde 2016
 
 ## Arquitetura do MCP
 
-O acesso ao banco pelo Claude é feito via MCP (Model Context Protocol). Há uma decisão de arquitetura importante aqui que afeta como você gerencia o servidor.
+### Como funciona no dia a dia
+
+O MCP funciona através de um pequeno servidor Python (`cvm_mcp.py`) que fica rodando em background na sua máquina. Ele abre uma conexão com o banco SQLite local e expõe as queries via HTTP na porta 8765.
+
+**Você não precisa gerenciar nada manualmente.** O LaunchAgent configurado no setup inicia o servidor automaticamente toda vez que você ligar o computador ou fizer login — igual a outros serviços de background do Mac (Dropbox, 1Password, etc.). O servidor fica ativo silenciosamente até você desligar o Mac.
+
+Fluxo no boot:
+```
+Mac liga → login → LaunchAgent inicia cvm_mcp.py → servidor disponível em localhost:8765
+                                                           ↓
+                                          Claude se conecta quando você abre uma sessão
+```
+
+Para confirmar que está rodando:
+```bash
+curl http://localhost:8765/mcp    # responde = OK
+# ou
+pgrep -f cvm_mcp.py               # mostra o PID do processo
+```
+
+---
 
 ### Por que um servidor HTTP e não `mcp-server-sqlite` direto?
 

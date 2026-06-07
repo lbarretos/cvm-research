@@ -23,4 +23,4 @@ PostgreSQL 16 local (sem Docker). GitHub Actions desativados. Ingestão passa a 
 ## Backlog
 
 - [ ] Configurar atualização automática semanal dos ingestores (launchd ou `/schedule`)
-- [ ] Testar `extract_pdf.py` localmente (hoje requer Supabase — possível porta para psycopg2)
+- [ ] Portar `extract_pdf.py` para SQLite — hoje requer Supabase (reescrita de ~100-150 linhas que usam `.select()/.update()` da supabase-py; depende da migração para SQLite)

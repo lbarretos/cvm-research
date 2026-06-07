@@ -1,4 +1,6 @@
 #!/bin/bash
+# DEPRECATED: use 'bash setup.sh' instead (SQLite, sem PostgreSQL necessário)
+echo "DEPRECATED: use 'bash setup.sh' instead (SQLite, no PostgreSQL required)" && exit 0
 # Cria o banco cvm_research e roda todas as migrations em ordem.
 # Uso: bash setup_migrations.sh
 

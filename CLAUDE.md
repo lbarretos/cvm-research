@@ -1,7 +1,7 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: PostgreSQL 16 local · 56 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
+Banco: SQLite local · 56 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
 Atualização: manual via scripts de ingestão (ver seção "Conexão e atualização manual").
 
 ## Configuração do MCP (ler antes de começar)
@@ -10,16 +10,24 @@ Para o Claude acessar o banco, o MCP `postgres-local` precisa estar conectado.
 Setup completo em `README.md`. Resumo rápido:
 
 ```bash
-# 1. PostgreSQL rodando?
-brew services list | grep postgresql   # se "stopped": brew services start postgresql@16
+# 1. Criar banco e configurar .env
+bash setup.sh                          # cria cvm_research.db
+echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 
 # 2. MCP no Claude Code
 claude mcp add postgres-local -s user -- $(which npx) \
-  -y @modelcontextprotocol/server-postgres postgresql://localhost/cvm_research
+  -y @modelcontextprotocol/server-sqlite \
+  $(pwd)/cvm_research.db
 
 # 3. MCP no Claude desktop app
 # Editar: ~/Library/Application Support/Claude/claude_desktop_config.json
-# Adicionar "mcpServers": { "postgres-local": { "command": "$(which npx)", "args": [...] } }
+# Adicionar:
+# "mcpServers": {
+#   "postgres-local": {
+#     "command": "/caminho/absoluto/do/npx",
+#     "args": ["-y", "@modelcontextprotocol/server-sqlite", "/caminho/absoluto/cvm_research.db"]
+#   }
+# }
 # Reiniciar o app após editar.
 ```
 
@@ -238,16 +246,21 @@ WHERE cnpj_companhia = '<CNPJ>'
 ORDER BY cd_conta;
 ```
 
-### Busca full-text no conteúdo de documentos
+### Busca full-text no conteúdo de documentos (SQLite FTS5)
+
 ```sql
-SELECT data_referencia, categoria, assunto,
-       ts_rank(search_vector, query) AS relevancia,
-       LEFT(texto_extraido, 300) AS trecho
-FROM ipe_docs,
-     to_tsquery('portuguese', 'aquisicao & controle') query
-WHERE cnpj_companhia = '<CNPJ>'
-  AND search_vector @@ query
-ORDER BY relevancia DESC;
+-- Antes da primeira busca, reconstruir o índice FTS (executar uma vez após ingestão):
+-- INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild');
+
+SELECT i.data_referencia, i.categoria, i.assunto,
+       f.rank AS relevancia,
+       substr(i.texto_extraido, 1, 300) AS trecho
+FROM ipe_docs_fts f
+JOIN ipe_docs i ON i.protocolo_entrega = f.protocolo_entrega
+WHERE f.cnpj_companhia = '<CNPJ>'
+  AND ipe_docs_fts MATCH 'aquisicao AND controle'
+ORDER BY rank
+LIMIT 20;
 ```
 
 ---
@@ -275,19 +288,20 @@ Se um documento recente não aparecer na base, informar ao usuário:
 
 ## Monitorar uso do banco
 ```sql
-SELECT pg_size_pretty(pg_database_size(current_database())) AS tamanho_db;
+SELECT COUNT(*) AS total_docs FROM ipe_docs;
 ```
 
 ## Conexão e atualização manual
 
-**Banco:** PostgreSQL 16 local, MCP `postgres-local` conectado.
-**Setup completo:** ver `README.md`.
+**Banco:** SQLite local (`cvm_research.db`), MCP `postgres-local` conectado.
+**Setup completo:** ver `README.md`. Setup rápido: `bash setup.sh`.
 
 ### MCP — Claude Code (terminal)
 
 ```bash
 claude mcp add postgres-local -s user -- $(which npx) \
-  -y @modelcontextprotocol/server-postgres postgresql://localhost/cvm_research
+  -y @modelcontextprotocol/server-sqlite \
+  $(pwd)/cvm_research.db
 
 # Verificar:
 claude mcp list   # deve mostrar ✓ Connected
@@ -302,13 +316,17 @@ Editar `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "postgres-local": {
       "command": "/caminho/absoluto/do/npx",
-      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/cvm_research"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "/caminho/absoluto/para/cvm_research.db"
+      ]
     }
   }
 }
 ```
 
-Obter o caminho do npx: `which npx`. Reiniciar o app após salvar.
+Obter o caminho do npx: `which npx`. Obter o caminho absoluto do banco: `pwd`/cvm_research.db. Reiniciar o app após salvar.
 
 ### Atualização manual dos dados
 
@@ -332,10 +350,19 @@ python ingest_itr.py --desde 2016
 
 O `.env` na raiz do projeto deve ter:
 ```
-DATABASE_URL=postgresql://localhost/cvm_research
+DATABASE_URL=sqlite:///cvm_research.db
 ```
 
-**Nota:** `extract_pdf.py` requer Supabase — não funciona com banco local.
+**Nota:** `extract_pdf.py` requer Supabase e não foi migrado para SQLite. Para
+extração de texto de PDFs, continue usando o banco Supabase + as variáveis
+SUPABASE_URL/SUPABASE_KEY no `.env`.
+
+**⚠️ Migração de dados existentes:** O campo `texto_extraido` (texto extraído de PDFs)
+**não é transferido automaticamente** ao migrar do PostgreSQL para SQLite. Após a
+migração, o banco SQLite inicia vazio. Todos os metadados de documentos são
+re-ingeridos pelos ingestores (IPE, VLMO, etc.), mas o texto extraído de PDFs
+requer re-execução do `extract_pdf.py` contra um banco Supabase. Guarde suas
+credenciais `SUPABASE_URL`/`SUPABASE_KEY` se quiser recuperar o conteúdo extraído.
 
 ## Skill routing
 

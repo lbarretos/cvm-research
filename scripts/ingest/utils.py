@@ -54,9 +54,20 @@ _INDEX_COLUMNS: dict[str, str] = {
 # ── Conexão de banco de dados ─────────────────────────────────────────────────
 
 def get_db():
-    """Retorna conexão psycopg2 para PostgreSQL local."""
-    import psycopg2
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    """Retorna conexão sqlite3 para banco local.
+
+    DATABASE_URL deve ser 'sqlite:///relative.db' ou 'sqlite:////abs/path.db'.
+    Caminho relativo é resolvido a partir da raiz do projeto.
+    """
+    import sqlite3
+    url = os.environ["DATABASE_URL"]
+    path = url.removeprefix("sqlite:///")
+    if not os.path.isabs(path):
+        path = str(Path(__file__).parents[2] / path)
+    conn = sqlite3.connect(path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
 
 def get_supabase():
     """Retorna cliente Supabase (nuvem) ou conexão psycopg2 (local).
@@ -125,50 +136,51 @@ def _sanitize(rows: list[dict]) -> list[dict]:
 # ── Upsert (Supabase ou psycopg2) ────────────────────────────────────────────
 
 def upsert(sb, table: str, rows: list[dict], conflict: str, batch: int = 500) -> None:
-    """Faz upsert em lotes (Supabase ou psycopg2), sanitizando NaN antes."""
+    """Faz upsert em lotes (sqlite3 ou supabase-py), sanitizando NaN antes."""
+    import sqlite3
     rows = _sanitize(rows)
-    if hasattr(sb, 'cursor'):   # psycopg2 connection
-        _upsert_pg(sb, table, rows, conflict, batch)
+    if isinstance(sb, sqlite3.Connection):
+        _upsert_sqlite(sb, table, rows, conflict, batch)
     else:                        # supabase-py client
         for i in range(0, len(rows), batch):
             sb.table(table).upsert(rows[i:i + batch], on_conflict=conflict).execute()
     print(f"  {table}: {len(rows)} rows")
 
-def _upsert_pg(conn, table: str, rows: list[dict], conflict: str, batch: int) -> None:
-    """INSERT ... ON CONFLICT DO UPDATE via psycopg2."""
-    import psycopg2.extras
+def _upsert_sqlite(conn, table: str, rows: list[dict], conflict: str, batch: int = 500) -> None:
+    """INSERT ... ON CONFLICT DO UPDATE via sqlite3 (requer SQLite ≥ 3.24)."""
     if not rows:
         return
     cols = list(rows[0].keys())
 
-    # Resolve named index → column list; caso contrário usa conflict direto
     conflict_cols = _INDEX_COLUMNS.get(conflict, conflict)
-    conflict_clause = f"ON CONFLICT ({conflict_cols})"
+    conflict_list = [c.strip() for c in conflict_cols.split(",")]
 
-    # Deduplica por chave de conflito — psycopg2 rejeita dois DO UPDATE na
-    # mesma linha num único comando ("cannot affect row a second time").
-    key_cols = [c.strip() for c in conflict_cols.split(",")]
-    seen_keys: dict = {}
+    # Deduplica por chave de conflito (Python None == None trata NULLs como iguais)
+    seen: dict = {}
     for row in rows:
-        key = tuple(row.get(c) for c in key_cols)
-        seen_keys[key] = row
-    rows = list(seen_keys.values())
+        key = tuple(row.get(c) for c in conflict_list)
+        seen[key] = row
+    rows = list(seen.values())
 
-    update_set = ", ".join(f"{c}=EXCLUDED.{c}" for c in cols if c not in EXCLUDED_FROM_UPDATE)
-    sql = (
-        f"INSERT INTO {table} ({','.join(cols)}) VALUES %s "
-        f"{conflict_clause} DO UPDATE SET {update_set}"
+    update_set = ", ".join(
+        f"{c}=excluded.{c}" for c in cols if c not in EXCLUDED_FROM_UPDATE
     )
+    placeholders = ",".join("?" * len(cols))
+    sql = (
+        f"INSERT INTO {table} ({','.join(cols)}) VALUES ({placeholders}) "
+        f"ON CONFLICT ({conflict_cols}) DO UPDATE SET {update_set}"
+    )
+
+    cur = conn.cursor()
     try:
-        with conn.cursor() as cur:
-            for i in range(0, len(rows), batch):
-                psycopg2.extras.execute_values(
-                    cur, sql, [tuple(r[c] for c in cols) for r in rows[i:i + batch]]
-                )
+        for i in range(0, len(rows), batch):
+            cur.executemany(sql, [tuple(r[c] for c in cols) for r in rows[i:i + batch]])
         conn.commit()
     except Exception:
         conn.rollback()
         raise
+    finally:
+        cur.close()
 
 # ── HTTP com retry ────────────────────────────────────────────────────────────
 

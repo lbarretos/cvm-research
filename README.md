@@ -4,7 +4,7 @@ Base de dados local de documentos e eventos de empresas abertas brasileiras, org
 
 **Fontes:** IPE · VLMO · Recompra · FRE · DFP/ITR  
 **Cobertura:** 56 empresas da watchlist (B3) · 2016–hoje  
-**Banco:** PostgreSQL 16 local (sem Docker, sem cloud)  
+**Banco:** SQLite local (`cvm_research.db`) — sem PostgreSQL, sem Docker, sem cloud  
 **Tamanho:** ~830 MB · 1,2M+ linhas  
 **Atualização:** manual via scripts de ingestão
 
@@ -14,12 +14,13 @@ Base de dados local de documentos e eventos de empresas abertas brasileiras, org
 
 | Ferramenta | Versão mínima | Verificar |
 |---|---|---|
-| macOS | — | — |
-| [Homebrew](https://brew.sh) | qualquer | `brew --version` |
+| macOS | 11+ (Big Sur) | `sw_vers -productVersion` |
 | Python | 3.10+ | `python3 --version` |
 | Node.js + npx | 18+ | `node --version` |
 | Claude Code CLI | qualquer | `claude --version` |
 | Claude desktop app | qualquer | (opcional, para chat visual) |
+
+> **SQLite** vem instalado no macOS por padrão — nenhuma instalação adicional necessária.
 
 ---
 
@@ -32,60 +33,33 @@ git clone https://github.com/lbarretos/cvm-research.git
 cd cvm-research
 ```
 
-### 2. Instalar PostgreSQL 16
+### 2. Criar o banco SQLite
 
 ```bash
-brew install postgresql@16
-brew services start postgresql@16
-echo 'export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-
-# Verificar que está rodando
-psql --version   # deve mostrar "psql (PostgreSQL) 16.x"
+bash setup.sh
+# Saída esperada:
+# === CVM Research — Setup do banco SQLite ===
+# Banco 'cvm_research.db' criado.
+# === Tabelas criadas ===
+# companies  demonstrativos_contabeis  fre_capital_social  ipe_docs  ...
+# ✅ Banco pronto.
 ```
 
-### 3. Criar banco e rodar migrations
+### 3. Configurar ambiente Python
 
 ```bash
-createdb cvm_research
-
-# Rodar todas as migrations em ordem
-for f in supabase/migrations/001_companies.sql \
-          supabase/migrations/002_ipe.sql \
-          supabase/migrations/003_vlmo.sql \
-          supabase/migrations/004_recompra.sql \
-          supabase/migrations/005_fre.sql \
-          supabase/migrations/007_drop_cpf_acionista.sql \
-          supabase/migrations/008_demonstrativos.sql \
-          supabase/migrations/009_vlmo_mov_uniq.sql; do
-  echo "Rodando $f..."
-  psql cvm_research < "$f"
-done
-
-# Verificar tabelas criadas (deve listar 11 tabelas)
-psql cvm_research -c "\dt"
-```
-
-> **006_rls.sql** é ignorado — RLS (segurança por linha) não é necessário localmente.
-
-### 4. Configurar ambiente Python
-
-```bash
-# Criar e ativar virtualenv (use python3.10+ ou superior)
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Instalar dependências
 pip install -r requirements.txt
 ```
 
 Criar o arquivo `.env` na raiz do projeto:
 
 ```bash
-echo "DATABASE_URL=postgresql://localhost/cvm_research" > .env
+echo "DATABASE_URL=sqlite:///cvm_research.db" > .env
 ```
 
-### 5. Carga inicial dos dados (~30–40 min)
+### 4. Carga inicial dos dados (~30–40 min)
 
 ```bash
 cd scripts/ingest
@@ -101,10 +75,9 @@ python ingest_itr.py --desde 2016   # trimestrais 2016–hoje (~15 min)
 
 Para verificar a carga:
 ```bash
-psql cvm_research -c "
-SELECT relname AS tabela, n_live_tup AS linhas
-FROM pg_stat_user_tables ORDER BY n_live_tup DESC;
-SELECT pg_size_pretty(pg_database_size('cvm_research')) AS tamanho;
+sqlite3 cvm_research.db "
+SELECT name AS tabela FROM sqlite_master WHERE type='table' ORDER BY name;
+SELECT COUNT(*) AS total_docs FROM ipe_docs;
 "
 ```
 
@@ -112,7 +85,7 @@ SELECT pg_size_pretty(pg_database_size('cvm_research')) AS tamanho;
 
 ## Configurar MCP no Claude
 
-O MCP (Model Context Protocol) permite ao Claude acessar o banco diretamente durante a conversa. Precisa ser configurado uma vez em cada interface que for usar.
+O MCP (Model Context Protocol) permite ao Claude acessar o banco diretamente durante a conversa. Precisa ser configurado uma vez em cada interface.
 
 ### Encontrar o caminho do npx
 
@@ -125,7 +98,11 @@ which npx
 # /opt/homebrew/bin/npx        (Homebrew)
 ```
 
-Guarde esse caminho — vai precisar nos passos abaixo.
+Guarde esse caminho e o caminho absoluto do banco:
+```bash
+which npx          # caminho do npx
+pwd                # raiz do projeto → append /cvm_research.db
+```
 
 ---
 
@@ -134,8 +111,8 @@ Guarde esse caminho — vai precisar nos passos abaixo.
 ```bash
 claude mcp add postgres-local -s user -- \
   $(which npx) \
-  -y @modelcontextprotocol/server-postgres \
-  postgresql://localhost/cvm_research
+  -y @modelcontextprotocol/server-sqlite \
+  $(pwd)/cvm_research.db
 ```
 
 Verificar se conectou:
@@ -161,26 +138,16 @@ Adicionar a chave `mcpServers` ao JSON existente:
       "command": "/CAMINHO/COMPLETO/DO/npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-postgres",
-        "postgresql://localhost/cvm_research"
+        "@modelcontextprotocol/server-sqlite",
+        "/CAMINHO/ABSOLUTO/cvm_research.db"
       ]
     }
-  },
-  ... resto da configuração existente ...
+  }
 }
 ```
 
-> **Importante:** substituir `/CAMINHO/COMPLETO/DO/npx` pelo caminho obtido com `which npx` acima. O Claude desktop não herda o PATH do shell, então o caminho deve ser absoluto.
-
-Exemplo com fnm:
-```json
-"command": "/Users/seu-usuario/.fnm/node-versions/v24.14.0/installation/bin/npx"
-```
-
-Exemplo com instalação padrão Node:
-```json
-"command": "/usr/local/bin/npx"
-```
+> **Importante:** use caminhos absolutos. O Claude desktop não herda o PATH do shell.
+> Exemplo: `"/Users/seu-usuario/cvm-research/cvm_research.db"` — nunca `~` ou caminhos relativos.
 
 Após editar, **reinicie o Claude desktop** (Cmd+Q → reabrir).
 
@@ -192,29 +159,25 @@ Tanto no Claude Code quanto no Claude desktop, faça uma pergunta de teste:
 
 > *"Quais tabelas existem no banco e quantas linhas tem cada uma?"*
 
-O Claude deve responder com a lista de tabelas e contagens diretamente do banco local. Se o banco não aparecer, verifique:
+O Claude deve responder com a lista de tabelas e contagens diretamente do banco. Se não aparecer:
 
 ```bash
-# 1. PostgreSQL está rodando?
-brew services list | grep postgresql
-# Se "stopped": brew services start postgresql@16
+# 1. Banco existe?
+ls -lh cvm_research.db
 
-# 2. Banco existe?
-psql -l | grep cvm_research
-
-# 3. npx funciona?
+# 2. npx funciona?
 npx --version
 
-# 4. MCP server funciona?
-$(which npx) -y @modelcontextprotocol/server-postgres postgresql://localhost/cvm_research
-# Deve imprimir algo e não dar erro imediato
+# 3. MCP server funciona?
+npx -y @modelcontextprotocol/server-sqlite ./cvm_research.db
+# Deve imprimir mensagem de startup sem erro
 ```
 
 ---
 
 ## Atualização manual da base
 
-> **Cadência da CVM:** os ZIPs do IPE (documentos corporativos) são atualizados **toda segunda-feira entre 8h00 e 8h30**. Documentos publicados durante a semana só ficam disponíveis após essa janela. Para documentos mais recentes, consulte diretamente o portal RAD: `rad.cvm.gov.br`.
+> **Cadência da CVM:** os ZIPs do IPE (documentos corporativos) são atualizados **toda segunda-feira entre 8h00 e 8h30**. Para documentos mais recentes, consulte diretamente o portal RAD: `rad.cvm.gov.br`.
 
 Rodar após cada segunda-feira para manter os dados em dia:
 
@@ -234,11 +197,6 @@ python ingest_itr.py
 python ingest_dfp.py --historico
 python ingest_itr.py --desde 2016
 ```
-
-> **PostgreSQL precisa estar rodando** para a ingestão funcionar. Se o Mac reiniciou:
-> ```bash
-> brew services start postgresql@16
-> ```
 
 ---
 
@@ -263,46 +221,64 @@ O arquivo `CLAUDE.md` documenta o schema completo, queries de exemplo e o compor
 
 ```
 cvm-research/
-├── watchlist.csv                   # 56 empresas com CNPJ e código CVM
+├── watchlist.csv                   # 56 empresas com CNPJ, ticker e código CVM
+├── schema.sql                      # schema SQLite completo (tabelas + views + FTS5)
+├── setup.sh                        # cria cvm_research.db a partir de schema.sql
 ├── CLAUDE.md                       # schema, queries e instruções para o Claude
 ├── README.md                       # este arquivo
-├── requirements.txt                # dependências Python
+├── requirements.txt                # dependências Python (sem PostgreSQL)
 ├── .env                            # DATABASE_URL (não commitado)
 ├── .env.example                    # template do .env
-├── supabase/migrations/            # schema SQL para setup local
-│   ├── 001_companies.sql
-│   ├── 002_ipe.sql
-│   ├── ...
-│   └── 009_vlmo_mov_uniq.sql
+├── supabase/migrations/            # schema legado (referência para cloud/Supabase)
 ├── scripts/ingest/
-│   ├── utils.py                    # conexão DB + helpers de conversão
+│   ├── utils.py                    # conexão SQLite + helpers de conversão
 │   ├── ingest_companies.py         # watchlist
-│   ├── ingest_ipe.py               # documentos CVM (metadados)
+│   ├── ingest_ipe.py               # documentos CVM (metadados) — flag: --desde ANO
 │   ├── ingest_vlmo.py              # insider trading
 │   ├── ingest_recompra.py          # programas de recompra
 │   ├── ingest_fre.py               # capital, acionistas, remuneração
-│   ├── ingest_dfp.py               # demonstrativos anuais (--historico / --desde ANO)
-│   ├── ingest_itr.py               # demonstrativos trimestrais (--desde ANO)
-│   ├── extract_pdf.py              # extração de texto de PDFs (requer Supabase)
-│   └── migrate_texto_supabase.py   # migração one-time Supabase→local (já executado)
+│   ├── ingest_dfp.py               # demonstrativos anuais — flags: --historico, --desde ANO
+│   ├── ingest_itr.py               # demonstrativos trimestrais — flag: --desde ANO
+│   └── extract_pdf.py              # extração de texto de PDFs (requer Supabase)
 └── .github/workflows/              # desativados — ingestão é manual
 ```
+
+### Fontes de dados
+
+| Script | Fonte CVM | Tabelas populadas | Cadência |
+|---|---|---|---|
+| `ingest_companies.py` | `watchlist.csv` | `companies` | quando watchlist mudar |
+| `ingest_ipe.py` | IPE ZIPs anuais | `ipe_docs` | semanal (seg após 8h30) |
+| `ingest_vlmo.py` | VLMO ZIPs anuais | `vlmo_posicao`, `vlmo_movimentacoes` | semanal |
+| `ingest_recompra.py` | Recompra ZIPs | `recompra_programas`, `recompra_quantidades` | semanal |
+| `ingest_fre.py` | FRE ZIPs anuais | `fre_capital_social`, `fre_posicao_acionaria`, `fre_remuneracao_orgao` | mensal |
+| `ingest_dfp.py` | DFP ZIPs anuais | `demonstrativos_contabeis` (fonte='DFP') | trimestral |
+| `ingest_itr.py` | ITR ZIPs anuais | `demonstrativos_contabeis` (fonte='ITR') | trimestral |
+
+---
+
+## Por que SQLite?
+
+Antes desta versão, o projeto exigia PostgreSQL 16 instalado localmente. Para levar a base para outro computador era preciso instalar o Postgres, criar o banco, rodar 9 migrations e configurar o serviço — uns 20 minutos de setup antes de poder fazer a primeira consulta.
+
+Com SQLite, o banco é um único arquivo (`cvm_research.db`). Python já traz o `sqlite3` na biblioteca padrão. O único requisito externo é o `npx` (para o MCP) — que qualquer desenvolvedor com Node.js já tem.
+
+**Limitações conhecidas vs PostgreSQL:**
+- `texto_extraido` (texto extraído de PDFs) não é re-ingerido automaticamente — requer `extract_pdf.py` com Supabase. Guarde suas credenciais `SUPABASE_URL`/`SUPABASE_KEY` se quiser recuperar o conteúdo.
+- Full-text search usa SQLite FTS5 com sintaxe diferente do `tsvector` PostgreSQL (documentada em `CLAUDE.md`).
+- `NULLS NOT DISTINCT` no índice único de `vlmo_movimentacoes` não é suportado — a deduplicação é feita no nível Python, o que é suficiente na prática.
 
 ---
 
 ## Troubleshooting
 
-**`createdb: error: database "cvm_research" already exists`**
+**`sqlite3: command not found`**
 ```bash
-dropdb cvm_research && createdb cvm_research
+# macOS: sqlite3 vem pré-instalado. Se não estiver:
+brew install sqlite3
 ```
 
-**`psql: command not found`**
-```bash
-export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
-```
-
-**`ModuleNotFoundError: No module named 'psycopg2'`**
+**`ModuleNotFoundError`**
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -311,11 +287,25 @@ pip install -r requirements.txt
 **`KeyError: 'DATABASE_URL'`**
 ```bash
 # Verificar se o .env existe na raiz do projeto
-cat .env   # deve mostrar DATABASE_URL=postgresql://localhost/cvm_research
+cat .env   # deve mostrar DATABASE_URL=sqlite:///cvm_research.db
+```
+
+**Banco vazio após setup**
+```bash
+# O banco é criado vazio — rode os ingestores para popular:
+cd scripts/ingest && source ../../.venv/bin/activate
+python ingest_companies.py && python ingest_ipe.py
+# ... (ver seção "Carga inicial" acima)
 ```
 
 **MCP não conecta no Claude desktop**
-- Confirme que o caminho do `npx` é absoluto (sem `~`)
+- Confirme que os caminhos são absolutos (sem `~`)
+- Confirme que `cvm_research.db` existe: `ls -lh cvm_research.db`
 - Confirme que o JSON está válido (sem vírgulas extras)
-- Reinicie o Claude desktop completamente (Cmd+Q)
-- Verifique que o PostgreSQL está rodando: `brew services list | grep postgresql`
+- Reinicie o Claude desktop completamente (Cmd+Q → reabrir)
+
+**`extract_pdf.py` falha com erro sobre SQLite**
+```
+ERRO: extract_pdf.py requer Supabase. Defina SUPABASE_URL e SUPABASE_KEY no .env.
+```
+Este script usa a API REST do Supabase diretamente. Para extração de PDFs, adicione `SUPABASE_URL` e `SUPABASE_KEY` ao `.env` (mantendo também o `DATABASE_URL`).

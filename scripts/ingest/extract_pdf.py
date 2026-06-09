@@ -11,8 +11,7 @@ Uso:
   python extract_pdf.py --retry-failed               # re-tenta falhas anteriores
   python extract_pdf.py --rebuild-fts                # só reconstrói o índice FTS5
 
-Funciona com banco local SQLite (DATABASE_URL=sqlite:///...) ou Supabase
-(SUPABASE_URL + SUPABASE_KEY sem DATABASE_URL).
+Requer DATABASE_URL=sqlite:///cvm_research.db no .env.
 """
 import argparse
 import io
@@ -22,7 +21,7 @@ import time
 from datetime import datetime, timezone
 import httpx
 import pdfplumber
-from utils import get_supabase, watchlist_cnpjs
+from utils import get_db, watchlist_cnpjs
 
 CATEGORIAS_PRIORITARIAS = {
     "Fato Relevante",
@@ -56,26 +55,24 @@ def fetch_pdf_text(url: str) -> str | None:
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]
         texto = "\n\n".join(p for p in pages if p.strip())
-        # Remove NUL bytes — SQLite e PostgreSQL rejeitam strings com NUL
+        # Remove NUL bytes — SQLite rejeita strings com NUL
         return texto.replace("\x00", "")
     except Exception as e:
         print(f"    ERRO fetch: {e}")
         return None
 
 
-# ── Backend SQLite ────────────────────────────────────────────────────────────
+# ── Operações SQLite ──────────────────────────────────────────────────────────
 
-def _fetch_pendentes_sqlite(conn: sqlite3.Connection, cnpjs: set, categorias: set,
-                            limite: int, retry_failed: bool = False) -> list[dict]:
+def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set, categorias: set,
+                     limite: int, retry_failed: bool = False) -> list[dict]:
     """Retorna documentos sem texto_extraido para as empresas e categorias fornecidas."""
     cnpjs_list = list(cnpjs)
     cats_list  = list(categorias)
-    # SQLite não permite IN () — se as listas estiverem vazias, não há nada a buscar
     if not cnpjs_list or not cats_list:
         return []
     falhou_val = 1 if retry_failed else 0
 
-    # SQLite não suporta ANY($1) — gera placeholders IN (?,?,...)
     cnpj_ph = ",".join("?" * len(cnpjs_list))
     cat_ph  = ",".join("?" * len(cats_list))
 
@@ -95,7 +92,7 @@ def _fetch_pendentes_sqlite(conn: sqlite3.Connection, cnpjs: set, categorias: se
     return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
-def _salvar_sqlite(conn: sqlite3.Connection, protocolo: str, texto: str | None) -> None:
+def _salvar(conn: sqlite3.Connection, protocolo: str, texto: str | None) -> None:
     """Persiste texto extraído (ou marca falha) no banco SQLite."""
     now = datetime.now(timezone.utc).isoformat()
     if texto:
@@ -118,7 +115,7 @@ def _salvar_sqlite(conn: sqlite3.Connection, protocolo: str, texto: str | None) 
     conn.commit()
 
 
-def _rebuild_fts_sqlite(conn: sqlite3.Connection) -> None:
+def _rebuild_fts(conn: sqlite3.Connection) -> None:
     """Reconstrói o índice FTS5 (ipe_docs_fts) a partir do conteúdo atual de ipe_docs."""
     print("Reconstruindo índice FTS5...")
     conn.execute("INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild')")
@@ -126,65 +123,23 @@ def _rebuild_fts_sqlite(conn: sqlite3.Connection) -> None:
     print("  FTS5 reconstruído.")
 
 
-# ── Backend Supabase ──────────────────────────────────────────────────────────
-
-def _fetch_pendentes_sb(sb, cnpjs: set, categorias: set, limite: int,
-                        retry_failed: bool = False) -> list[dict]:
-    return (
-        sb.table("ipe_docs")
-          .select("protocolo_entrega, cnpj_companhia, categoria, assunto, link_download")
-          .is_("texto_extraido", "null")
-          .eq("extracao_falhou", retry_failed)
-          .in_("cnpj_companhia", list(cnpjs))
-          .in_("categoria", list(categorias))
-          .order("data_entrega", desc=True)
-          .limit(limite)
-          .execute()
-          .data
-    )
-
-
-def _salvar_sb(sb, protocolo: str, texto: str | None) -> None:
-    if texto:
-        sb.table("ipe_docs").update({
-            "texto_extraido": texto,
-            "chars_extraidos": len(texto),
-            "extraido_em": datetime.now(timezone.utc).isoformat(),
-            "extracao_falhou": False,
-        }).eq("protocolo_entrega", protocolo).execute()
-    else:
-        sb.table("ipe_docs").update({
-            "extracao_falhou": True,
-        }).eq("protocolo_entrega", protocolo).execute()
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200,
          retry_failed=False, rebuild_fts=False):
-    db       = get_supabase()   # retorna sqlite3.Connection ou supabase-py client
-    is_local = isinstance(db, sqlite3.Connection)
+    conn = get_db()
 
-    # Atalho: só rebuild do FTS5 (sem extrações)
     if rebuild_fts:
-        if not is_local:
-            print("AVISO: --rebuild-fts só se aplica ao banco SQLite local.")
-            return
-        _rebuild_fts_sqlite(db)
+        _rebuild_fts(conn)
         return
 
     cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
     cats   = {categoria_filter} if categoria_filter else CATEGORIAS_PRIORITARIAS
-
-    backend = "SQLite local" if is_local else "Supabase"
-    modo    = " [retry falhas anteriores]" if retry_failed else ""
-    print(f"Backend: {backend}{modo}")
+    modo   = " [retry falhas anteriores]" if retry_failed else ""
+    print(f"Backend: SQLite local{modo}")
     print(f"Empresas: {len(cnpjs)} | Categorias: {sorted(cats)}")
 
-    if is_local:
-        docs = _fetch_pendentes_sqlite(db, cnpjs, cats, limite, retry_failed)
-    else:
-        docs = _fetch_pendentes_sb(db, cnpjs, cats, limite, retry_failed)
+    docs = _fetch_pendentes(conn, cnpjs, cats, limite, retry_failed)
     print(f"Pendentes para extração: {len(docs)}")
 
     ok = fail = skip = 0
@@ -200,10 +155,7 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
         time.sleep(0.5)  # respeita rate limit do portal CVM
 
         sucesso = texto and len(texto) > 100
-        if is_local:
-            _salvar_sqlite(db, doc["protocolo_entrega"], texto if sucesso else None)
-        else:
-            _salvar_sb(db, doc["protocolo_entrega"], texto if sucesso else None)
+        _salvar(conn, doc["protocolo_entrega"], texto if sucesso else None)
 
         if sucesso:
             ok += 1
@@ -212,10 +164,9 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
 
     print(f"\nResultado: {ok} extraídos | {fail} falhas | {skip} sem link")
 
-    # Após extrações bem-sucedidas, reconstruir FTS5 automaticamente
-    if is_local and ok > 0:
+    if ok > 0:
         print()
-        _rebuild_fts_sqlite(db)
+        _rebuild_fts(conn)
         print("  Busca full-text disponível via ipe_docs_fts.")
 
 

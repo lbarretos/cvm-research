@@ -1,6 +1,6 @@
 name: Ingest Diário (Recompra)
 
-# Ingestão desativada — banco migrado para PostgreSQL local (sem Supabase).
+# Ingestão desativada — banco é SQLite local. Disparo manual disponível para referência.
 on:
   workflow_dispatch:
 
@@ -25,5 +25,4 @@ jobs:
       - name: Ingest recompra
         run: python ingest_recompra.py
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

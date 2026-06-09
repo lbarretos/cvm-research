@@ -29,5 +29,4 @@ jobs:
       - name: Ingest DFP histórico (2021 → hoje)
         run: python ingest_dfp.py --historico
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

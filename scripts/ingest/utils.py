@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import sqlite3
 import sys
 import time
 import zipfile
@@ -38,6 +39,7 @@ def watchlist_cnpjs() -> set[str]:
 # ── Mapeamento de índice nomeado → colunas (para ON CONFLICT sem CONSTRAINT) ──
 # vlmo_mov_uniq é um CREATE UNIQUE INDEX (não uma CONSTRAINT nomeada),
 # portanto ON CONFLICT ON CONSTRAINT não funciona — precisamos das colunas.
+# Definição do índice está em schema.sql.
 
 EXCLUDED_FROM_UPDATE: frozenset = frozenset({'id', 'created_at'})
 
@@ -53,13 +55,12 @@ _INDEX_COLUMNS: dict[str, str] = {
 
 # ── Conexão de banco de dados ─────────────────────────────────────────────────
 
-def get_db():
+def get_db() -> sqlite3.Connection:
     """Retorna conexão sqlite3 para banco local.
 
     DATABASE_URL deve ser 'sqlite:///relative.db' ou 'sqlite:////abs/path.db'.
     Caminho relativo é resolvido a partir da raiz do projeto.
     """
-    import sqlite3
     url = os.environ["DATABASE_URL"]
     path = url.removeprefix("sqlite:///")
     if not os.path.isabs(path):
@@ -68,27 +69,6 @@ def get_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
-
-def get_supabase():
-    """Retorna cliente Supabase (nuvem) ou conexão psycopg2 (local).
-
-    Modo dual: quando DATABASE_URL estiver no .env, usa psycopg2.
-    Quando SUPABASE_URL + SUPABASE_KEY estiverem definidos, usa supabase-py.
-    """
-    if os.environ.get("DATABASE_URL"):
-        return get_db()
-    from supabase import create_client
-    url = os.environ["SUPABASE_URL"]
-    key = os.environ["SUPABASE_KEY"]
-    client = create_client(url, key)
-    try:
-        client.table("companies").select("cnpj").limit(1).execute()
-    except Exception as e:
-        if "401" in str(e) or "403" in str(e) or "Unauthorized" in str(e):
-            print(f"ERRO DE AUTENTICAÇÃO: chave Supabase inválida — {e}", file=sys.stderr)
-            sys.exit(1)
-        raise  # re-raise erros de rede ou outros (não autenticação)
-    return client
 
 # ── Helpers de conversão de tipo ─────────────────────────────────────────────
 # Extraídos de ingest_fre.py — compartilhados por todos os ingestores.
@@ -126,24 +106,19 @@ def _float(v):
         return None
 
 def _sanitize(rows: list[dict]) -> list[dict]:
-    """Remove float NaN de qualquer campo do dict (Supabase rejeita NaN)."""
+    """Remove float NaN de qualquer campo do dict (SQLite e pandas produzem NaN em campos vazios)."""
     def clean(val):
         if isinstance(val, float) and val != val:
             return None
         return val
     return [{k: clean(v) for k, v in row.items()} for row in rows]
 
-# ── Upsert (Supabase ou psycopg2) ────────────────────────────────────────────
+# ── Upsert ───────────────────────────────────────────────────────────────────
 
-def upsert(sb, table: str, rows: list[dict], conflict: str, batch: int = 500) -> None:
-    """Faz upsert em lotes (sqlite3 ou supabase-py), sanitizando NaN antes."""
-    import sqlite3
+def upsert(conn: sqlite3.Connection, table: str, rows: list[dict], conflict: str, batch: int = 500) -> None:
+    """Faz upsert em lotes via sqlite3, sanitizando NaN antes."""
     rows = _sanitize(rows)
-    if isinstance(sb, sqlite3.Connection):
-        _upsert_sqlite(sb, table, rows, conflict, batch)
-    else:                        # supabase-py client
-        for i in range(0, len(rows), batch):
-            sb.table(table).upsert(rows[i:i + batch], on_conflict=conflict).execute()
+    _upsert_sqlite(conn, table, rows, conflict, batch)
     print(f"  {table}: {len(rows)} rows")
 
 def _upsert_sqlite(conn, table: str, rows: list[dict], conflict: str, batch: int = 500) -> None:

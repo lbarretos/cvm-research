@@ -354,16 +354,8 @@ O `.env` na raiz do projeto deve ter:
 DATABASE_URL=sqlite:///cvm_research.db
 ```
 
-**Nota:** `extract_pdf.py` requer Supabase e não foi migrado para SQLite. Para
-extração de texto de PDFs, continue usando o banco Supabase + as variáveis
-SUPABASE_URL/SUPABASE_KEY no `.env`.
-
-**⚠️ Migração de dados existentes:** O campo `texto_extraido` (texto extraído de PDFs)
-**não é transferido automaticamente** ao migrar do PostgreSQL para SQLite. Após a
-migração, o banco SQLite inicia vazio. Todos os metadados de documentos são
-re-ingeridos pelos ingestores (IPE, VLMO, etc.), mas o texto extraído de PDFs
-requer re-execução do `extract_pdf.py` contra um banco Supabase. Guarde suas
-credenciais `SUPABASE_URL`/`SUPABASE_KEY` se quiser recuperar o conteúdo extraído.
+**Extração de texto de PDFs:** `extract_pdf.py` funciona diretamente com o banco SQLite.
+Para popular `texto_extraido`, rode `python extract_pdf.py` com o DATABASE_URL configurado.
 
 ## Skill routing
 

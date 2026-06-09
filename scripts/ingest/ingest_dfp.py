@@ -1,5 +1,5 @@
 """
-Ingere os demonstrativos financeiros anuais (DFP) da CVM no Supabase.
+Ingere os demonstrativos financeiros anuais (DFP) da CVM no banco local.
 
 Fonte: https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_{ano}.zip
 Tipos ingeridos (consolidado): BPA, BPP, DRE, DFC_MI, DVA
@@ -16,7 +16,7 @@ from datetime import date
 
 import pandas as pd
 
-from utils import _date, _float, _int, _sanitize, download_year, get_supabase, upsert, watchlist_cnpjs
+from utils import _date, _float, _int, _sanitize, download_year, get_db, upsert, watchlist_cnpjs
 
 FONTE = "DFP"
 TIPOS = ["BPA", "BPP", "DRE", "DFC_MI", "DVA"]
@@ -99,7 +99,7 @@ def main():
         anos = [hoje.year - 1, hoje.year]
         print(f"Modo semanal: processando {hoje.year - 1} e {hoje.year}")
 
-    sb    = get_supabase()
+    conn  = get_db()
     cnpjs = watchlist_cnpjs()
 
     for ano in anos:
@@ -117,7 +117,7 @@ def main():
             try:
                 rows = process_df(dfs[tipo], cnpjs, tipo)
                 if rows:
-                    upsert(sb, "demonstrativos_contabeis", rows, CONFLICT)
+                    upsert(conn, "demonstrativos_contabeis", rows, CONFLICT)
                 else:
                     print(f"  demonstrativos_contabeis [{tipo}]: 0 rows (watchlist sem dados)")
             except Exception as e:

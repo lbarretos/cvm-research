@@ -1,9 +1,9 @@
-"""Baixa VLMO (posição consolidada + movimentações) e faz upsert no Supabase."""
+"""Baixa VLMO (posição consolidada + movimentações) e faz upsert no banco local."""
 import io
 import zipfile
 from datetime import date
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _http_get, _int, _float, upsert
+from utils import get_db, watchlist_cnpjs, _http_get, _int, _float, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/VLMO/DADOS"
 
@@ -90,16 +90,16 @@ def main():
                         help="Ano inicial (padrão: 2021)")
     args = parser.parse_args()
 
-    sb    = get_supabase()
+    conn  = get_db()
     cnpjs = watchlist_cnpjs()
 
     for ano in range(args.desde, date.today().year + 1):
         posicao, movs = download_year(ano)
         if posicao is not None:
-            upsert(sb, "vlmo_posicao", process_posicao(posicao, cnpjs),
+            upsert(conn, "vlmo_posicao", process_posicao(posicao, cnpjs),
                    conflict="protocolo_entrega")
         if movs is not None:
-            upsert(sb, "vlmo_movimentacoes", process_movimentacoes(movs, cnpjs),
+            upsert(conn, "vlmo_movimentacoes", process_movimentacoes(movs, cnpjs),
                    conflict="vlmo_mov_uniq")
 
 if __name__ == "__main__":

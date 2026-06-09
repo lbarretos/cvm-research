@@ -1,5 +1,5 @@
 """
-Baixa os ZIPs anuais do FRE e ingere as tabelas prioritárias no Supabase.
+Baixa os ZIPs anuais do FRE e ingere as tabelas prioritárias no banco local.
 Um ZIP por ano contém ~30 CSVs; extrai só os necessários em memória.
 
 Tabelas ingeridas:
@@ -12,7 +12,7 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _date, _http_get, _int, _float, _sanitize, upsert
+from utils import get_db, watchlist_cnpjs, _date, _http_get, _int, _float, _sanitize, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/FRE/DADOS"
 
@@ -122,7 +122,7 @@ def main():
                         help="Ano inicial (padrão: 2021)")
     args = parser.parse_args()
 
-    sb    = get_supabase()
+    conn  = get_db()
     cnpjs = watchlist_cnpjs()
 
     for ano in range(args.desde, date.today().year + 1):
@@ -140,7 +140,7 @@ def main():
             try:
                 rows = fn(dfs[suffix], cnpjs)
                 if rows:
-                    upsert(sb, table, rows, conflict)
+                    upsert(conn, table, rows, conflict)
                 else:
                     print(f"  {table}: 0 rows (watchlist sem dados)")
             except Exception as e:

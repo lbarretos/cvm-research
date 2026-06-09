@@ -1,12 +1,12 @@
 """Popula a tabela companies a partir do watchlist.csv."""
 import csv
 from pathlib import Path
-from utils import get_supabase, upsert
+from utils import get_db, upsert
 
 WATCHLIST = Path(__file__).parents[2] / "watchlist.csv"
 
 def main():
-    sb = get_supabase()
+    conn = get_db()
     rows = []
     with open(WATCHLIST, encoding="utf-8") as f:
         for r in csv.DictReader(f):
@@ -30,7 +30,7 @@ def main():
         seen[row["cnpj"]] = row
     rows = list(seen.values())
 
-    upsert(sb, "companies", rows, "cnpj")
+    upsert(conn, "companies", rows, "cnpj")
     print(f"Upserted {len(rows)} empresas")
 
 if __name__ == "__main__":

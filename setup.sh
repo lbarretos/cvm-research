@@ -43,5 +43,4 @@ echo "   python ingest_companies.py && python ingest_ipe.py && python ingest_vlm
 echo "   python ingest_recompra.py && python ingest_fre.py && python ingest_dfp.py && python ingest_itr.py"
 echo ""
 echo "⚠️  texto_extraido (texto de PDFs) NÃO é re-ingerido automaticamente."
-echo "   O conteúdo extraído requer extract_pdf.py que usa Supabase."
-echo "   Mantenha suas credenciais SUPABASE_URL/KEY anotadas se quiser recuperar o texto."
+echo "   Para popular o texto, rode: cd scripts/ingest && python extract_pdf.py"

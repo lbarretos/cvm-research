@@ -1,7 +1,6 @@
 name: Ingest Semanal (IPE + VLMO + DFP + ITR)
 
-# Ingestão desativada — banco migrado para PostgreSQL local (sem Supabase).
-# Manter como referência para eventual reativação. Só disparo manual disponível.
+# Ingestão desativada — banco é SQLite local. Disparo manual disponível para referência.
 on:
   workflow_dispatch:
 
@@ -29,41 +28,34 @@ jobs:
       - name: Ingest companies (watchlist)
         run: python ingest_companies.py
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Ingest IPE metadata
         run: python ingest_ipe.py
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Ingest VLMO
         run: python ingest_vlmo.py
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Ingest FRE
         run: python ingest_fre.py
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Ingest DFP (demonstrativos anuais)
         run: python ingest_dfp.py
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Ingest ITR (demonstrativos trimestrais)
         run: python ingest_itr.py
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Extract PDFs (batch 150 docs mais recentes)
         run: python extract_pdf.py --limite 150
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

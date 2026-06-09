@@ -1,8 +1,8 @@
-"""Baixa programas de recompra de ações e faz upsert no Supabase."""
+"""Baixa programas de recompra de ações e faz upsert no banco local."""
 import io
 import zipfile
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _http_get, _int, _float, upsert
+from utils import get_db, watchlist_cnpjs, _http_get, _int, _float, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/EVENTOS/RECOMPRA_ACOES/DADOS"
 
@@ -40,13 +40,13 @@ def process_programas(df: pd.DataFrame, cnpjs: set) -> list[dict]:
     return rows
 
 def main():
-    sb    = get_supabase()
+    conn  = get_db()
     cnpjs = watchlist_cnpjs()
     dfs   = download()
 
     if "programas" in dfs:
         rows = process_programas(dfs["programas"], cnpjs)
-        upsert(sb, "recompra_programas", rows, "id_programa")
+        upsert(conn, "recompra_programas", rows, "id_programa")
 
 if __name__ == "__main__":
     main()

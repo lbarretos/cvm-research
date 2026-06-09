@@ -1,5 +1,5 @@
 """
-Baixa os CSVs anuais do IPE e faz upsert dos metadados no Supabase.
+Baixa os CSVs anuais do IPE e faz upsert dos metadados no banco local.
 Não baixa nem armazena PDFs — apenas metadados + link_download.
 """
 import io
@@ -7,7 +7,7 @@ import zipfile
 from datetime import date
 import httpx
 import pandas as pd
-from utils import get_supabase, watchlist_cnpjs, _http_get, _sanitize, upsert
+from utils import get_db, watchlist_cnpjs, _http_get, _sanitize, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/IPE/DADOS"
 
@@ -58,7 +58,7 @@ def process(df: pd.DataFrame, cnpjs: set[str]) -> list[dict]:
         })
     return rows
 
-def upsert_batch(sb, rows: list[dict]):
+def upsert_batch(conn, rows: list[dict]):
     # sanitize antes do dedup: NaN → None para que o filtro abaixo os exclua
     rows = _sanitize(rows)
     # drop rows without a protocolo (NOT NULL PK) and deduplicate
@@ -70,7 +70,7 @@ def upsert_batch(sb, rows: list[dict]):
     if not rows:
         print("  0 docs (todos sem protocolo)")
         return
-    upsert(sb, "ipe_docs", rows, "protocolo_entrega")
+    upsert(conn, "ipe_docs", rows, "protocolo_entrega")
     print(f"  Upserted {len(rows)} docs")
 
 def main():
@@ -80,7 +80,7 @@ def main():
                         help="Ano inicial (padrão: 2021)")
     args = parser.parse_args()
 
-    sb     = get_supabase()
+    conn   = get_db()
     cnpjs  = watchlist_cnpjs()
     anos   = range(args.desde, date.today().year + 1)
 
@@ -88,7 +88,7 @@ def main():
         try:
             df   = download_year(ano)
             rows = process(df, cnpjs)
-            upsert_batch(sb, rows)
+            upsert_batch(conn, rows)
             print(f"  {ano}: {len(rows)} docs da watchlist")
         except Exception as e:
             print(f"  ERRO {ano}: {e}")

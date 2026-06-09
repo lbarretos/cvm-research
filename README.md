@@ -136,7 +136,6 @@ cvm-research/
 ├── requirements.txt                # dependências Python (sem PostgreSQL)
 ├── .env                            # DATABASE_URL (não commitado)
 ├── .env.example                    # template do .env
-├── supabase/migrations/            # schema legado (referência para cloud/Supabase)
 ├── scripts/ingest/
 │   ├── utils.py                    # conexão SQLite + helpers de conversão
 │   ├── ingest_companies.py         # watchlist
@@ -146,7 +145,7 @@ cvm-research/
 │   ├── ingest_fre.py               # capital, acionistas, remuneração
 │   ├── ingest_dfp.py               # demonstrativos anuais — flags: --historico, --desde ANO
 │   ├── ingest_itr.py               # demonstrativos trimestrais — flag: --desde ANO
-│   └── extract_pdf.py              # extração de texto de PDFs (requer Supabase)
+│   └── extract_pdf.py              # extração de texto de PDFs (SQLite local)
 └── .github/workflows/              # desativados — ingestão é manual
 ```
 
@@ -171,7 +170,7 @@ Antes desta versão, o projeto exigia PostgreSQL 16 instalado localmente. Para l
 Com SQLite, o banco é um único arquivo (`cvm_research.db`). Python já traz o `sqlite3` na biblioteca padrão. O único requisito externo é o `npx` (para o MCP) — que qualquer desenvolvedor com Node.js já tem.
 
 **Limitações conhecidas vs PostgreSQL:**
-- `texto_extraido` (texto extraído de PDFs) não é re-ingerido automaticamente — requer `extract_pdf.py` com Supabase. Guarde suas credenciais `SUPABASE_URL`/`SUPABASE_KEY` se quiser recuperar o conteúdo.
+- `texto_extraido` (texto extraído de PDFs) não é populado pelos ingestores padrão — requer `extract_pdf.py` rodando separadamente.
 - Full-text search usa SQLite FTS5 com sintaxe diferente do `tsvector` PostgreSQL (documentada em `CLAUDE.md`).
 - `NULLS NOT DISTINCT` no índice único de `vlmo_movimentacoes` não é suportado — a deduplicação é feita no nível Python, o que é suficiente na prática.
 
@@ -211,8 +210,8 @@ python ingest_companies.py && python ingest_ipe.py
 - Confirme que o `~/.claude.json` aponta para HTTP (não stdio): `claude mcp list`
 - Veja troubleshooting completo em [INSTALL.md](INSTALL.md#troubleshooting-do-mcp)
 
-**`extract_pdf.py` falha com erro sobre SQLite**
+**`extract_pdf.py` falha com `KeyError: 'DATABASE_URL'`**
+```bash
+# Verificar se o .env existe e tem DATABASE_URL
+cat .env   # deve mostrar DATABASE_URL=sqlite:///cvm_research.db
 ```
-ERRO: extract_pdf.py requer Supabase. Defina SUPABASE_URL e SUPABASE_KEY no .env.
-```
-Este script usa a API REST do Supabase diretamente. Para extração de PDFs, adicione `SUPABASE_URL` e `SUPABASE_KEY` ao `.env` (mantendo também o `DATABASE_URL`).

@@ -6,7 +6,8 @@ Cobre:
   - VL_CONTA vazio / NaN → None (bug fix: float('') levanta ValueError sem _float())
   - _date, _int, _float, _sanitize (helpers compartilhados via utils.py)
   - _http_get: retry em ConnectError/Timeout, falha rápida em erro HTTP
-  - _upsert_sqlite: upsert via sqlite3 (substituiu _upsert_pg)
+  - _upsert_sqlite: upsert via sqlite3
+  - get_db: conexão SQLite via DATABASE_URL
 """
 import math
 import sqlite3
@@ -20,7 +21,7 @@ import pytest
 # Adiciona scripts/ingest ao path para importar utils sem instalar o pacote
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 
-from utils import _date, _float, _http_get, _int, _sanitize, _upsert_sqlite, upsert, get_supabase
+from utils import _date, _float, _http_get, _int, _sanitize, _upsert_sqlite, upsert, get_db
 
 # Constante local que replica a lógica dos ingestores DFP/ITR
 SCALE = {"MIL": 1000, "UNIDADE": 1}
@@ -314,20 +315,6 @@ def test_upsert_despacha_para_sqlite_quando_sb_e_sqlite_connection():
         assert args[3] == "cnpj"
 
 
-def test_upsert_despacha_para_supabase_quando_sb_sem_cursor():
-    """upsert() usa sb.table().upsert() quando 'sb' não é sqlite3.Connection."""
-    sb = MagicMock(spec=["table"])
-
-    with patch("utils._upsert_sqlite") as mock_sq:
-        upsert(sb, "companies", [{"cnpj": "x"}], conflict="cnpj", batch=500)
-        mock_sq.assert_not_called()
-
-    sb.table.assert_called_once_with("companies")
-    sb.table.return_value.upsert.assert_called_once()
-    call_kwargs = sb.table.return_value.upsert.call_args
-    assert call_kwargs[1]["on_conflict"] == "cnpj"
-
-
 def test_upsert_sanitiza_nan_antes_de_chamar_upsert_sqlite():
     """upsert() aplica _sanitize (NaN→None) antes de despachar para _upsert_sqlite."""
     conn = sqlite3.connect(':memory:')
@@ -340,75 +327,18 @@ def test_upsert_sanitiza_nan_antes_de_chamar_upsert_sqlite():
     assert valor is None
 
 
-def test_get_supabase_usa_sqlite_quando_database_url_definido():
-    """get_supabase() retorna sqlite3.Connection quando DATABASE_URL=sqlite:///... está definido."""
+def test_get_db_retorna_sqlite_connection():
+    """get_db() retorna sqlite3.Connection quando DATABASE_URL=sqlite:///... está definido."""
     import tempfile
     with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
         db_path = f.name
     try:
         with patch.dict(os.environ, {"DATABASE_URL": f"sqlite:///{db_path}"}, clear=False):
-            result = get_supabase()
+            result = get_db()
         assert isinstance(result, sqlite3.Connection)
         result.close()
     finally:
         os.unlink(db_path)
-
-
-def test_get_supabase_usa_supabase_quando_database_url_ausente():
-    """get_supabase() usa supabase-py quando DATABASE_URL não está definido."""
-    import sys
-    import types
-
-    fake_client = MagicMock()
-    fake_client.table.return_value.select.return_value.limit.return_value.execute.return_value = None
-    mock_create = MagicMock(return_value=fake_client)
-
-    # Injeta módulo supabase falso para não depender do pacote real estar instalado
-    fake_supabase_mod = types.ModuleType("supabase")
-    fake_supabase_mod.create_client = mock_create
-
-    env_sem_db_url = {k: v for k, v in os.environ.items() if k != "DATABASE_URL"}
-    env_sem_db_url["SUPABASE_URL"] = "https://fake.supabase.co"
-    env_sem_db_url["SUPABASE_KEY"] = "fake-key"
-
-    original_mod = sys.modules.get("supabase")
-    sys.modules["supabase"] = fake_supabase_mod
-    try:
-        with patch.dict(os.environ, env_sem_db_url, clear=True):
-            result = get_supabase()
-    finally:
-        if original_mod is None:
-            sys.modules.pop("supabase", None)
-        else:
-            sys.modules["supabase"] = original_mod
-
-    mock_create.assert_called_once_with("https://fake.supabase.co", "fake-key")
-    assert result is fake_client
-
-
-# ── extract_pdf.py fail-fast guard ───────────────────────────────────────────
-
-def test_extract_pdf_failfast_com_sqlite_sem_supabase_url():
-    """extract_pdf.main() deve sair com código 1 quando DATABASE_URL=sqlite://... e SUPABASE_URL ausente."""
-    import importlib
-    import types
-
-    env_sqlite_sem_supabase = {
-        k: v for k, v in os.environ.items() if k not in ("DATABASE_URL", "SUPABASE_URL")
-    }
-    env_sqlite_sem_supabase["DATABASE_URL"] = "sqlite:///test.db"
-
-    extract_pdf_path = os.path.join(
-        os.path.dirname(__file__), "..", "scripts", "ingest", "extract_pdf.py"
-    )
-    spec = importlib.util.spec_from_file_location("extract_pdf_test", extract_pdf_path)
-    extract_pdf = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(extract_pdf)
-
-    with patch.dict(os.environ, env_sqlite_sem_supabase, clear=True):
-        with pytest.raises(SystemExit) as exc_info:
-            extract_pdf.main()
-    assert exc_info.value.code == 1
 
 
 # ── _upsert_sqlite rollback on exception ─────────────────────────────────────

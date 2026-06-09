@@ -314,7 +314,7 @@ Ou use outra porta:
 |---|---|---|
 | `mcp-server-sqlite` abre banco vazio | Sandbox do `disclaimer` no Claude.app | Usar servidor HTTP (`cvm_mcp.py`) |
 | `unable to open database file` | MCP sem permissão ao CloudStorage/OneDrive | Mover banco para fora do OneDrive ou usar HTTP MCP |
-| `extract_pdf.py` falha | Requer Supabase (não migrado para SQLite) | Definir `SUPABASE_URL`/`SUPABASE_KEY` no `.env` |
+| `extract_pdf.py` falha | `DATABASE_URL` não configurado ou banco ausente | Verificar `.env` com `DATABASE_URL=sqlite:///cvm_research.db` e rodar `bash setup.sh` |
 | Banco mostra dados antigos | Ingestores não rodaram após segunda-feira | Rodar scripts de ingestão manualmente |
 | `KeyError: 'DATABASE_URL'` | `.env` não existe | `echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env` |
 

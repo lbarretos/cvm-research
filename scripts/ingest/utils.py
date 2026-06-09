@@ -62,11 +62,19 @@ def get_db() -> sqlite3.Connection:
     Caminho relativo é resolvido a partir da raiz do projeto.
     """
     url = os.environ["DATABASE_URL"]
+    if not url.startswith("sqlite:///"):
+        raise ValueError(
+            f"DATABASE_URL deve começar com 'sqlite:///' — recebido: {url!r}\n"
+            "Exemplo: DATABASE_URL=sqlite:///cvm_research.db"
+        )
     path = url.removeprefix("sqlite:///")
     if not os.path.isabs(path):
         path = str(Path(__file__).parents[2] / path)
     conn = sqlite3.connect(path)
-    conn.execute("PRAGMA journal_mode=WAL")
+    mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+    if mode != "wal":
+        print(f"AVISO: journal_mode=WAL não ativo (modo atual: {mode!r}). "
+              "Verifique se o banco está em rede/OneDrive.", file=sys.stderr)
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
 

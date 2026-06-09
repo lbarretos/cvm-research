@@ -96,10 +96,10 @@ def main():
     for ano in range(args.desde, date.today().year + 1):
         posicao, movs = download_year(ano)
         if posicao is not None:
-            upsert(conn,"vlmo_posicao", process_posicao(posicao, cnpjs),
+            upsert(conn, "vlmo_posicao", process_posicao(posicao, cnpjs),
                    conflict="protocolo_entrega")
         if movs is not None:
-            upsert(conn,"vlmo_movimentacoes", process_movimentacoes(movs, cnpjs),
+            upsert(conn, "vlmo_movimentacoes", process_movimentacoes(movs, cnpjs),
                    conflict="vlmo_mov_uniq")
 
 if __name__ == "__main__":

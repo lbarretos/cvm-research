@@ -344,9 +344,12 @@ python ingest_fre.py        # dados de capital, acionistas, remuneração
 python ingest_dfp.py        # demonstrativos anuais (ano corrente e anterior)
 python ingest_itr.py        # demonstrativo trimestral (ano corrente)
 
-# Trimestral — reprocessa toda a série histórica
-python ingest_dfp.py --historico
-python ingest_itr.py --desde 2016
+# Histórico completo — rode uma vez ao migrar ou adicionar novas empresas
+python ingest_ipe.py   --desde 2009   # IPE disponível desde 2009 no CVM
+python ingest_dfp.py   --historico --desde 2010   # DFP desde 2010
+python ingest_itr.py   --desde 2011   # ITR desde 2011
+python ingest_vlmo.py  --desde 2018   # VLMO estruturado disponível desde 2018
+python ingest_fre.py   --desde 2010   # FRE desde 2010
 ```
 
 O `.env` na raiz do projeto deve ter:
@@ -356,6 +359,40 @@ DATABASE_URL=sqlite:///cvm_research.db
 
 **Extração de texto de PDFs:** `extract_pdf.py` funciona diretamente com o banco SQLite.
 Para popular `texto_extraido`, rode `python extract_pdf.py` com o DATABASE_URL configurado.
+
+### Adicionar empresas à watchlist
+
+O `watchlist.csv` controla quais empresas são ingeridas. Para expandir a cobertura:
+
+```bash
+cd scripts/ingest
+source ../../.venv/bin/activate
+
+# 1. Gerar/atualizar o catálogo B3+CVM (empresa_catalog.csv na raiz do projeto)
+python catalog.py
+
+# 2. Buscar uma empresa por nome ou ticker
+python catalog.py --search "petrobras"
+
+# 3. Adicionar empresas ao watchlist.csv
+python add_companies.py --ibov          # Todas as empresas do IBOV atual
+python add_companies.py --ibov --dry-run  # Preview sem gravar
+python add_companies.py --all           # Todas as ~443 empresas B3 ativas
+python add_companies.py --ticker VALE3  # Uma empresa específica
+
+# 4. Sincronizar watchlist.csv → tabela companies
+python ingest_companies.py
+
+# 5. Re-rodar ingestores com histórico completo para as novas empresas
+# (os ZIPs já foram baixados — re-download é inevitável mas sem código novo)
+python ingest_ipe.py --desde 2009
+python ingest_dfp.py --historico --desde 2010
+# ... etc
+```
+
+**Tickers assumidos:** empresas fora do IBOV recebem ticker com sufixo "3" (ON).
+Checar coluna `observacao` no watchlist.csv para linhas com `auto:assumed` e corrigir
+o ticker se necessário antes de rodar `ingest_companies.py`.
 
 ## Skill routing
 

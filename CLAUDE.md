@@ -1,7 +1,7 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: SQLite local · 56 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
+Banco: SQLite local · 111 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
 Atualização: manual via scripts de ingestão (ver seção "Conexão e atualização manual").
 
 ## Configuração do MCP (ler antes de começar)
@@ -368,7 +368,7 @@ O `watchlist.csv` controla quais empresas são ingeridas. Para expandir a cobert
 cd scripts/ingest
 source ../../.venv/bin/activate
 
-# 1. Gerar/atualizar o catálogo B3+CVM (empresa_catalog.csv na raiz do projeto)
+# 1. Gerar/atualizar o catálogo B3+CVM (company_catalog.csv na raiz do projeto)
 python catalog.py
 
 # 2. Buscar uma empresa por nome ou ticker
@@ -379,6 +379,8 @@ python add_companies.py --ibov          # Todas as empresas do IBOV atual
 python add_companies.py --ibov --dry-run  # Preview sem gravar
 python add_companies.py --all           # Todas as ~443 empresas B3 ativas
 python add_companies.py --ticker VALE3  # Uma empresa específica
+python add_companies.py --setor "Saude" # Por setor CVM (parcial, case-insensitive)
+python add_companies.py --ibov --skip-assumed  # Pula tickers inferidos (sufixo 3)
 
 # 4. Sincronizar watchlist.csv → tabela companies
 python ingest_companies.py

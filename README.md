@@ -216,7 +216,7 @@ python ingest_companies.py && python ingest_ipe.py
 - Confirme que está configurado: `claude mcp list` — deve mostrar `postgres-local`
 - Se não aparecer: `claude mcp add postgres-local -s user -- $(which npx) -y mcp-server-sqlite --db $(pwd)/cvm_research.db`
 - No Claude.app: confirme que os caminhos no `claude_desktop_config.json` são absolutos
-- Veja troubleshooting completo em [INSTALL.md](INSTALL.md#troubleshooting-do-mcp)
+- Veja troubleshooting completo em [INSTALL.md](INSTALL.md#troubleshooting)
 
 **`extract_pdf.py` falha com `KeyError: 'DATABASE_URL'`**
 ```bash

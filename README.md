@@ -3,9 +3,9 @@
 Base de dados local de documentos e eventos de empresas abertas brasileiras, organizada para pesquisa via Claude.
 
 **Fontes:** IPE · VLMO · Recompra · FRE · DFP/ITR  
-**Cobertura:** 56 empresas da watchlist (B3) · 2016–hoje  
+**Cobertura:** 111 empresas (IBOV + cobertura própria) · 2010–hoje  
 **Banco:** SQLite local (`cvm_research.db`) — sem PostgreSQL, sem Docker, sem cloud  
-**Tamanho:** ~830 MB · 1,2M+ linhas  
+**Tamanho:** ~1.6 GB · 3.4M+ linhas  
 **Atualização:** manual via scripts de ingestão
 
 ---
@@ -43,7 +43,7 @@ Carga inicial (~30–40 min):
 cd scripts/ingest
 python ingest_companies.py && python ingest_ipe.py && python ingest_vlmo.py
 python ingest_recompra.py && python ingest_fre.py
-python ingest_dfp.py --historico && python ingest_itr.py --desde 2016
+python ingest_dfp.py --historico --desde 2010 && python ingest_itr.py --desde 2011
 ```
 
 ---
@@ -52,33 +52,37 @@ python ingest_dfp.py --historico && python ingest_itr.py --desde 2016
 
 O MCP permite ao Claude consultar o banco diretamente durante a conversa.
 
-> **Atenção:** o Claude.app (interface visual) usa um sandbox que impede o `mcp-server-sqlite` (npm) de abrir arquivos. Use o servidor HTTP Python descrito abaixo. Veja a explicação completa em [INSTALL.md — Arquitetura do MCP](INSTALL.md#arquitetura-do-mcp).
-
-### Setup do MCP (Claude Code + Claude.app)
+### Claude Code CLI (terminal)
 
 ```bash
-# 1. Instalar o MCP SDK Python
-pip3 install "mcp[cli]"
+claude mcp add postgres-local -s user -- $(which npx) \
+  -y mcp-server-sqlite \
+  --db $(pwd)/cvm_research.db
 
-# 2. Iniciar o servidor HTTP (porta 8765)
-bash scripts/mcp/start_mcp.sh
-
-# 3. Configurar o ~/.claude.json para HTTP
-claude mcp remove postgres-local 2>/dev/null || true
-claude mcp add postgres-local -s user --transport http http://localhost:8765/mcp
-
-# 4. (Opcional) Auto-iniciar no login do Mac
-launchctl load ~/Library/LaunchAgents/com.cvm-research.mcp.plist
+claude mcp list   # postgres-local: ✓ Connected
 ```
+
+### Claude desktop app (interface visual)
+
+Edite `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "postgres-local": {
+      "command": "/caminho/absoluto/do/npx",
+      "args": ["-y", "mcp-server-sqlite", "--db", "/caminho/absoluto/cvm_research.db"]
+    }
+  }
+}
+```
+
+Use caminhos absolutos (`which npx` e `pwd`/cvm_research.db). Reinicie o app após salvar.
+Veja o [INSTALL.md](INSTALL.md) para o guia completo.
 
 ### Verificar
 
-```bash
-curl -s http://localhost:8765/mcp   # servidor respondendo
-claude mcp list                     # postgres-local: ✓ Connected
-```
-
-Ou pergunte ao Claude: *"Quantas linhas tem a tabela ipe_docs?"* — deve responder ~35.000.
+Pergunte ao Claude: *"Quantas linhas tem a tabela ipe_docs?"* — deve responder ~134.000.
 
 ---
 
@@ -100,9 +104,9 @@ python ingest_fre.py
 python ingest_dfp.py
 python ingest_itr.py
 
-# Trimestral (reprocessa série histórica completa)
-python ingest_dfp.py --historico
-python ingest_itr.py --desde 2016
+# Histórico completo (após adicionar novas empresas)
+python ingest_dfp.py --historico --desde 2010
+python ingest_itr.py --desde 2011
 ```
 
 ---
@@ -128,7 +132,7 @@ O arquivo `CLAUDE.md` documenta o schema completo, queries de exemplo e o compor
 
 ```
 cvm-research/
-├── watchlist.csv                   # 56 empresas com CNPJ, ticker e código CVM
+├── watchlist.csv                   # 111 empresas com CNPJ, ticker e código CVM
 ├── schema.sql                      # schema SQLite completo (tabelas + views + FTS5)
 ├── setup.sh                        # cria cvm_research.db a partir de schema.sql
 ├── CLAUDE.md                       # schema, queries e instruções para o Claude
@@ -138,7 +142,9 @@ cvm-research/
 ├── .env.example                    # template do .env
 ├── scripts/ingest/
 │   ├── utils.py                    # conexão SQLite + helpers de conversão
-│   ├── ingest_companies.py         # watchlist
+│   ├── catalog.py                  # baixa catálogo B3+CVM → company_catalog.csv
+│   ├── add_companies.py            # adiciona empresas do catálogo à watchlist
+│   ├── ingest_companies.py         # sincroniza watchlist.csv → tabela companies
 │   ├── ingest_ipe.py               # documentos CVM (metadados) — flag: --desde ANO
 │   ├── ingest_vlmo.py              # insider trading
 │   ├── ingest_recompra.py          # programas de recompra
@@ -151,12 +157,14 @@ cvm-research/
 
 ### Fontes de dados
 
-| Script | Fonte CVM | Tabelas populadas | Cadência |
+| Script | Fonte | Tabelas populadas | Cadência |
 |---|---|---|---|
-| `ingest_companies.py` | `watchlist.csv` | `companies` | quando watchlist mudar |
+| `catalog.py` | B3 API + CVM | `company_catalog.csv` (arquivo) | ao expandir cobertura |
+| `add_companies.py` | `company_catalog.csv` | `watchlist.csv` (arquivo) | ao expandir cobertura |
+| `ingest_companies.py` | `watchlist.csv` | `companies` | após mudar watchlist |
 | `ingest_ipe.py` | IPE ZIPs anuais | `ipe_docs` | semanal (seg após 8h30) |
 | `ingest_vlmo.py` | VLMO ZIPs anuais | `vlmo_posicao`, `vlmo_movimentacoes` | semanal |
-| `ingest_recompra.py` | Recompra ZIPs | `recompra_programas`, `recompra_quantidades` | semanal |
+| `ingest_recompra.py` | Recompra ZIPs | `recompra_programas` | semanal |
 | `ingest_fre.py` | FRE ZIPs anuais | `fre_capital_social`, `fre_posicao_acionaria`, `fre_remuneracao_orgao` | mensal |
 | `ingest_dfp.py` | DFP ZIPs anuais | `demonstrativos_contabeis` (fonte='DFP') | trimestral |
 | `ingest_itr.py` | ITR ZIPs anuais | `demonstrativos_contabeis` (fonte='ITR') | trimestral |
@@ -205,9 +213,9 @@ python ingest_companies.py && python ingest_ipe.py
 ```
 
 **MCP não conecta**
-- Confirme que o servidor HTTP está rodando: `curl http://localhost:8765/mcp`
-- Se não estiver: `bash scripts/mcp/start_mcp.sh`
-- Confirme que o `~/.claude.json` aponta para HTTP (não stdio): `claude mcp list`
+- Confirme que está configurado: `claude mcp list` — deve mostrar `postgres-local`
+- Se não aparecer: `claude mcp add postgres-local -s user -- $(which npx) -y mcp-server-sqlite --db $(pwd)/cvm_research.db`
+- No Claude.app: confirme que os caminhos no `claude_desktop_config.json` são absolutos
 - Veja troubleshooting completo em [INSTALL.md](INSTALL.md#troubleshooting-do-mcp)
 
 **`extract_pdf.py` falha com `KeyError: 'DATABASE_URL'`**

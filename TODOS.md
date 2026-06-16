@@ -16,6 +16,19 @@ Banco: `cvm_research.db` · Schema: `schema.sql` · MCP: `mcp-server-sqlite`.
 
 ---
 
+## ✅ Expansão de cobertura B3 — CONCLUÍDA
+
+**Contexto:** Cobertura expandida de 54 → 111 empresas usando catálogo automático B3+CVM.
+
+**O que foi feito:**
+- `scripts/ingest/catalog.py` — baixa catálogo de 443 empresas ativas da B3+CVM, resolve tickers via IBOV
+- `scripts/ingest/add_companies.py` — adiciona empresas ao `watchlist.csv` com modos `--ibov`, `--all`, `--ticker`, `--dry-run`
+- 57 empresas do IBOV adicionadas (0 tickers assumidos)
+- Histórico estendido: IPE 2015+, DFP/FRE/ITR 2010+, VLMO 2018+
+- Banco: ~1.6 GB, 3.4M+ linhas
+
+---
+
 ## Backlog
 
 - [ ] Configurar atualização automática semanal dos ingestores (launchd ou `/schedule`)

@@ -26,9 +26,45 @@ Base de dados local de documentos e eventos de empresas abertas brasileiras, org
 
 ## Setup completo
 
-> **Recomendado:** veja o [INSTALL.md](INSTALL.md) para o guia passo a passo com suporte ao Claude Code — do clone ao primeiro SELECT em menos de 5 minutos de trabalho seu.
+> **Guia detalhado:** [INSTALL.md](INSTALL.md) cobre instalação do zero, transferência de banco existente, configuração do Claude desktop app e expansão de cobertura de empresas.
 
-### Resumo rápido (manual)
+### Instalar com Claude Code (recomendado)
+
+Clone e abra o Claude Code na pasta do projeto:
+
+```bash
+git clone https://github.com/lbarretos/cvm-research.git
+cd cvm-research
+claude
+```
+
+Dentro do Claude Code, cole este prompt e ele fará tudo automaticamente (~30–60 min):
+
+```
+Configure este projeto do zero para mim:
+
+1. Crie o banco SQLite: bash setup.sh
+2. Crie o ambiente Python: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+3. Crie o .env: echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
+4. Configure o MCP no Claude Code: claude mcp add postgres-local -s user -- $(which npx) -y mcp-server-sqlite --db $(pwd)/cvm_research.db
+5. Baixe os dados da CVM (pode levar 30–60 min — baixa ~15 GB de ZIPs):
+   cd scripts/ingest && source ../../.venv/bin/activate
+   python ingest_companies.py
+   python ingest_ipe.py --desde 2009
+   python ingest_vlmo.py --desde 2018
+   python ingest_recompra.py
+   python ingest_fre.py --desde 2010
+   python ingest_dfp.py --historico --desde 2010
+   python ingest_itr.py --desde 2011
+6. Verifique: sqlite3 cvm_research.db "SELECT COUNT(*) FROM ipe_docs;"
+   (esperado: ~134.000 documentos)
+
+Me avise quando cada etapa terminar e se algum erro ocorrer.
+```
+
+Quando concluir, feche e reabra o Claude Code — o banco estará disponível via MCP.
+
+### Instalação manual
 
 ```bash
 git clone https://github.com/lbarretos/cvm-research.git
@@ -38,12 +74,16 @@ python3 -m venv .venv && source .venv/bin/activate && pip install -r requirement
 echo "DATABASE_URL=sqlite:///cvm_research.db" > .env
 ```
 
-Carga inicial (~30–40 min):
+Carga inicial (~30–60 min):
 ```bash
-cd scripts/ingest
-python ingest_companies.py && python ingest_ipe.py && python ingest_vlmo.py
-python ingest_recompra.py && python ingest_fre.py
-python ingest_dfp.py --historico --desde 2010 && python ingest_itr.py --desde 2011
+cd scripts/ingest && source ../../.venv/bin/activate
+python ingest_companies.py
+python ingest_ipe.py --desde 2009
+python ingest_vlmo.py --desde 2018
+python ingest_recompra.py
+python ingest_fre.py --desde 2010
+python ingest_dfp.py --historico --desde 2010
+python ingest_itr.py --desde 2011
 ```
 
 ---

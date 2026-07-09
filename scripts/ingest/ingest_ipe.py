@@ -58,6 +58,25 @@ def process(df: pd.DataFrame, cnpjs: set[str]) -> list[dict]:
         })
     return rows
 
+GAP_ANOS_SUSPEITO = 9  # ver "Anomalias conhecidas" no CLAUDE.md
+
+def check_date_anomalies(rows: list[dict]) -> None:
+    """Avisa sobre data_referencia muito distante de data_entrega (erro de
+    digitação na fonte da CVM, não de parsing local — ver CLAUDE.md)."""
+    anomalias = []
+    for r in rows:
+        ref, ent = r.get("data_referencia"), r.get("data_entrega")
+        if not ref or not ent:
+            continue
+        gap = int(ref[:4]) - int(ent[:4])
+        if gap >= GAP_ANOS_SUSPEITO:
+            anomalias.append((gap, r["protocolo_entrega"], r["cnpj_companhia"], r["categoria"], ref, ent))
+    if not anomalias:
+        return
+    print(f"  AVISO: {len(anomalias)} doc(s) com data_referencia suspeita (gap >= {GAP_ANOS_SUSPEITO} anos vs data_entrega):")
+    for gap, protocolo, cnpj, categoria, ref, ent in sorted(anomalias, reverse=True):
+        print(f"    gap={gap}a  {ref} (entrega {ent})  {cnpj}  {categoria}  protocolo={protocolo}")
+
 def upsert_batch(conn, rows: list[dict]):
     # sanitize antes do dedup: NaN → None para que o filtro abaixo os exclua
     rows = _sanitize(rows)
@@ -88,6 +107,7 @@ def main():
         try:
             df   = download_year(ano)
             rows = process(df, cnpjs)
+            check_date_anomalies(rows)
             upsert_batch(conn, rows)
             print(f"  {ano}: {len(rows)} docs da watchlist")
         except Exception as e:

@@ -286,6 +286,26 @@ Se um documento recente não aparecer na base, informar ao usuário:
 
 **VLMO / FRE / Recompra / DFP / ITR:** sem atualização automática — rodar manualmente quando necessário.
 
+## Anomalias conhecidas: `data_referencia` no futuro em `ipe_docs`
+
+Existem registros em `ipe_docs` com `data_referencia` posterior à data atual. **Não filtre isso de forma genérica** (ex: `WHERE data_referencia <= date('now')`) — a maioria é legítima:
+
+- **~96% dos casos** (categorias `Calendário de Eventos Corporativos` e `Assembleia`) são documentos que citam datas de eventos *futuros* por natureza: um calendário de eventos corporativos lista datas de divulgações ainda não ocorridas; uma convocação de assembleia é publicada com a data da própria assembleia, que ainda vai acontecer. Isso é dado correto, não erro.
+- **Uma fração pequena é erro de digitação na fonte da CVM**, confirmado comparando o CSV oficial (`https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/IPE/DADOS/ipe_cia_aberta_<ano>.zip`) diretamente — o erro já vem no `Data_Referencia` da CVM, inclusive embutido no `Protocolo_Entrega` gerado pelo sistema deles (ex: protocolo `001023IPE07072121...` para uma data `2121-07-07`, quando a `data_entrega` real foi `2021-07-30`). **Não é bug do `ingest_ipe.py`** (ele usa `pd.to_datetime` puro, sem lógica de correção de ano) — é erro de digitação no momento do registro do documento na CVM.
+
+**Como distinguir um caso legítimo de um erro real:** compare `data_referencia` com `data_entrega` (que é sempre confiável — é o timestamp de recebimento pela CVM). Gap de 0–1 ano é normal (evento agendado para o mesmo ano ou o seguinte). Gap ≥ 9 anos é sinal de erro de digitação na fonte:
+
+```sql
+SELECT data_referencia, data_entrega, cnpj_companhia, categoria, protocolo_entrega,
+  (CAST(substr(data_referencia,1,4) AS INTEGER) - CAST(substr(data_entrega,1,4) AS INTEGER)) AS gap_anos
+FROM ipe_docs
+WHERE data_referencia > date('now')
+  AND (CAST(substr(data_referencia,1,4) AS INTEGER) - CAST(substr(data_entrega,1,4) AS INTEGER)) >= 9
+ORDER BY gap_anos DESC;
+```
+
+Quando aparecer um novo caso assim (gap ≥ 9 anos): não tentar "corrigir" o ano automaticamente (não há offset consistente — já vimos +100, +71, +16, +9 anos no mesmo padrão de erro), apenas reportar ao usuário citando `data_entrega` como a data confiável e, se necessário, o `link_download` para conferência manual no portal da CVM.
+
 ## Monitorar uso do banco
 ```sql
 SELECT COUNT(*) AS total_docs FROM ipe_docs;

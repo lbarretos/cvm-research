@@ -11,3 +11,4 @@ cvm_research.db-wal
 .DS_Store
 company_catalog.csv
 logs/
+.gstack/

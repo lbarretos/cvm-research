@@ -1,7 +1,7 @@
 # CVM Research — Guia de Instalação
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco SQLite · 111 empresas (IBOV + cobertura própria) · dados desde 2010.
+Banco SQLite · 145 empresas (IBOV + cobertura própria) · dados desde 2010.
 
 ---
 
@@ -161,6 +161,15 @@ Confira a coluna `observacao` no watchlist.csv — corrija antes de rodar os ing
 ## Atualizar os dados
 
 A CVM publica ZIPs atualizados toda **segunda-feira entre 8h00 e 8h30**.
+
+**Automático (recomendado):** agenda no launchd do macOS toda segunda às 09:00.
+
+```bash
+bash scripts/install_weekly_launchd.sh --run-now   # instala e roda a primeira vez
+bash scripts/install_weekly_launchd.sh --status    # confere estado e último log
+```
+
+**Manual:** `bash scripts/update_weekly.sh`, ou passo a passo:
 
 ```bash
 cd scripts/ingest && source ../../.venv/bin/activate

@@ -3,10 +3,10 @@
 Base de dados local de documentos e eventos de empresas abertas brasileiras, organizada para pesquisa via Claude.
 
 **Fontes:** IPE · VLMO · Recompra · FRE · DFP/ITR  
-**Cobertura:** 111 empresas (IBOV + cobertura própria) · 2010–hoje  
+**Cobertura:** 145 empresas (IBOV + cobertura própria) · 2010–hoje  
 **Banco:** SQLite local (`cvm_research.db`) — sem PostgreSQL, sem Docker, sem cloud  
 **Tamanho:** ~1.6 GB · 3.4M+ linhas  
-**Atualização:** manual via scripts de ingestão
+**Atualização:** semanal automática (launchd, segunda 9h) ou manual via `scripts/update_weekly.sh`
 
 ---
 
@@ -126,11 +126,30 @@ Pergunte ao Claude: *"Quantas linhas tem a tabela ipe_docs?"* — deve responder
 
 ---
 
-## Atualização manual da base
+## Atualização da base
 
 > **Cadência da CVM:** os ZIPs do IPE (documentos corporativos) são atualizados **toda segunda-feira entre 8h00 e 8h30**. Para documentos mais recentes, consulte diretamente o portal RAD: `rad.cvm.gov.br`.
 
-Rodar após cada segunda-feira para manter os dados em dia:
+### Automática (launchd, macOS)
+
+```bash
+bash scripts/install_weekly_launchd.sh            # agenda toda segunda às 09:00
+bash scripts/install_weekly_launchd.sh --run-now  # agenda e roda agora
+bash scripts/install_weekly_launchd.sh --status   # estado + último log
+bash scripts/install_weekly_launchd.sh --uninstall
+```
+
+O job roda `scripts/update_weekly.sh` (todos os ingestores + `extract_pdf.py`) com logs em `logs/update_*.log`. Horário e dia podem ser alterados com `WEEKDAY=1 HOUR=9 MINUTE=0`.
+Se o Mac estiver dormindo no horário, o launchd executa ao acordar. Se o log mostrar `Operation not permitted`, dê Acesso Total ao Disco a `/bin/bash` em Ajustes do Sistema → Privacidade e Segurança.
+
+### Manual
+
+```bash
+bash scripts/update_weekly.sh                          # tudo de uma vez
+EXTRACT_LIMIT=2000 RETRY_FAILED=1 bash scripts/update_weekly.sh   # com re-tentativa de PDFs falhos
+```
+
+Ou passo a passo:
 
 ```bash
 cd scripts/ingest
@@ -192,7 +211,9 @@ cvm-research/
 │   ├── ingest_dfp.py               # demonstrativos anuais — flags: --historico, --desde ANO
 │   ├── ingest_itr.py               # demonstrativos trimestrais — flag: --desde ANO
 │   └── extract_pdf.py              # extração de texto de PDFs (SQLite local)
-└── .github/workflows/              # desativados — ingestão é manual
+├── scripts/update_weekly.sh        # roda todos os ingestores + extract_pdf (com lock e log)
+├── scripts/install_weekly_launchd.sh # agenda update_weekly.sh no launchd (segunda 9h)
+└── .github/workflows/              # desativados — ingestão roda localmente
 ```
 
 ### Fontes de dados

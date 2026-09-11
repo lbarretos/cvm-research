@@ -1,8 +1,8 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: SQLite local · 111 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
-Atualização: manual via scripts de ingestão (ver seção "Conexão e atualização manual").
+Banco: SQLite local · 145 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
+Atualização: automática toda segunda 9h via launchd (`scripts/update_weekly.sh`); manual a qualquer momento com `bash scripts/update_weekly.sh`.
 
 ## Configuração do MCP (ler antes de começar)
 
@@ -284,7 +284,7 @@ Se um documento recente não aparecer na base, informar ao usuário:
 - O documento pode ser consultado diretamente no portal da CVM: `https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx`
 - Rodar `python ingest_ipe.py` após a segunda-feira atualiza a base
 
-**VLMO / FRE / Recompra / DFP / ITR:** sem atualização automática — rodar manualmente quando necessário.
+**VLMO / FRE / Recompra / DFP / ITR:** entram no mesmo job semanal (`scripts/update_weekly.sh`). Para forçar agora: `bash scripts/update_weekly.sh`. Logs em `logs/update_*.log`.
 
 ## Anomalias conhecidas: `data_referencia` no futuro em `ipe_docs`
 
@@ -349,9 +349,10 @@ Editar `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 Obter o caminho do npx: `which npx`. Obter o caminho absoluto do banco: `pwd`/cvm_research.db. Reiniciar o app após salvar.
 
-### Atualização manual dos dados
+### Atualização dos dados
 
-Rodar periodicamente para manter a base em dia:
+Automática: `bash scripts/install_weekly_launchd.sh` (segunda 9h; `--status` mostra o último log).
+Manual, tudo de uma vez: `bash scripts/update_weekly.sh`. Passo a passo:
 
 ```bash
 cd scripts/ingest

@@ -29,6 +29,11 @@ Banco: `cvm_research.db` · Schema: `schema.sql` · MCP: `mcp-server-sqlite`.
 
 ---
 
+## ✅ Atualização semanal automática — CONCLUÍDA
+
+- `scripts/update_weekly.sh` — roda todos os ingestores + `extract_pdf.py` com lock, log em `logs/` e resumo do banco
+- `scripts/install_weekly_launchd.sh` — instala job launchd `com.cvm-research.weekly-update` (segunda 09:00, `--run-now`, `--status`, `--uninstall`)
+
 ## Backlog
 
-- [ ] Configurar atualização automática semanal dos ingestores (launchd ou `/schedule`)
+- [ ] Re-tentar os ~1.680 PDFs prioritários com `extracao_falhou=1` (`extract_pdf.py --retry-failed`) — muitos são digitalizados sem camada de texto

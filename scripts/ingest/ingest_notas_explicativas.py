@@ -1,0 +1,104 @@
+"""
+Extrai o texto das Notas Explicativas de ITR/DFP da CVM.
+
+Por que este script existe: demonstrativos_contabeis (ingest_dfp.py /
+ingest_itr.py) só tem os quadros padronizados (BPA/BPP/DRE/DFC_MI/DVA) — sem
+notas explicativas. Confirmado por inspeção manual do pacote ZIP oficial de um
+ITR (Frasle 1T26, NumeroSequencialDocumento=156792): o XML embutido
+("006211ITR31-03-2026v2.xml") usa o mesmo schema Conta/CodigoConta/Valor já
+normalizado no banco — não é XBRL e não tem nenhum bloco de nota. As notas só
+existem no PDF completo embutido no mesmo pacote (mesmo documento publicado em
+sites de RI como mziq.com).
+
+Fluxo: utils.fetch_doc_metadata() dá o NumeroSequencialDocumento por
+(cnpj, data_referencia) → baixa o ZIP do pacote em memória → extrai o PDF
+embutido em memória → extrai texto com pdfplumber → salva no banco → descarta
+os bytes. Nenhum PDF é persistido em disco (mesma política de extract_pdf.py).
+
+Uso:
+  python ingest_notas_explicativas.py --cnpj 88.610.126/0001-29 --ano 2026 --fonte ITR
+  python ingest_notas_explicativas.py --ano 2025 --fonte DFP
+  python ingest_notas_explicativas.py --ano 2025 --fonte ITR --limite 20
+  python ingest_notas_explicativas.py --retry-failed
+  python ingest_notas_explicativas.py --rebuild-fts
+
+Requer DATABASE_URL=sqlite:///cvm_research.db no .env.
+"""
+import argparse
+import io
+import time
+import zipfile
+from datetime import date, datetime, timezone
+
+import pandas as pd
+import pdfplumber
+
+from utils import _http_get, fetch_doc_metadata, get_db, watchlist_cnpjs
+
+DOWNLOAD_URL = (
+    "https://www.rad.cvm.gov.br/ENETCONSULTA/frmDownloadDocumento.aspx"
+    "?CodigoInstituicao=1&NumeroSequencialDocumento={numero}"
+)
+
+
+# ── Funções puras ─────────────────────────────────────────────────────────────
+
+def latest_por_periodo(df_meta: pd.DataFrame, cnpjs: set, fonte: str) -> list[dict]:
+    """
+    Reduz o CSV de metadados (ver utils.fetch_doc_metadata) a 1 linha por
+    (cnpj, data_referencia): a maior VERSAO — igual à lógica já usada nas
+    queries de demonstrativos_contabeis (CLAUDE.md, seção "DRE linha a linha").
+    """
+    df = df_meta[df_meta["CNPJ_CIA"].isin(cnpjs)].copy()
+    if df.empty:
+        return []
+    df.loc[:, "VERSAO"] = df["VERSAO"].astype(int)
+    df.loc[:, "ID_DOC"] = df["ID_DOC"].astype(int)
+    df = df.sort_values("VERSAO").drop_duplicates(
+        subset=["CNPJ_CIA", "DT_REFER"], keep="last"
+    )
+    return [
+        {
+            "cnpj_companhia": r["CNPJ_CIA"],
+            "fonte": fonte,
+            "data_referencia": r["DT_REFER"],
+            "versao": int(r["VERSAO"]),
+            "numero_sequencial_documento": int(r["ID_DOC"]),
+        }
+        for _, r in df.iterrows()
+    ]
+
+
+def extrair_pdf_do_pacote(zip_bytes: bytes) -> bytes | None:
+    """Retorna os bytes do primeiro .pdf dentro do pacote ZIP do documento."""
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
+        pdf_names = [n for n in z.namelist() if n.lower().endswith(".pdf")]
+        if not pdf_names:
+            return None
+        return z.read(pdf_names[0])
+
+
+# ── Stubs for functions implemented in later tasks (Task 4 and Task 5) ────────
+# These exist only so this module is importable by tests/test_ingest_notas_explicativas.py
+# right now. Their real logic and their own dedicated tests come in later tasks.
+# DO NOT implement real logic here — leave as NotImplementedError stubs.
+
+def fetch_notas_texto(numero_sequencial: int) -> str | None:
+    raise NotImplementedError("Implemented in Task 4")
+
+
+def _upsert_pendente_rows(conn, rows: list[dict]) -> None:
+    raise NotImplementedError("Implemented in Task 5")
+
+
+def _fetch_pendentes(conn, cnpjs: set, fonte: str, ano: int, limite: int,
+                      retry_failed: bool = False) -> list[dict]:
+    raise NotImplementedError("Implemented in Task 5")
+
+
+def _salvar(conn, row_id: int, texto: str | None) -> None:
+    raise NotImplementedError("Implemented in Task 5")
+
+
+if __name__ == "__main__":
+    pass  # CLI adicionado em task futura

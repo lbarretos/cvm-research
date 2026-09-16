@@ -30,8 +30,6 @@ from ingest_notas_explicativas import (
 )
 
 
-# ── latest_por_periodo ────────────────────────────────────────────────────────
-
 def test_latest_por_periodo_escolhe_maior_versao():
     df = pd.DataFrame([
         {"CNPJ_CIA": "88.610.126/0001-29", "DT_REFER": "2026-03-31", "VERSAO": "1", "ID_DOC": "156716"},
@@ -70,8 +68,6 @@ def test_latest_por_periodo_multiplos_periodos_mesma_empresa():
     periodos = {r["data_referencia"] for r in result}
     assert periodos == {"2025-12-31", "2026-03-31"}
 
-
-# ── extrair_pdf_do_pacote ─────────────────────────────────────────────────────
 
 def test_extrair_pdf_do_pacote_encontra_pdf():
     buf = io.BytesIO()

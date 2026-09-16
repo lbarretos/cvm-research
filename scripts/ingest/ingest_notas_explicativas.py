@@ -41,8 +41,6 @@ DOWNLOAD_URL = (
 )
 
 
-# ── Funções puras ─────────────────────────────────────────────────────────────
-
 def latest_por_periodo(df_meta: pd.DataFrame, cnpjs: set, fonte: str) -> list[dict]:
     """
     Reduz o CSV de metadados (ver utils.fetch_doc_metadata) a 1 linha por
@@ -52,8 +50,8 @@ def latest_por_periodo(df_meta: pd.DataFrame, cnpjs: set, fonte: str) -> list[di
     df = df_meta[df_meta["CNPJ_CIA"].isin(cnpjs)].copy()
     if df.empty:
         return []
-    df.loc[:, "VERSAO"] = df["VERSAO"].astype(int)
-    df.loc[:, "ID_DOC"] = df["ID_DOC"].astype(int)
+    df["VERSAO"] = df["VERSAO"].astype(int)
+    df["ID_DOC"] = df["ID_DOC"].astype(int)
     df = df.sort_values("VERSAO").drop_duplicates(
         subset=["CNPJ_CIA", "DT_REFER"], keep="last"
     )
@@ -77,11 +75,6 @@ def extrair_pdf_do_pacote(zip_bytes: bytes) -> bytes | None:
             return None
         return z.read(pdf_names[0])
 
-
-# ── Stubs for functions implemented in later tasks (Task 4 and Task 5) ────────
-# These exist only so this module is importable by tests/test_ingest_notas_explicativas.py
-# right now. Their real logic and their own dedicated tests come in later tasks.
-# DO NOT implement real logic here — leave as NotImplementedError stubs.
 
 def fetch_notas_texto(numero_sequencial: int) -> str | None:
     raise NotImplementedError("Implemented in Task 4")

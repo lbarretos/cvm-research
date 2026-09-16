@@ -102,7 +102,8 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 
 ### `notas_explicativas` — texto completo do ITR/DFP (com notas explicativas)
 `cnpj_companhia, fonte ('ITR'/'DFP'), data_referencia, versao,`
-`numero_sequencial_documento, texto_extraido (NULL = não extraído), chars_extraidos`
+`numero_sequencial_documento, link_download, texto_extraido (NULL = não extraído),`
+`extracao_falhou, chars_extraidos`
 
 Diferença para `demonstrativos_contabeis`: aquela tabela só tem os quadros
 padronizados (BPA/BPP/DRE/DFC_MI/DVA); esta tem o **PDF completo do documento**,
@@ -111,6 +112,14 @@ Uso, provisões, etc.) — dado que não existe em nenhum feed estruturado da CV
 Populada sob demanda via `ingest_notas_explicativas.py` (não faz parte do fluxo
 semanal automático — ver script para detalhes). Busca full-text via
 `notas_explicativas_fts` (mesmo padrão de `ipe_docs_fts`).
+
+⚠️ Diferente dos demais ingestores (que baixam ZIPs anuais de `dados.cvm.gov.br`),
+este busca cada documento individualmente em `rad.cvm.gov.br` (o portal de
+consulta de documentos da CVM, não o feed de dados abertos) — mais lento e mais
+sensível a rate limit, por isso o `time.sleep(0.5)` entre documentos e o
+`--limite` default de 20. Além disso, ao contrário de `demonstrativos_contabeis`
+(que guarda todas as versões), aqui só a versão mais recente é mantida — uma
+reapresentação (nova `versao`) descarta o `texto_extraido` da versão anterior.
 
 ---
 
@@ -376,8 +385,6 @@ python ingest_recompra.py   # programas de recompra
 python ingest_fre.py        # dados de capital, acionistas, remuneração
 python ingest_dfp.py        # demonstrativos anuais (ano corrente e anterior)
 python ingest_itr.py        # demonstrativo trimestral (ano corrente)
-python ingest_notas_explicativas.py --ano <ANO> --fonte ITR   # texto completo (com notas) do ITR
-python ingest_notas_explicativas.py --ano <ANO> --fonte DFP   # texto completo (com notas) do DFP anual
 
 # Histórico completo — rode uma vez ao migrar ou adicionar novas empresas
 python ingest_ipe.py   --desde 2009   # IPE disponível desde 2009 no CVM

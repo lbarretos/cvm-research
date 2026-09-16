@@ -50,8 +50,8 @@ def latest_por_periodo(df_meta: pd.DataFrame, cnpjs: set, fonte: str) -> list[di
     df = df_meta[df_meta["CNPJ_CIA"].isin(cnpjs)].copy()
     if df.empty:
         return []
-    df["VERSAO"] = df["VERSAO"].astype(int)
-    df["ID_DOC"] = df["ID_DOC"].astype(int)
+    df.loc[:, "VERSAO"] = df["VERSAO"].astype(int)
+    df.loc[:, "ID_DOC"] = df["ID_DOC"].astype(int)
     df = df.sort_values("VERSAO").drop_duplicates(
         subset=["CNPJ_CIA", "DT_REFER"], keep="last"
     )
@@ -85,7 +85,7 @@ def fetch_notas_texto(numero_sequencial: int) -> str | None:
     url = DOWNLOAD_URL.format(numero=numero_sequencial)
     try:
         r = _http_get(url, timeout=120)
-        content_length = int(r.headers.get("content-length", 0))
+        content_length = len(r.content)
         if content_length > 150 * 1024 * 1024:
             print(f"    SKIP: pacote muito grande ({content_length // 1024 // 1024}MB)")
             return None

@@ -343,8 +343,7 @@ def test_fetch_notas_texto_pacote_muito_grande_retorna_none(mock_http_get, mock_
     coincidir com uma falha de parsing que aconteceria de qualquer forma.
     """
     resp = MagicMock()
-    resp.headers = {"content-length": str(200 * 1024 * 1024)}  # 200MB > 150MB cap
-    resp.content = b"conteudo irrelevante - nunca deveria ser lido"
+    resp.content = b"x" * (151 * 1024 * 1024)  # 151MB > 150MB cap
     mock_http_get.return_value = resp
 
     assert fetch_notas_texto(1) is None

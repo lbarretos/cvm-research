@@ -240,6 +240,23 @@ def test_upsert_pendente_rows_versao_nova_reseta_texto():
     assert row == (2, 156792, None, 0)
 
 
+def test_upsert_pendente_rows_popula_link_download():
+    conn = _make_notas_conn()
+    rows = [{
+        "cnpj_companhia": "88.610.126/0001-29", "fonte": "ITR",
+        "data_referencia": "2026-03-31", "versao": 2,
+        "numero_sequencial_documento": 156792,
+    }]
+
+    _upsert_pendente_rows(conn, rows)
+
+    link = conn.execute("SELECT link_download FROM notas_explicativas").fetchone()[0]
+    assert link == (
+        "https://www.rad.cvm.gov.br/ENETCONSULTA/frmDownloadDocumento.aspx"
+        "?CodigoInstituicao=1&NumeroSequencialDocumento=156792"
+    )
+
+
 def test_fetch_pendentes_filtra_texto_nulo_e_fonte_ano():
     conn = _make_notas_conn()
     conn.executemany(
@@ -316,3 +333,13 @@ def test_salvar_falha_marca_extracao_falhou():
         "SELECT texto_extraido, extracao_falhou FROM notas_explicativas WHERE id=1"
     ).fetchone()
     assert row == (None, 1)
+
+
+@patch("ingest_notas_explicativas._http_get")
+def test_fetch_notas_texto_pacote_muito_grande_retorna_none(mock_http_get):
+    resp = MagicMock()
+    resp.headers = {"content-length": str(200 * 1024 * 1024)}  # 200MB > 150MB cap
+    resp.content = b"nao deveria nem tentar abrir isso"  # invalid zip on purpose
+    mock_http_get.return_value = resp
+
+    assert fetch_notas_texto(1) is None

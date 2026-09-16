@@ -85,6 +85,10 @@ def fetch_notas_texto(numero_sequencial: int) -> str | None:
     url = DOWNLOAD_URL.format(numero=numero_sequencial)
     try:
         r = _http_get(url, timeout=120)
+        content_length = int(r.headers.get("content-length", 0))
+        if content_length > 150 * 1024 * 1024:
+            print(f"    SKIP: pacote muito grande ({content_length // 1024 // 1024}MB)")
+            return None
         pdf_bytes = extrair_pdf_do_pacote(r.content)
         if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
             return None
@@ -104,21 +108,23 @@ def _upsert_pendente_rows(conn, rows: list[dict]) -> None:
     texto_extraido/extracao_falhou para forçar reprocessamento.
     """
     for row in rows:
+        params = {**row, "link_download": DOWNLOAD_URL.format(numero=row["numero_sequencial_documento"])}
         conn.execute(
             """
             INSERT INTO notas_explicativas
-                (cnpj_companhia, fonte, data_referencia, versao, numero_sequencial_documento)
-            VALUES (:cnpj_companhia, :fonte, :data_referencia, :versao, :numero_sequencial_documento)
+                (cnpj_companhia, fonte, data_referencia, versao, numero_sequencial_documento, link_download)
+            VALUES (:cnpj_companhia, :fonte, :data_referencia, :versao, :numero_sequencial_documento, :link_download)
             ON CONFLICT (cnpj_companhia, fonte, data_referencia) DO UPDATE SET
                 versao = excluded.versao,
                 numero_sequencial_documento = excluded.numero_sequencial_documento,
+                link_download = excluded.link_download,
                 texto_extraido = CASE WHEN excluded.versao > notas_explicativas.versao
                                        THEN NULL ELSE notas_explicativas.texto_extraido END,
                 extracao_falhou = CASE WHEN excluded.versao > notas_explicativas.versao
                                         THEN 0 ELSE notas_explicativas.extracao_falhou END,
                 updated_at = datetime('now')
             """,
-            row,
+            params,
         )
     conn.commit()
 

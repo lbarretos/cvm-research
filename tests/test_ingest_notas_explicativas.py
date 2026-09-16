@@ -335,11 +335,17 @@ def test_salvar_falha_marca_extracao_falhou():
     assert row == (None, 1)
 
 
+@patch("ingest_notas_explicativas.extrair_pdf_do_pacote")
 @patch("ingest_notas_explicativas._http_get")
-def test_fetch_notas_texto_pacote_muito_grande_retorna_none(mock_http_get):
+def test_fetch_notas_texto_pacote_muito_grande_retorna_none(mock_http_get, mock_extrair_pdf):
+    """
+    O cap de tamanho deve barrar ANTES de tentar abrir o ZIP/PDF — não apenas
+    coincidir com uma falha de parsing que aconteceria de qualquer forma.
+    """
     resp = MagicMock()
     resp.headers = {"content-length": str(200 * 1024 * 1024)}  # 200MB > 150MB cap
-    resp.content = b"nao deveria nem tentar abrir isso"  # invalid zip on purpose
+    resp.content = b"conteudo irrelevante - nunca deveria ser lido"
     mock_http_get.return_value = resp
 
     assert fetch_notas_texto(1) is None
+    mock_extrair_pdf.assert_not_called()

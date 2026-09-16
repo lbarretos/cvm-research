@@ -267,6 +267,44 @@ CREATE INDEX IF NOT EXISTS idx_dem_tipo_conta ON demonstrativos_contabeis (tipo_
 CREATE INDEX IF NOT EXISTS idx_dem_cnpj_tipo  ON demonstrativos_contabeis (cnpj_companhia, tipo_doc, data_referencia DESC);
 CREATE INDEX IF NOT EXISTS idx_dem_versao     ON demonstrativos_contabeis (cnpj_companhia, fonte, tipo_doc, data_referencia, cd_conta, ordem_exercicio, versao DESC);
 
+-- ── Notas Explicativas (ITR/DFP) ────────────────────────────────────────────
+-- Texto completo extraído do PDF oficial do ITR/DFP (o mesmo documento
+-- publicado em RI). Não existe em demonstrativos_contabeis: aquela tabela só
+-- tem os quadros padronizados (BPA/BPP/DRE/DFC_MI/DVA), sem notas.
+-- Ver scripts/ingest/ingest_notas_explicativas.py para o fluxo de extração.
+
+CREATE TABLE IF NOT EXISTS notas_explicativas (
+    id                           INTEGER PRIMARY KEY AUTOINCREMENT,
+    cnpj_companhia               TEXT NOT NULL,
+    fonte                        TEXT NOT NULL CHECK (fonte IN ('ITR', 'DFP')),
+    data_referencia              TEXT NOT NULL,
+    versao                       INTEGER NOT NULL DEFAULT 1,
+    numero_sequencial_documento  INTEGER NOT NULL,
+    link_download                TEXT,
+    texto_extraido               TEXT,
+    extraido_em                  TEXT,
+    extracao_falhou              INTEGER DEFAULT 0,
+    chars_extraidos              INTEGER,
+    created_at                   TEXT DEFAULT (datetime('now')),
+    updated_at                   TEXT DEFAULT (datetime('now')),
+    UNIQUE (cnpj_companhia, fonte, data_referencia)
+);
+
+CREATE INDEX IF NOT EXISTS idx_notas_cnpj_data ON notas_explicativas (cnpj_companhia, data_referencia DESC);
+CREATE INDEX IF NOT EXISTS idx_notas_sem_texto ON notas_explicativas (cnpj_companhia)
+    WHERE texto_extraido IS NULL AND extracao_falhou = 0;
+
+-- Busca full-text (idêntico ao padrão de ipe_docs_fts):
+--   INSERT INTO notas_explicativas_fts(notas_explicativas_fts) VALUES ('rebuild');
+--   SELECT n.* FROM notas_explicativas_fts f JOIN notas_explicativas n ON n.id = f.rowid
+--   WHERE notas_explicativas_fts MATCH 'imobilizado AND depreciacao' ORDER BY rank LIMIT 20;
+CREATE VIRTUAL TABLE IF NOT EXISTS notas_explicativas_fts USING fts5(
+    cnpj_companhia,
+    texto_extraido,
+    content='notas_explicativas',
+    content_rowid='id'
+);
+
 -- ── Views ─────────────────────────────────────────────────────────────────────
 -- DISTINCT ON (PostgreSQL) replaced by MAX(versao) CTE — semantically equivalent.
 

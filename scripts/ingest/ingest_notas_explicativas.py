@@ -167,5 +167,68 @@ def _salvar(conn, row_id: int, texto: str | None) -> None:
     conn.commit()
 
 
+def _rebuild_fts(conn) -> None:
+    """Reconstrói o índice FTS5 a partir do conteúdo atual de notas_explicativas."""
+    print("Reconstruindo índice FTS5...")
+    conn.execute("INSERT INTO notas_explicativas_fts(notas_explicativas_fts) VALUES ('rebuild')")
+    conn.commit()
+    print("  FTS5 reconstruído.")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main(cnpj_filter=None, ano=None, fonte="ITR", limite=20,
+         retry_failed=False, rebuild_fts=False):
+    conn = get_db()
+
+    if rebuild_fts:
+        _rebuild_fts(conn)
+        return
+
+    ano = ano or date.today().year
+    cnpjs = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
+
+    print(f"Baixando metadados {fonte} {ano}...")
+    df_meta = fetch_doc_metadata(ano, fonte)
+    candidatos = latest_por_periodo(df_meta, cnpjs, fonte)
+    print(f"Períodos encontrados na watchlist: {len(candidatos)}")
+    if candidatos:
+        _upsert_pendente_rows(conn, candidatos)
+
+    docs = _fetch_pendentes(conn, cnpjs, fonte, ano, limite, retry_failed)
+    print(f"Pendentes para extração: {len(docs)}")
+
+    ok = fail = 0
+    for doc in docs:
+        numero = doc["numero_sequencial_documento"]
+        print(f"  [{doc['cnpj_companhia']}] {doc['data_referencia']} (doc {numero})...")
+        texto = fetch_notas_texto(numero)
+        time.sleep(0.5)  # respeita rate limit do portal CVM
+
+        sucesso = bool(texto) and len(texto) > 100
+        _salvar(conn, doc["id"], texto if sucesso else None)
+        ok += 1 if sucesso else 0
+        fail += 0 if sucesso else 1
+
+    print(f"\nResultado: {ok} extraídos | {fail} falhas")
+    if ok > 0:
+        _rebuild_fts(conn)
+        print("  Busca full-text disponível via notas_explicativas_fts.")
+
+
 if __name__ == "__main__":
-    pass  # CLI adicionado em task futura
+    p = argparse.ArgumentParser(
+        description="Extrai o texto completo (com notas explicativas) de ITR/DFP da CVM."
+    )
+    p.add_argument("--cnpj",         help="Filtrar por CNPJ")
+    p.add_argument("--ano",          type=int, help="Ano de referência (default: ano atual)")
+    p.add_argument("--fonte",        choices=["ITR", "DFP"], default="ITR")
+    p.add_argument("--limite",       type=int, default=20,
+                   help="Máximo de documentos a processar nesta run (default: 20 — "
+                        "cada PDF tem dezenas de MB, processar em lotes evita runs longas demais)")
+    p.add_argument("--retry-failed", action="store_true",
+                   help="Re-tentar docs marcados como falha")
+    p.add_argument("--rebuild-fts",  action="store_true",
+                   help="Apenas reconstrói o índice FTS5 sem baixar nada")
+    args = p.parse_args()
+    main(args.cnpj, args.ano, args.fonte, args.limite, args.retry_failed, args.rebuild_fts)

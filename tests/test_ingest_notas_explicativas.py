@@ -87,3 +87,68 @@ def test_extrair_pdf_do_pacote_sem_pdf_retorna_none():
         z.writestr("apenas.xml", b"<xml/>")
 
     assert extrair_pdf_do_pacote(buf.getvalue()) is None
+
+
+@patch("ingest_notas_explicativas.pdfplumber.open")
+@patch("ingest_notas_explicativas._http_get")
+def test_fetch_notas_texto_sucesso(mock_http_get, mock_pdf_open):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("156792_006211_ts.pdf", b"%PDF-1.4 fake")
+    resp = MagicMock()
+    resp.content = buf.getvalue()
+    mock_http_get.return_value = resp
+
+    page = MagicMock()
+    page.extract_text.return_value = "Despesa de depreciação do período (26.581)"
+    mock_pdf_open.return_value.__enter__.return_value.pages = [page]
+
+    texto = fetch_notas_texto(156792)
+
+    assert texto == "Despesa de depreciação do período (26.581)"
+    mock_http_get.assert_called_once_with(
+        "https://www.rad.cvm.gov.br/ENETCONSULTA/frmDownloadDocumento.aspx"
+        "?CodigoInstituicao=1&NumeroSequencialDocumento=156792",
+        timeout=120,
+    )
+
+
+@patch("ingest_notas_explicativas._http_get")
+def test_fetch_notas_texto_sem_pdf_no_zip_retorna_none(mock_http_get):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("apenas.xml", b"<xml/>")
+    resp = MagicMock()
+    resp.content = buf.getvalue()
+    mock_http_get.return_value = resp
+
+    assert fetch_notas_texto(999) is None
+
+
+@patch("ingest_notas_explicativas._http_get")
+def test_fetch_notas_texto_erro_rede_retorna_none(mock_http_get):
+    """Qualquer exceção (rede, ZIP corrompido, etc.) deve virar None, não crash."""
+    mock_http_get.side_effect = Exception("timeout")
+
+    assert fetch_notas_texto(156792) is None
+
+
+@patch("ingest_notas_explicativas.pdfplumber.open")
+@patch("ingest_notas_explicativas._http_get")
+def test_fetch_notas_texto_remove_nul_bytes(mock_http_get, mock_pdf_open):
+    """SQLite rejeita strings com NUL — mesma proteção de extract_pdf.py."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("x.pdf", b"%PDF-1.4")
+    resp = MagicMock()
+    resp.content = buf.getvalue()
+    mock_http_get.return_value = resp
+
+    page = MagicMock()
+    page.extract_text.return_value = "texto\x00com\x00nul"
+    mock_pdf_open.return_value.__enter__.return_value.pages = [page]
+
+    texto = fetch_notas_texto(1)
+
+    assert "\x00" not in texto
+    assert texto == "textocomnul"

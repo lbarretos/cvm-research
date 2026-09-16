@@ -77,7 +77,24 @@ def extrair_pdf_do_pacote(zip_bytes: bytes) -> bytes | None:
 
 
 def fetch_notas_texto(numero_sequencial: int) -> str | None:
-    raise NotImplementedError("Implemented in Task 4")
+    """
+    Baixa o pacote ZIP completo do documento (ITR/DFP) via NumeroSequencialDocumento
+    e extrai o texto do PDF embutido — único lugar onde as notas explicativas
+    existem (ver docstring do módulo).
+    """
+    url = DOWNLOAD_URL.format(numero=numero_sequencial)
+    try:
+        r = _http_get(url, timeout=120)
+        pdf_bytes = extrair_pdf_do_pacote(r.content)
+        if not pdf_bytes or not pdf_bytes.startswith(b"%PDF"):
+            return None
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            pages = [p.extract_text() or "" for p in pdf.pages]
+        texto = "\n\n".join(p for p in pages if p.strip())
+        return texto.replace("\x00", "")
+    except Exception as e:
+        print(f"    ERRO fetch (doc {numero_sequencial}): {e}")
+        return None
 
 
 def _upsert_pendente_rows(conn, rows: list[dict]) -> None:

@@ -1,38 +1,14 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: SQLite local · 145 empresas · fontes IPE + VLMO + Recompra + FRE + DFP/ITR.
-Atualização: automática toda segunda 9h via launchd (`scripts/update_weekly.sh`); manual a qualquer momento com `bash scripts/update_weekly.sh`.
+Banco: SQLite local (`cvm_research.db`, ~12 GB) · 145 empresas · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda).
+Atualização: `bash scripts/update_weekly.sh` (manual) ou job launchd toda segunda 9h (`scripts/install_weekly_launchd.sh`).
 
-## Configuração do MCP (ler antes de começar)
+## Acesso ao banco (MCP `cvm-research`)
 
-Para o Claude acessar o banco, o MCP `postgres-local` precisa estar conectado.
-Setup completo em `README.md`. Resumo rápido:
-
-```bash
-# 1. Criar banco e configurar .env
-bash setup.sh                          # cria cvm_research.db
-echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
-
-# 2. MCP no Claude Code
-claude mcp add postgres-local -s user -- $(which npx) \
-  -y mcp-server-sqlite \
-  --db $(pwd)/cvm_research.db
-
-# 3. MCP no Claude desktop app
-# Editar: ~/Library/Application Support/Claude/claude_desktop_config.json
-# Adicionar:
-# "mcpServers": {
-#   "postgres-local": {
-#     "command": "/caminho/absoluto/do/npx",
-#     "args": ["-y", "mcp-server-sqlite", "--db", "/caminho/absoluto/cvm_research.db"]
-#   }
-# }
-# Reiniciar o app após editar.
-```
-
-**Verificar conexão** — peça ao Claude: *"Quantas linhas tem a tabela ipe_docs?"*
-Se responder com número, o MCP está funcionando.
+O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
+Ferramentas: `query(sql)` (SELECT, até 500 linhas), `list_tables()`, `describe_table(nome)`.
+Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linhas tem a tabela ipe_docs?"* deve responder um número acima de 160.000.
 
 ## Como identificar uma empresa
 
@@ -77,6 +53,8 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 `id_programa (PK), cnpj_companhia, finalidade_compra, data_deliberacao,`
 `motivo, data_final_prazo, situacao ('Em Andamento'/'Encerrado')`
 
+⚠️ `recompra_quantidades` e `recompra_intermediarios` existem no schema mas estão **vazias** — o ingestor ainda não as popula. Não use.
+
 ### `fre_capital_social` — composição do capital social (histórico)
 `cnpj_companhia, data_referencia, tipo_capital, data_autorizacao_aprovacao,`
 `valor_capital, quantidade_acoes_ordinarias, quantidade_acoes_preferenciais, quantidade_total_acoes`
@@ -110,7 +88,9 @@ padronizados (BPA/BPP/DRE/DFC_MI/DVA); esta tem o **PDF completo do documento**,
 incluindo notas explicativas (movimentação de Imobilizado/Intangível/Direito de
 Uso, provisões, etc.) — dado que não existe em nenhum feed estruturado da CVM.
 Populada sob demanda via `ingest_notas_explicativas.py` (não faz parte do fluxo
-semanal automático — ver script para detalhes). Busca full-text via
+semanal automático — ver script para detalhes). **Cobertura é mínima**: antes de
+consultar, verifique com `SELECT cnpj_companhia, fonte, data_referencia FROM notas_explicativas`
+se a empresa/período já foi ingerido; se não, informe o comando para ingerir. Busca full-text via
 `notas_explicativas_fts` (mesmo padrão de `ipe_docs_fts`).
 
 ⚠️ Diferente dos demais ingestores (que baixam ZIPs anuais de `dados.cvm.gov.br`),
@@ -334,41 +314,7 @@ SELECT COUNT(*) AS total_docs FROM ipe_docs;
 
 ## Conexão e atualização manual
 
-**Banco:** SQLite local (`cvm_research.db`), MCP `postgres-local` conectado.
-**Setup completo:** ver `README.md`. Setup rápido: `bash setup.sh`.
-
-### MCP — Claude Code (terminal)
-
-```bash
-claude mcp add postgres-local -s user -- $(which npx) \
-  -y mcp-server-sqlite \
-  --db $(pwd)/cvm_research.db
-
-# Verificar:
-claude mcp list   # deve mostrar ✓ Connected
-```
-
-### MCP — Claude desktop app (chat visual)
-
-Editar `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "postgres-local": {
-      "command": "/caminho/absoluto/do/npx",
-      "args": [
-        "-y",
-        "mcp-server-sqlite",
-        "--db",
-        "/caminho/absoluto/para/cvm_research.db"
-      ]
-    }
-  }
-}
-```
-
-Obter o caminho do npx: `which npx`. Obter o caminho absoluto do banco: `pwd`/cvm_research.db. Reiniciar o app após salvar.
+**Banco:** SQLite local (`cvm_research.db`) via MCP `cvm-research`. Setup completo em `INSTALL.md`; setup rápido: `bash setup.sh`.
 
 ### Atualização dos dados
 
@@ -387,7 +333,7 @@ python ingest_dfp.py        # demonstrativos anuais (ano corrente e anterior)
 python ingest_itr.py        # demonstrativo trimestral (ano corrente)
 
 # Histórico completo — rode uma vez ao migrar ou adicionar novas empresas
-python ingest_ipe.py   --desde 2009   # IPE disponível desde 2009 no CVM
+python ingest_ipe.py   --desde 2015   # IPE útil a partir de 2015 (ZIPs 2009–2014 vêm sem protocolo → 0 docs)
 python ingest_dfp.py   --historico --desde 2010   # DFP desde 2010
 python ingest_itr.py   --desde 2011   # ITR desde 2011
 python ingest_vlmo.py  --desde 2018   # VLMO estruturado disponível desde 2018
@@ -434,7 +380,7 @@ python ingest_companies.py
 
 # 5. Re-rodar ingestores com histórico completo para as novas empresas
 # (os ZIPs já foram baixados — re-download é inevitável mas sem código novo)
-python ingest_ipe.py --desde 2009
+python ingest_ipe.py --desde 2015
 python ingest_dfp.py --historico --desde 2010
 # ... etc
 ```
@@ -455,7 +401,7 @@ Key routing rules:
 - Full review pipeline → invoke /autoplan
 - Bugs/errors → invoke /investigate
 - QA/testing site behavior → invoke /qa or /qa-only
-- Code review/diff check → invoke /review
+- Code review/diff check → invoke /code-review
 - Visual polish → invoke /design-review
 - Ship/deploy/PR → invoke /ship or /land-and-deploy
 - Save progress → invoke /context-save

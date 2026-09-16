@@ -12,3 +12,5 @@ cvm_research.db-wal
 company_catalog.csv
 logs/
 .gstack/
+.claude/
+.pytest_cache/

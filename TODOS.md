@@ -1,39 +1,22 @@
 # TODOS
 
-## ✅ Migração para SQLite local — CONCLUÍDA
+Backlog do projeto. O que já foi feito está no `git log` e na seção "Histórico" do README.
 
-**Contexto:** Projeto migrado de PostgreSQL/Supabase para SQLite local sem dependências externas.
-Banco: `cvm_research.db` · Schema: `schema.sql` · MCP: `mcp-server-sqlite`.
+## Dados
 
-**O que foi feito:**
-- SQLite substituiu PostgreSQL e Supabase em todos os ingestores
-- `utils.py` simplificado: apenas `get_db()` (sem modo dual)
-- `extract_pdf.py` migrado para SQLite nativo
-- `supabase` removido do `requirements.txt`
-- `supabase/migrations/` e scripts de migração antigos removidos
-- GitHub Actions atualizados para usar `DATABASE_URL` (sem `SUPABASE_URL`/`SUPABASE_KEY`)
-- README.md e CLAUDE.md atualizados
+- [ ] **PDFs com falha de extração** — 5.586 docs em `ipe_docs` com `extracao_falhou=1` (a maioria digitalizados sem camada de texto). Avaliar OCR (`ocrmypdf`/`tesseract`) para os prioritários (Fato Relevante, Assembleia) ou aceitar o gap. `EXTRACT_LIMIT=2000 RETRY_FAILED=1 bash scripts/update_weekly.sh` re-tenta os transitórios.
+- [ ] **`recompra_quantidades` e `recompra_intermediarios`** — existem no schema, 0 linhas, o ingestor não as popula. Popular a partir dos CSVs do ZIP de recompra ou remover do `schema.sql`.
+- [ ] **Notas explicativas** — cobertura mínima (só Frasle 1T26/2T26). Definir critério de ingestão (ex: últimos 8 trimestres das empresas em análise ativa) e um comando de lote por empresa.
+- [ ] **Tickers assumidos** — 34 linhas do `watchlist.csv` com `auto:assumed` (lote de julho/2026). Conferir na B3 e limpar a flag.
+- [ ] **IPE 2009–2014** — os ZIPs da CVM desses anos vêm sem `Protocolo_Entrega` e são descartados. Verificar se há outra chave utilizável ou documentar como limite definitivo.
 
----
+## Operação
 
-## ✅ Expansão de cobertura B3 — CONCLUÍDA
+- [ ] **Job semanal no launchd** — instalado em 16/09/2026 mas bloqueado pelo TCC (projeto em `~/Documents`). Dar Acesso Total ao Disco ao `/bin/bash` ou mover o projeto para fora de `~/Documents`, depois `bash scripts/install_weekly_launchd.sh --run-now` e conferir `logs/`.
+- [ ] **Claude desktop app** — `claude_desktop_config.json` está sem o MCP `cvm-research` (só o Claude Code está configurado). Adicionar se for usar o app.
+- [ ] **`VACUUM` periódico** — o banco tem ~12 GB; após grandes reextrações vale um `VACUUM` (precisa de espaço livre igual ao tamanho do banco).
 
-**Contexto:** Cobertura expandida de 54 → 111 empresas usando catálogo automático B3+CVM.
+## Código
 
-**O que foi feito:**
-- `scripts/ingest/catalog.py` — baixa catálogo de 443 empresas ativas da B3+CVM, resolve tickers via IBOV
-- `scripts/ingest/add_companies.py` — adiciona empresas ao `watchlist.csv` com modos `--ibov`, `--all`, `--ticker`, `--dry-run`
-- 57 empresas do IBOV adicionadas (0 tickers assumidos)
-- Histórico estendido: IPE 2015+, DFP/FRE/ITR 2010+, VLMO 2018+
-- Banco: ~1.6 GB, 3.4M+ linhas
-
----
-
-## ✅ Atualização semanal automática — CONCLUÍDA
-
-- `scripts/update_weekly.sh` — roda todos os ingestores + `extract_pdf.py` com lock, log em `logs/` e resumo do banco
-- `scripts/install_weekly_launchd.sh` — instala job launchd `com.cvm-research.weekly-update` (segunda 09:00, `--run-now`, `--status`, `--uninstall`)
-
-## Backlog
-
-- [ ] Re-tentar os ~1.680 PDFs prioritários com `extracao_falhou=1` (`extract_pdf.py --retry-failed`) — muitos são digitalizados sem camada de texto
+- [ ] **Testes de integração leves** — hoje tudo é mockado; um teste que roda `setup.sh` num banco temporário e valida as views (`vw_dre`, `vw_balanco`) contra fixtures pequenas pegaria regressões de schema.
+- [ ] **`extract_pdf.py` no fluxo semanal** — `EXTRACT_LIMIT` default 1000 pode não acompanhar semanas com muitos docs; medir e ajustar.

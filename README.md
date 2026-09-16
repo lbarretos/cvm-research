@@ -2,11 +2,15 @@
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras, organizada para pesquisa via Claude.
 
-**Fontes:** IPE · VLMO · Recompra · FRE · DFP/ITR  
-**Cobertura:** 145 empresas (IBOV + cobertura própria) · 2010–hoje  
-**Banco:** SQLite local (`cvm_research.db`) — sem PostgreSQL, sem Docker, sem cloud  
-**Tamanho:** ~1.6 GB · 3.4M+ linhas  
-**Atualização:** semanal automática (launchd, segunda 9h) ou manual via `scripts/update_weekly.sh`
+**Fontes:** IPE · VLMO · Recompra · FRE · DFP/ITR · Notas Explicativas (sob demanda)  
+**Cobertura:** 145 empresas (IBOV + cobertura própria) · IPE desde 2015 · demonstrativos desde 2010  
+**Banco:** SQLite local (`cvm_research.db`) — sem servidor, sem Docker, sem cloud  
+**Tamanho:** ~12 GB (mais da metade é texto extraído dos PDFs + índice full-text) · ~4,9M linhas  
+**Atualização:** `bash scripts/update_weekly.sh` (manual) ou job launchd toda segunda 9h
+
+> **Instalação passo a passo, MCP e troubleshooting:** [INSTALL.md](INSTALL.md)  
+> **Schema, queries e comportamento do Claude:** [CLAUDE.md](CLAUDE.md)  
+> **Backlog:** [TODOS.md](TODOS.md)
 
 ---
 
@@ -16,165 +20,86 @@ Base de dados local de documentos e eventos de empresas abertas brasileiras, org
 |---|---|---|
 | macOS | 11+ (Big Sur) | `sw_vers -productVersion` |
 | Python | 3.10+ | `python3 --version` |
-| Node.js + npx | 18+ | `node --version` |
 | Claude Code CLI | qualquer | `claude --version` |
 | Claude desktop app | qualquer | (opcional, para chat visual) |
 
-> **SQLite** vem instalado no macOS por padrão — nenhuma instalação adicional necessária.
+SQLite vem instalado no macOS. Não é preciso Node.js: o MCP é um script Python do próprio projeto.
+
+> ⚠️ **Não coloque o projeto em pasta sincronizada (OneDrive, iCloud, Dropbox).** O banco tem ~12 GB e muda toda semana; sincronizar isso é lento e pode corromper o arquivo. Se ficar em `~/Documents`, `~/Desktop` ou `~/Downloads`, o job automático do launchd precisa de Acesso Total ao Disco (ver [INSTALL.md](INSTALL.md#troubleshooting)).
 
 ---
 
-## Setup completo
-
-> **Guia detalhado:** [INSTALL.md](INSTALL.md) cobre instalação do zero, transferência de banco existente, configuração do Claude desktop app e expansão de cobertura de empresas.
-
-### Instalar com Claude Code (recomendado)
-
-Clone e abra o Claude Code na pasta do projeto:
+## Setup rápido
 
 ```bash
 git clone https://github.com/lbarretos/cvm-research.git
 cd cvm-research
-claude
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+bash setup.sh                                          # cria cvm_research.db vazio
+echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
+claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
 ```
 
-Dentro do Claude Code, cole este prompt e ele fará tudo automaticamente (~30–60 min):
+Carga inicial (30–60 min, baixa ~15 GB de ZIPs da CVM):
 
-```
-Configure este projeto do zero para mim:
-
-1. Crie o banco SQLite: bash setup.sh
-2. Crie o ambiente Python: python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-3. Crie o .env: echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
-4. Configure o MCP no Claude Code: claude mcp add postgres-local -s user -- $(which npx) -y mcp-server-sqlite --db $(pwd)/cvm_research.db
-5. Baixe os dados da CVM (pode levar 30–60 min — baixa ~15 GB de ZIPs):
-   cd scripts/ingest && source ../../.venv/bin/activate
-   python ingest_companies.py
-   python ingest_ipe.py --desde 2009
-   python ingest_vlmo.py --desde 2018
-   python ingest_recompra.py
-   python ingest_fre.py --desde 2010
-   python ingest_dfp.py --historico --desde 2010
-   python ingest_itr.py --desde 2011
-6. Verifique: sqlite3 cvm_research.db "SELECT COUNT(*) FROM ipe_docs;"
-   (esperado: ~134.000 documentos)
-
-Me avise quando cada etapa terminar e se algum erro ocorrer.
-```
-
-Quando concluir, feche e reabra o Claude Code — o banco estará disponível via MCP.
-
-### Instalação manual
-
-```bash
-git clone https://github.com/lbarretos/cvm-research.git
-cd cvm-research
-bash setup.sh
-python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-echo "DATABASE_URL=sqlite:///cvm_research.db" > .env
-```
-
-Carga inicial (~30–60 min):
 ```bash
 cd scripts/ingest && source ../../.venv/bin/activate
 python ingest_companies.py
-python ingest_ipe.py --desde 2009
+python ingest_ipe.py --desde 2015
 python ingest_vlmo.py --desde 2018
 python ingest_recompra.py
 python ingest_fre.py --desde 2010
 python ingest_dfp.py --historico --desde 2010
 python ingest_itr.py --desde 2011
+python extract_pdf.py            # texto dos PDFs (opcional, demorado; pode rodar em lotes com --limite)
 ```
 
----
+Verifique com `claude mcp list` (deve mostrar `cvm-research: ✓ Connected`) e pergunte ao Claude *"Quantas linhas tem a tabela ipe_docs?"*.
 
-## Configurar MCP no Claude
-
-O MCP permite ao Claude consultar o banco diretamente durante a conversa.
-
-### Claude Code CLI (terminal)
-
-```bash
-claude mcp add postgres-local -s user -- $(which npx) \
-  -y mcp-server-sqlite \
-  --db $(pwd)/cvm_research.db
-
-claude mcp list   # postgres-local: ✓ Connected
-```
-
-### Claude desktop app (interface visual)
-
-Edite `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "postgres-local": {
-      "command": "/caminho/absoluto/do/npx",
-      "args": ["-y", "mcp-server-sqlite", "--db", "/caminho/absoluto/cvm_research.db"]
-    }
-  }
-}
-```
-
-Use caminhos absolutos (`which npx` e `pwd`/cvm_research.db). Reinicie o app após salvar.
-Veja o [INSTALL.md](INSTALL.md) para o guia completo.
-
-### Verificar
-
-Pergunte ao Claude: *"Quantas linhas tem a tabela ipe_docs?"* — deve responder ~134.000.
+O [INSTALL.md](INSTALL.md) cobre também a opção de copiar um banco já populado de outra máquina e o setup no Claude desktop app.
 
 ---
 
 ## Atualização da base
 
-> **Cadência da CVM:** os ZIPs do IPE (documentos corporativos) são atualizados **toda segunda-feira entre 8h00 e 8h30**. Para documentos mais recentes, consulte diretamente o portal RAD: `rad.cvm.gov.br`.
-
-### Automática (launchd, macOS)
+> **Cadência da CVM:** os ZIPs do IPE são atualizados **toda segunda-feira entre 8h00 e 8h30**. Para documentos mais recentes que isso, consulte o portal RAD: `rad.cvm.gov.br`.
 
 ```bash
-bash scripts/install_weekly_launchd.sh            # agenda toda segunda às 09:00
+bash scripts/update_weekly.sh                                   # tudo de uma vez (ingestores + extract_pdf)
+EXTRACT_LIMIT=2000 RETRY_FAILED=1 bash scripts/update_weekly.sh # com re-tentativa de PDFs falhos
+```
+
+Automático (launchd, segunda 09:00):
+
+```bash
+bash scripts/install_weekly_launchd.sh            # agenda
 bash scripts/install_weekly_launchd.sh --run-now  # agenda e roda agora
 bash scripts/install_weekly_launchd.sh --status   # estado + último log
 bash scripts/install_weekly_launchd.sh --uninstall
 ```
 
-O job roda `scripts/update_weekly.sh` (todos os ingestores + `extract_pdf.py`) com logs em `logs/update_*.log`. Horário e dia podem ser alterados com `WEEKDAY=1 HOUR=9 MINUTE=0`.
-Se o Mac estiver dormindo no horário, o launchd executa ao acordar. Se o log mostrar `Operation not permitted`, dê Acesso Total ao Disco a `/bin/bash` em Ajustes do Sistema → Privacidade e Segurança.
+Logs em `logs/update_*.log` (mantidos os 12 mais recentes). Se o Mac estiver dormindo no horário, o launchd executa ao acordar. Dia e hora: `WEEKDAY=1 HOUR=9 MINUTE=0`.
 
-### Manual
+Passo a passo, se preferir:
 
 ```bash
-bash scripts/update_weekly.sh                          # tudo de uma vez
-EXTRACT_LIMIT=2000 RETRY_FAILED=1 bash scripts/update_weekly.sh   # com re-tentativa de PDFs falhos
+cd scripts/ingest && source ../../.venv/bin/activate
+python ingest_ipe.py && python ingest_vlmo.py && python ingest_recompra.py
+python ingest_fre.py && python ingest_dfp.py && python ingest_itr.py
+python extract_pdf.py --limite 1000
 ```
 
-Ou passo a passo:
+Notas explicativas (texto completo do ITR/DFP) não entram no fluxo semanal: cada PDF tem dezenas de MB. Ingira sob demanda:
 
 ```bash
-cd scripts/ingest
-source ../../.venv/bin/activate
-
-# Semanal (IPE, VLMO, FRE e demonstrativos do ano corrente)
-python ingest_ipe.py
-python ingest_vlmo.py
-python ingest_recompra.py
-python ingest_fre.py
-python ingest_dfp.py
-python ingest_itr.py
-
-# Histórico completo (após adicionar novas empresas)
-python ingest_dfp.py --historico --desde 2010
-python ingest_itr.py --desde 2011
+python ingest_notas_explicativas.py --cnpj <CNPJ> --ano 2026 --fonte ITR
 ```
 
 ---
 
 ## Uso com o Claude
 
-Com o MCP conectado, basta conversar normalmente. O Claude consulta o banco quando necessário.
-
-**Exemplos de perguntas:**
+Com o MCP conectado, basta conversar. O Claude consulta o banco quando necessário.
 
 - *"Resumo das últimas AGOs e AGEs da WEG com o que foi deliberado"*
 - *"Fatos relevantes da Embraer no último ano — classifica por tipo de impacto"*
@@ -183,37 +108,41 @@ Com o MCP conectado, basta conversar normalmente. O Claude consulta o banco quan
 - *"Quais programas de recompra estão vigentes?"*
 - *"Quem são os maiores acionistas da Vale hoje?"*
 
-O arquivo `CLAUDE.md` documenta o schema completo, queries de exemplo e o comportamento esperado para cada tipo de pesquisa.
-
 ---
 
 ## Estrutura do projeto
 
 ```
 cvm-research/
-├── watchlist.csv                   # 111 empresas com CNPJ, ticker e código CVM
+├── README.md                       # este arquivo
+├── INSTALL.md                      # instalação, MCP (Code e desktop), troubleshooting
+├── CLAUDE.md                       # schema, queries e instruções para o Claude
+├── TODOS.md                        # backlog
+├── watchlist.csv                   # 145 empresas com CNPJ, ticker e código CVM
 ├── schema.sql                      # schema SQLite completo (tabelas + views + FTS5)
 ├── setup.sh                        # cria cvm_research.db a partir de schema.sql
-├── CLAUDE.md                       # schema, queries e instruções para o Claude
-├── README.md                       # este arquivo
-├── requirements.txt                # dependências Python (sem PostgreSQL)
-├── .env                            # DATABASE_URL (não commitado)
-├── .env.example                    # template do .env
-├── scripts/ingest/
-│   ├── utils.py                    # conexão SQLite + helpers de conversão
-│   ├── catalog.py                  # baixa catálogo B3+CVM → company_catalog.csv
-│   ├── add_companies.py            # adiciona empresas do catálogo à watchlist
-│   ├── ingest_companies.py         # sincroniza watchlist.csv → tabela companies
-│   ├── ingest_ipe.py               # documentos CVM (metadados) — flag: --desde ANO
-│   ├── ingest_vlmo.py              # insider trading
-│   ├── ingest_recompra.py          # programas de recompra
-│   ├── ingest_fre.py               # capital, acionistas, remuneração
-│   ├── ingest_dfp.py               # demonstrativos anuais — flags: --historico, --desde ANO
-│   ├── ingest_itr.py               # demonstrativos trimestrais — flag: --desde ANO
-│   └── extract_pdf.py              # extração de texto de PDFs (SQLite local)
-├── scripts/update_weekly.sh        # roda todos os ingestores + extract_pdf (com lock e log)
-├── scripts/install_weekly_launchd.sh # agenda update_weekly.sh no launchd (segunda 9h)
-└── .github/workflows/              # desativados — ingestão roda localmente
+├── requirements.txt                # dependências Python (inclui mcp)
+├── .env.example                    # template do .env (DATABASE_URL)
+├── scripts/
+│   ├── update_weekly.sh            # roda todos os ingestores + extract_pdf (lock + log)
+│   ├── install_weekly_launchd.sh   # agenda update_weekly.sh no launchd (segunda 9h)
+│   ├── mcp/cvm_mcp.py              # servidor MCP (stdio, somente leitura)
+│   └── ingest/
+│       ├── utils.py                # conexão SQLite + helpers de download/conversão
+│       ├── catalog.py              # baixa catálogo B3+CVM → company_catalog.csv
+│       ├── add_companies.py        # adiciona empresas do catálogo à watchlist
+│       ├── ingest_companies.py     # sincroniza watchlist.csv → tabela companies
+│       ├── ingest_ipe.py           # documentos CVM (metadados) — flag: --desde ANO
+│       ├── ingest_vlmo.py          # insider trading
+│       ├── ingest_recompra.py      # programas de recompra
+│       ├── ingest_fre.py           # capital, acionistas, remuneração
+│       ├── ingest_dfp.py           # demonstrativos anuais — flags: --historico, --desde ANO
+│       ├── ingest_itr.py           # demonstrativos trimestrais — flag: --desde ANO
+│       ├── ingest_notas_explicativas.py  # texto completo do ITR/DFP (sob demanda)
+│       └── extract_pdf.py          # extração de texto dos PDFs do IPE
+├── tests/                          # pytest (sem rede, tudo mockado)
+├── docs/superpowers/plans/         # registros de design de features já implementadas
+└── logs/                           # logs do update semanal (não versionado)
 ```
 
 ### Fontes de dados
@@ -223,64 +152,23 @@ cvm-research/
 | `catalog.py` | B3 API + CVM | `company_catalog.csv` (arquivo) | ao expandir cobertura |
 | `add_companies.py` | `company_catalog.csv` | `watchlist.csv` (arquivo) | ao expandir cobertura |
 | `ingest_companies.py` | `watchlist.csv` | `companies` | após mudar watchlist |
-| `ingest_ipe.py` | IPE ZIPs anuais | `ipe_docs` | semanal (seg após 8h30) |
+| `ingest_ipe.py` | IPE ZIPs anuais | `ipe_docs` (metadados) | semanal (seg após 8h30) |
+| `extract_pdf.py` | PDFs do `link_download` | `ipe_docs.texto_extraido`, `ipe_docs_fts` | semanal, em lotes |
 | `ingest_vlmo.py` | VLMO ZIPs anuais | `vlmo_posicao`, `vlmo_movimentacoes` | semanal |
 | `ingest_recompra.py` | Recompra ZIPs | `recompra_programas` | semanal |
-| `ingest_fre.py` | FRE ZIPs anuais | `fre_capital_social`, `fre_posicao_acionaria`, `fre_remuneracao_orgao` | mensal |
-| `ingest_dfp.py` | DFP ZIPs anuais | `demonstrativos_contabeis` (fonte='DFP') | trimestral |
-| `ingest_itr.py` | ITR ZIPs anuais | `demonstrativos_contabeis` (fonte='ITR') | trimestral |
+| `ingest_fre.py` | FRE ZIPs anuais | `fre_capital_social`, `fre_posicao_acionaria`, `fre_remuneracao_orgao` | semanal |
+| `ingest_dfp.py` | DFP ZIPs anuais | `demonstrativos_contabeis` (fonte='DFP') | semanal |
+| `ingest_itr.py` | ITR ZIPs anuais | `demonstrativos_contabeis` (fonte='ITR') | semanal |
+| `ingest_notas_explicativas.py` | Pacote ZIP do filing (rad.cvm.gov.br) | `notas_explicativas`, `notas_explicativas_fts` | sob demanda |
 
 ---
 
-## Por que SQLite?
+## Histórico
 
-Antes desta versão, o projeto exigia PostgreSQL 16 instalado localmente. Para levar a base para outro computador era preciso instalar o Postgres, criar o banco, rodar 9 migrations e configurar o serviço — uns 20 minutos de setup antes de poder fazer a primeira consulta.
+O projeto começou em Supabase/PostgreSQL e migrou para SQLite local em junho de 2026 (um arquivo, zero serviços). O MCP passou de `mcp-server-sqlite` (npx) para um servidor Python próprio em setembro de 2026. Os workflows de GitHub Actions foram removidos: toda a ingestão roda localmente.
 
-Com SQLite, o banco é um único arquivo (`cvm_research.db`). Python já traz o `sqlite3` na biblioteca padrão. O único requisito externo é o `npx` (para o MCP) — que qualquer desenvolvedor com Node.js já tem.
+## Testes
 
-**Limitações conhecidas vs PostgreSQL:**
-- `texto_extraido` (texto extraído de PDFs) não é populado pelos ingestores padrão — requer `extract_pdf.py` rodando separadamente.
-- Full-text search usa SQLite FTS5 com sintaxe diferente do `tsvector` PostgreSQL (documentada em `CLAUDE.md`).
-- `NULLS NOT DISTINCT` no índice único de `vlmo_movimentacoes` não é suportado — a deduplicação é feita no nível Python, o que é suficiente na prática.
-
----
-
-## Troubleshooting
-
-**`sqlite3: command not found`**
 ```bash
-# macOS: sqlite3 vem pré-instalado. Se não estiver:
-brew install sqlite3
-```
-
-**`ModuleNotFoundError`**
-```bash
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-**`KeyError: 'DATABASE_URL'`**
-```bash
-# Verificar se o .env existe na raiz do projeto
-cat .env   # deve mostrar DATABASE_URL=sqlite:///cvm_research.db
-```
-
-**Banco vazio após setup**
-```bash
-# O banco é criado vazio — rode os ingestores para popular:
-cd scripts/ingest && source ../../.venv/bin/activate
-python ingest_companies.py && python ingest_ipe.py
-# ... (ver seção "Carga inicial" acima)
-```
-
-**MCP não conecta**
-- Confirme que está configurado: `claude mcp list` — deve mostrar `postgres-local`
-- Se não aparecer: `claude mcp add postgres-local -s user -- $(which npx) -y mcp-server-sqlite --db $(pwd)/cvm_research.db`
-- No Claude.app: confirme que os caminhos no `claude_desktop_config.json` são absolutos
-- Veja troubleshooting completo em [INSTALL.md](INSTALL.md#troubleshooting)
-
-**`extract_pdf.py` falha com `KeyError: 'DATABASE_URL'`**
-```bash
-# Verificar se o .env existe e tem DATABASE_URL
-cat .env   # deve mostrar DATABASE_URL=sqlite:///cvm_research.db
+.venv/bin/python -m pytest tests/ -q
 ```

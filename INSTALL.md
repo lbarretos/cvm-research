@@ -1,7 +1,7 @@
 # CVM Research — Guia de Instalação
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco SQLite · 145 empresas (IBOV + cobertura própria) · dados desde 2010.
+SQLite · 145 empresas · IPE desde 2015, demonstrativos desde 2010 · ~12 GB populado.
 
 ---
 
@@ -9,11 +9,12 @@ Banco SQLite · 145 empresas (IBOV + cobertura própria) · dados desde 2010.
 
 | Ferramenta | Verificar | Instalar |
 |---|---|---|
-| Python 3.10+ | `python3 --version` | [python.org](https://www.python.org/downloads/) |
+| Python 3.10+ | `python3 --version` | [python.org](https://www.python.org/downloads/) ou `brew install python` |
 | Claude Code CLI | `claude --version` | `npm install -g @anthropic-ai/claude-code` |
-| Node.js 18+ | `node --version` | [nodejs.org](https://nodejs.org) |
 
-SQLite vem pré-instalado no macOS.
+SQLite vem pré-instalado no macOS. Node.js não é necessário.
+
+**Onde colocar o projeto.** Fora de pastas sincronizadas (OneDrive, iCloud Drive, Dropbox): o banco tem ~12 GB e muda toda semana. Prefira uma pasta como `~/Projects/cvm-research`. Se ficar em `~/Documents`, `~/Desktop` ou `~/Downloads`, o macOS bloqueia o job automático do launchd até você dar Acesso Total ao Disco ao `/bin/bash` (ver Troubleshooting).
 
 ---
 
@@ -23,163 +24,131 @@ SQLite vem pré-instalado no macOS.
 git clone https://github.com/lbarretos/cvm-research.git
 cd cvm-research
 
-# Criar ambiente Python
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# Ambiente Python
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
-# Criar banco e .env
+# Banco vazio + .env
 bash setup.sh
 echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 
-# Configurar MCP no Claude Code
-claude mcp add postgres-local -s user -- $(which npx) \
-  -y mcp-server-sqlite \
-  --db $(pwd)/cvm_research.db
+# MCP no Claude Code (caminhos absolutos, gravados no ~/.claude.json)
+claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
 
 # Popular o banco (30–60 min — baixa ~15 GB de ZIPs da CVM)
 cd scripts/ingest && source ../../.venv/bin/activate
 python ingest_companies.py
-python ingest_ipe.py --desde 2009
+python ingest_ipe.py --desde 2015
 python ingest_vlmo.py --desde 2018
 python ingest_recompra.py
 python ingest_fre.py --desde 2010
 python ingest_dfp.py --historico --desde 2010
 python ingest_itr.py --desde 2011
+
+# Texto dos PDFs (opcional; horas para o histórico inteiro — rode em lotes)
+python extract_pdf.py --limite 2000
 ```
 
 ---
 
-## Opção B — Transferir banco existente (recomendado)
+## Opção B — Copiar um banco já populado (recomendado)
 
-Se você já tem o banco populado em outra máquina, copie dois arquivos:
-
-| Arquivo | Tamanho | Como obter |
-|---|---|---|
-| `cvm_research.db` | ~1.6 GB | Copiar da máquina de origem |
-| `cvm_research_projeto.tar.gz` | ~52 KB | Gerado com `tar -czf` do projeto (sem .venv e .db) |
-
-**Na máquina destino:**
+Copie a pasta do projeto **sem `.venv`** (ela não é relocável: os scripts `pip`/`python` dela gravam o caminho absoluto de origem) mais o arquivo `cvm_research.db`. Na máquina destino:
 
 ```bash
-# 1. Extrair o projeto
-tar -xzf cvm_research_projeto.tar.gz
 cd cvm-research
-
-# 2. Mover o banco para dentro da pasta
-mv /caminho/para/cvm_research.db .
-
-# 3. Criar ambiente Python
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-
-# 4. Configurar MCP no Claude Code
-claude mcp add postgres-local -s user -- $(which npx) \
-  -y mcp-server-sqlite \
-  --db $(pwd)/cvm_research.db
-
-# 5. Verificar
-claude mcp list   # deve mostrar postgres-local ✓ Connected
+rm -rf .venv                                   # se veio junto por engano
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
+sqlite3 cvm_research.db "PRAGMA quick_check;"  # deve responder "ok" (demora alguns minutos)
+claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
+claude mcp list                                # cvm-research: ✓ Connected
 ```
+
+Se a pasta for **movida** dentro da mesma máquina, os mesmos passos valem: recriar a `.venv`, registrar o MCP de novo (`claude mcp remove cvm-research -s user` antes) e reinstalar o job semanal com `bash scripts/install_weekly_launchd.sh`, pois todos gravam o caminho absoluto.
 
 ---
 
-## MCP no Claude desktop app (interface visual)
+## MCP
 
-O Claude desktop app requer configuração no arquivo JSON — não usa `claude mcp add`.
+O servidor é `scripts/mcp/cvm_mcp.py` (Python, stdio, somente leitura). O Claude sobe o processo sob demanda; nada fica rodando em background. Ferramentas: `query(sql)`, `list_tables()`, `describe_table(nome)`.
 
-Edite `~/Library/Application Support/Claude/claude_desktop_config.json`:
+### Claude Code (terminal)
+
+```bash
+claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
+claude mcp list        # cvm-research: ✓ Connected
+```
+
+### Claude desktop app
+
+Edite `~/Library/Application Support/Claude/claude_desktop_config.json` com caminhos absolutos (`pwd` na raiz do projeto):
 
 ```json
 {
   "mcpServers": {
-    "postgres-local": {
-      "command": "/caminho/absoluto/do/npx",
-      "args": [
-        "-y",
-        "mcp-server-sqlite",
-        "--db",
-        "/caminho/absoluto/para/cvm_research.db"
-      ]
+    "cvm-research": {
+      "command": "/caminho/absoluto/cvm-research/.venv/bin/python",
+      "args": ["/caminho/absoluto/cvm-research/scripts/mcp/cvm_mcp.py"]
     }
   }
 }
 ```
 
-Obter os caminhos:
-```bash
-which npx                  # caminho do npx
-pwd                        # rodar de dentro da pasta do projeto
-```
-
 Reinicie o app após salvar.
+
+### Modo HTTP (opcional)
+
+Para clientes que só falam streamable-http: `.venv/bin/python scripts/mcp/cvm_mcp.py --http --port 8765` e configure `{"type": "http", "url": "http://localhost:8765/mcp"}`. Nesse modo o processo precisa estar rodando; prefira stdio.
+
+### Verificar
+
+Pergunte ao Claude: *"Quantas linhas tem a tabela ipe_docs?"* — deve responder um número acima de 160.000.
 
 ---
 
-## Verificar que está funcionando
+## Atualizar os dados
 
-Abra o Claude e pergunte:
+A CVM publica os ZIPs atualizados toda **segunda-feira entre 8h00 e 8h30**.
 
-> *"Quantas linhas tem a tabela ipe_docs?"*
+```bash
+bash scripts/update_weekly.sh                       # manual, tudo de uma vez
+bash scripts/install_weekly_launchd.sh --run-now    # agenda no launchd (segunda 9h) e roda agora
+bash scripts/install_weekly_launchd.sh --status     # estado e último log
+```
 
-Se responder com número (~134.000), o MCP está funcionando.
+Notas explicativas (PDF completo do ITR/DFP) não entram no semanal; ingira sob demanda:
+
+```bash
+cd scripts/ingest && source ../../.venv/bin/activate
+python ingest_notas_explicativas.py --cnpj <CNPJ> --ano 2026 --fonte ITR
+```
 
 ---
 
 ## Expandir cobertura de empresas
 
-O `watchlist.csv` controla quais empresas são cobertas. Para adicionar:
+O `watchlist.csv` controla quais empresas são cobertas.
 
 ```bash
 cd scripts/ingest && source ../../.venv/bin/activate
 
-# Gerar catálogo B3+CVM (443 empresas ativas)
-python catalog.py
-
-# Buscar uma empresa
-python catalog.py --search "petrobras"
-
-# Adicionar todas do IBOV (sem tickers assumidos)
+python catalog.py                          # catálogo B3+CVM (~443 empresas ativas)
+python catalog.py --search "petrobras"     # buscar uma empresa
 python add_companies.py --ibov --dry-run   # preview
 python add_companies.py --ibov             # confirmar com "s"
+python add_companies.py --ticker VALE3     # uma empresa
 
-# Sincronizar watchlist → tabela companies
-python ingest_companies.py
+python ingest_companies.py                 # watchlist → tabela companies
 
 # Re-ingerir histórico para as novas empresas
-python ingest_ipe.py --desde 2009
+python ingest_ipe.py --desde 2015
 python ingest_dfp.py --historico --desde 2010
 python ingest_itr.py --desde 2011
 python ingest_vlmo.py --desde 2018
 python ingest_fre.py --desde 2010
 ```
 
-**Tickers assumidos:** empresas fora de índices recebem ticker `XXXX3` (ON inferido).
-Confira a coluna `observacao` no watchlist.csv — corrija antes de rodar os ingestores se necessário.
-
----
-
-## Atualizar os dados
-
-A CVM publica ZIPs atualizados toda **segunda-feira entre 8h00 e 8h30**.
-
-**Automático (recomendado):** agenda no launchd do macOS toda segunda às 09:00.
-
-```bash
-bash scripts/install_weekly_launchd.sh --run-now   # instala e roda a primeira vez
-bash scripts/install_weekly_launchd.sh --status    # confere estado e último log
-```
-
-**Manual:** `bash scripts/update_weekly.sh`, ou passo a passo:
-
-```bash
-cd scripts/ingest && source ../../.venv/bin/activate
-python ingest_ipe.py
-python ingest_vlmo.py
-python ingest_recompra.py
-python ingest_fre.py
-python ingest_dfp.py
-python ingest_itr.py
-```
+**Tickers assumidos:** empresas fora do IBOV recebem ticker `XXXX3` (ON inferido) e a coluna `observacao` do watchlist fica com `auto:assumed`. Confira e corrija antes de rodar os ingestores.
 
 ---
 
@@ -187,17 +156,18 @@ python ingest_itr.py
 
 | Sintoma | Causa | Solução |
 |---|---|---|
-| `postgres-local: Connection failed` | npx não encontrado ou caminho errado | Use `$(which npx)` no comando `claude mcp add` |
-| `no such table` no Claude.app | Caminho do banco relativo no config JSON | Usar caminho absoluto em `claude_desktop_config.json` |
+| `cvm-research: ✗ Failed to connect` | Caminho da `.venv` ou do script mudou, ou `mcp` não instalado na venv | `claude mcp remove cvm-research -s user` e registrar de novo; `.venv/bin/pip install -r requirements.txt` |
+| `ERRO: banco não encontrado` no log do MCP | `cvm_research.db` não está na raiz do projeto | `bash setup.sh` ou copiar o banco; ou exportar `CVM_DB_PATH` |
+| `launchd.err.log`: `Operation not permitted` | Projeto em `~/Documents`, `~/Desktop` ou `~/Downloads` (pasta protegida pelo TCC) | Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco → adicionar `/bin/bash`; ou mover o projeto para fora dessas pastas e reinstalar o job |
+| `pip`/`python` da venv apontam para outra pasta | Venv copiada de outro local | `rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` |
 | `KeyError: 'DATABASE_URL'` | `.env` não existe | `echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env` |
-| Banco mostra dados antigos | Ingestores não rodaram após segunda-feira | Rodar scripts de ingestão manualmente |
-| `unable to open database file` | Banco em OneDrive com WAL ativo | `sqlite3 cvm_research.db "PRAGMA wal_checkpoint(TRUNCATE);"` |
+| Banco mostra dados antigos | Update semanal não rodou | `bash scripts/update_weekly.sh` e conferir `logs/update_*.log` |
+| `database is locked` | Ingestor rodando ao mesmo tempo | Esperar o `update_weekly.sh` terminar (lock em `logs/.update_weekly.lock`) |
+| `unable to open database file` | Banco em pasta sincronizada com WAL ativo | Mover o projeto para fora do OneDrive/iCloud |
 
 ---
 
 ## Exemplos de pesquisa
-
-Com o banco e MCP funcionando, pergunte ao Claude:
 
 - *"Quais foram as deliberações da última AGO da WEG?"*
 - *"Houve insider trading na Embraer nos 7 dias antes do último fato relevante?"*
@@ -205,4 +175,4 @@ Com o banco e MCP funcionando, pergunte ao Claude:
 - *"Quais programas de recompra estão em andamento hoje?"*
 - *"Mostre a evolução da dívida líquida da Petrobras desde 2015"*
 
-O arquivo `CLAUDE.md` documenta o schema completo, queries de exemplo e comportamento esperado para cada tipo de pesquisa.
+O `CLAUDE.md` documenta o schema completo, queries de exemplo e o comportamento esperado para cada tipo de pesquisa.

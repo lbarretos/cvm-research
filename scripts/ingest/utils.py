@@ -225,3 +225,31 @@ def download_year(year: int, fonte: str, tipos: list[str]) -> dict[str, pd.DataF
                 with z.open(fname) as f:
                     dfs[tipo] = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
     return dfs
+
+
+def fetch_doc_metadata(year: int, fonte: str) -> pd.DataFrame:
+    """
+    Baixa o CSV principal (não os _con_/_ind_) do ZIP anual de DFP/ITR.
+
+    Esse CSV traz ID_DOC (= NumeroSequencialDocumento) e LINK_DOC por
+    (CNPJ_CIA, DT_REFER, VERSAO) — é o único ponto de acesso ao pacote
+    ZIP completo do documento, que contém o PDF com as Notas Explicativas.
+    Os CSVs _con_/_ind_ (consumidos por download_year) não têm essa
+    informação; só o CSV principal do ZIP tem.
+
+    Ver ingest_notas_explicativas.py para o consumidor.
+
+    Colunas retornadas: CNPJ_CIA, DT_REFER, VERSAO, ID_DOC (todas como string,
+    dtype=str — conversão para int fica a cargo do chamador).
+    """
+    source = fonte.lower()
+    url = (
+        f"https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/{fonte}/DADOS/"
+        f"{source}_cia_aberta_{year}.zip"
+    )
+    r = _http_get(url, timeout=300)
+    fname = f"{source}_cia_aberta_{year}.csv"
+    with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        with z.open(fname) as f:
+            df = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
+    return df[["CNPJ_CIA", "DT_REFER", "VERSAO", "ID_DOC"]]

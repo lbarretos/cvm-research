@@ -21,7 +21,7 @@ import pytest
 # Adiciona scripts/ingest ao path para importar utils sem instalar o pacote
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 
-from utils import _date, _float, _http_get, _int, _sanitize, _upsert_sqlite, upsert, get_db
+from utils import _date, _float, _http_get, _int, _sanitize, _upsert_sqlite, upsert, get_db, fetch_doc_metadata
 
 # Constante local que replica a lógica dos ingestores DFP/ITR
 SCALE = {"MIL": 1000, "UNIDADE": 1}
@@ -352,3 +352,60 @@ def test_upsert_sqlite_rollback_em_excecao():
     # Conexão deve estar usável após rollback
     count = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
     assert count == 0
+
+
+# ── fetch_doc_metadata ────────────────────────────────────────────────────────
+
+@patch("utils._http_get")
+def test_fetch_doc_metadata_retorna_colunas_esperadas(mock_http_get):
+    """
+    fetch_doc_metadata deve baixar o CSV principal (não os _con_/_ind_) do ZIP
+    anual e retornar só as colunas necessárias para localizar o documento
+    completo: CNPJ_CIA, DT_REFER, VERSAO, ID_DOC (= NumeroSequencialDocumento).
+    """
+    import io
+    import zipfile
+
+    csv_bytes = (
+        "CNPJ_CIA;DT_REFER;VERSAO;DENOM_CIA;CD_CVM;CATEG_DOC;ID_DOC;DT_RECEB;LINK_DOC\n"
+        "88.610.126/0001-29;2026-03-31;2;FRASLE MOBILITY S.A.;006211;ITR;156792;"
+        "2026-05-07;http://x\n"
+    ).encode("latin-1")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("itr_cia_aberta_2026.csv", csv_bytes)
+    resp = MagicMock()
+    resp.content = buf.getvalue()
+    mock_http_get.return_value = resp
+
+    df = fetch_doc_metadata(2026, "ITR")
+
+    assert list(df.columns) == ["CNPJ_CIA", "DT_REFER", "VERSAO", "ID_DOC"]
+    assert df.iloc[0]["ID_DOC"] == "156792"
+    assert df.iloc[0]["CNPJ_CIA"] == "88.610.126/0001-29"
+    mock_http_get.assert_called_once_with(
+        "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/ITR/DADOS/itr_cia_aberta_2026.zip",
+        timeout=300,
+    )
+
+
+@patch("utils._http_get")
+def test_fetch_doc_metadata_dfp_usa_url_dfp(mock_http_get):
+    """fonte='DFP' deve montar a URL do ZIP anual de DFP, não de ITR."""
+    import io
+    import zipfile
+
+    csv_bytes = "CNPJ_CIA;DT_REFER;VERSAO;DENOM_CIA;CD_CVM;CATEG_DOC;ID_DOC;DT_RECEB;LINK_DOC\n".encode("latin-1")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("dfp_cia_aberta_2025.csv", csv_bytes)
+    resp = MagicMock()
+    resp.content = buf.getvalue()
+    mock_http_get.return_value = resp
+
+    fetch_doc_metadata(2025, "DFP")
+
+    mock_http_get.assert_called_once_with(
+        "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_2025.zip",
+        timeout=300,
+    )

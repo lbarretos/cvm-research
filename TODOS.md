@@ -12,7 +12,7 @@ Backlog do projeto. O que já foi feito está no `git log` e na seção "Histór
 
 ## Operação
 
-- [ ] **Job semanal no launchd** — instalado em 16/09/2026 mas bloqueado pelo TCC (projeto em `~/Documents`). Dar Acesso Total ao Disco ao `/bin/bash` ou mover o projeto para fora de `~/Documents`, depois `bash scripts/install_weekly_launchd.sh --run-now` e conferir `logs/`.
+- [x] **Job semanal no launchd** — instalado em 16/09/2026; exigiu Acesso Total ao Disco para `/bin/bash` (projeto em `~/Documents`). Conferir na segunda seguinte com `bash scripts/install_weekly_launchd.sh --status`.
 - [ ] **Claude desktop app** — `claude_desktop_config.json` está sem o MCP `cvm-research` (só o Claude Code está configurado). Adicionar se for usar o app.
 - [ ] **`VACUUM` periódico** — o banco tem ~12 GB; após grandes reextrações vale um `VACUUM` (precisa de espaço livre igual ao tamanho do banco).
 

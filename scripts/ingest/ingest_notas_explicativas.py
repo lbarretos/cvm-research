@@ -98,16 +98,73 @@ def fetch_notas_texto(numero_sequencial: int) -> str | None:
 
 
 def _upsert_pendente_rows(conn, rows: list[dict]) -> None:
-    raise NotImplementedError("Implemented in Task 5")
+    """
+    Garante 1 linha por (cnpj, fonte, data_referencia) antes de extrair.
+    Se a VERSAO subiu desde a última vez (reapresentação), reseta
+    texto_extraido/extracao_falhou para forçar reprocessamento.
+    """
+    for row in rows:
+        conn.execute(
+            """
+            INSERT INTO notas_explicativas
+                (cnpj_companhia, fonte, data_referencia, versao, numero_sequencial_documento)
+            VALUES (:cnpj_companhia, :fonte, :data_referencia, :versao, :numero_sequencial_documento)
+            ON CONFLICT (cnpj_companhia, fonte, data_referencia) DO UPDATE SET
+                versao = excluded.versao,
+                numero_sequencial_documento = excluded.numero_sequencial_documento,
+                texto_extraido = CASE WHEN excluded.versao > notas_explicativas.versao
+                                       THEN NULL ELSE notas_explicativas.texto_extraido END,
+                extracao_falhou = CASE WHEN excluded.versao > notas_explicativas.versao
+                                        THEN 0 ELSE notas_explicativas.extracao_falhou END,
+                updated_at = datetime('now')
+            """,
+            row,
+        )
+    conn.commit()
 
 
 def _fetch_pendentes(conn, cnpjs: set, fonte: str, ano: int, limite: int,
                       retry_failed: bool = False) -> list[dict]:
-    raise NotImplementedError("Implemented in Task 5")
+    """Retorna documentos sem texto_extraido para as empresas/fonte/ano dados."""
+    falhou_val = 1 if retry_failed else 0
+    cnpj_list = list(cnpjs)
+    if not cnpj_list:
+        return []
+    cnpj_ph = ",".join("?" * len(cnpj_list))
+    sql = f"""
+        SELECT id, cnpj_companhia, data_referencia, numero_sequencial_documento
+        FROM notas_explicativas
+        WHERE texto_extraido IS NULL
+          AND extracao_falhou = ?
+          AND fonte = ?
+          AND data_referencia LIKE ?
+          AND cnpj_companhia IN ({cnpj_ph})
+        ORDER BY data_referencia DESC
+        LIMIT ?
+    """
+    params = [falhou_val, fonte, f"{ano}-%", *cnpj_list, limite]
+    cur = conn.execute(sql, params)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
 def _salvar(conn, row_id: int, texto: str | None) -> None:
-    raise NotImplementedError("Implemented in Task 5")
+    """Persiste texto extraído (ou marca falha) no banco SQLite."""
+    now = datetime.now(timezone.utc).isoformat()
+    if texto:
+        conn.execute(
+            """
+            UPDATE notas_explicativas
+               SET texto_extraido = ?, chars_extraidos = ?, extraido_em = ?, extracao_falhou = 0
+             WHERE id = ?
+            """,
+            (texto, len(texto), now, row_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE notas_explicativas SET extracao_falhou = 1 WHERE id = ?", (row_id,)
+        )
+    conn.commit()
 
 
 if __name__ == "__main__":

@@ -152,3 +152,167 @@ def test_fetch_notas_texto_remove_nul_bytes(mock_http_get, mock_pdf_open):
 
     assert "\x00" not in texto
     assert texto == "textocomnul"
+
+
+def _make_notas_conn():
+    """In-memory SQLite com o schema mínimo de notas_explicativas (ver schema.sql)."""
+    conn = sqlite3.connect(":memory:")
+    conn.executescript("""
+        CREATE TABLE notas_explicativas (
+            id                           INTEGER PRIMARY KEY AUTOINCREMENT,
+            cnpj_companhia               TEXT NOT NULL,
+            fonte                        TEXT NOT NULL CHECK (fonte IN ('ITR','DFP')),
+            data_referencia              TEXT NOT NULL,
+            versao                       INTEGER NOT NULL DEFAULT 1,
+            numero_sequencial_documento  INTEGER NOT NULL,
+            link_download                TEXT,
+            texto_extraido               TEXT,
+            extraido_em                  TEXT,
+            extracao_falhou              INTEGER DEFAULT 0,
+            chars_extraidos              INTEGER,
+            created_at                   TEXT DEFAULT (datetime('now')),
+            updated_at                   TEXT DEFAULT (datetime('now')),
+            UNIQUE (cnpj_companhia, fonte, data_referencia)
+        );
+    """)
+    return conn
+
+
+def test_upsert_pendente_rows_insere_nova_linha():
+    conn = _make_notas_conn()
+    rows = [{
+        "cnpj_companhia": "88.610.126/0001-29", "fonte": "ITR",
+        "data_referencia": "2026-03-31", "versao": 2,
+        "numero_sequencial_documento": 156792,
+    }]
+
+    _upsert_pendente_rows(conn, rows)
+
+    row = conn.execute(
+        "SELECT versao, numero_sequencial_documento, texto_extraido FROM notas_explicativas"
+    ).fetchone()
+    assert row == (2, 156792, None)
+
+
+def test_upsert_pendente_rows_versao_igual_preserva_texto():
+    """Re-rodar o ingestor sem nova versão não deve apagar texto já extraído."""
+    conn = _make_notas_conn()
+    conn.execute(
+        "INSERT INTO notas_explicativas "
+        "(cnpj_companhia, fonte, data_referencia, versao, numero_sequencial_documento, texto_extraido) "
+        "VALUES ('88.610.126/0001-29', 'ITR', '2026-03-31', 2, 156792, 'texto já extraído')"
+    )
+    conn.commit()
+    rows = [{
+        "cnpj_companhia": "88.610.126/0001-29", "fonte": "ITR",
+        "data_referencia": "2026-03-31", "versao": 2,
+        "numero_sequencial_documento": 156792,
+    }]
+
+    _upsert_pendente_rows(conn, rows)
+
+    texto = conn.execute("SELECT texto_extraido FROM notas_explicativas").fetchone()[0]
+    assert texto == "texto já extraído"
+
+
+def test_upsert_pendente_rows_versao_nova_reseta_texto():
+    """Uma reapresentação (versão maior) invalida o texto extraído da versão antiga."""
+    conn = _make_notas_conn()
+    conn.execute(
+        "INSERT INTO notas_explicativas "
+        "(cnpj_companhia, fonte, data_referencia, versao, numero_sequencial_documento, "
+        " texto_extraido, extracao_falhou) "
+        "VALUES ('88.610.126/0001-29', 'ITR', '2026-03-31', 1, 156716, 'texto da v1', 1)"
+    )
+    conn.commit()
+    rows = [{
+        "cnpj_companhia": "88.610.126/0001-29", "fonte": "ITR",
+        "data_referencia": "2026-03-31", "versao": 2,
+        "numero_sequencial_documento": 156792,
+    }]
+
+    _upsert_pendente_rows(conn, rows)
+
+    row = conn.execute(
+        "SELECT versao, numero_sequencial_documento, texto_extraido, extracao_falhou "
+        "FROM notas_explicativas"
+    ).fetchone()
+    assert row == (2, 156792, None, 0)
+
+
+def test_fetch_pendentes_filtra_texto_nulo_e_fonte_ano():
+    conn = _make_notas_conn()
+    conn.executemany(
+        "INSERT INTO notas_explicativas "
+        "(cnpj_companhia, fonte, data_referencia, numero_sequencial_documento, texto_extraido) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [
+            ("88.610.126/0001-29", "ITR", "2026-03-31", 1, None),           # pendente
+            ("88.610.126/0001-29", "ITR", "2026-06-30", 2, "já extraído"),  # não pendente
+            ("88.610.126/0001-29", "DFP", "2026-12-31", 3, None),           # fonte errada
+            ("00.000.000/0001-00", "ITR", "2026-03-31", 4, None),           # cnpj fora do filtro
+        ],
+    )
+    conn.commit()
+
+    docs = _fetch_pendentes(
+        conn, {"88.610.126/0001-29"}, fonte="ITR", ano=2026, limite=10
+    )
+
+    assert len(docs) == 1
+    assert docs[0]["numero_sequencial_documento"] == 1
+
+
+def test_fetch_pendentes_retry_failed_so_pega_falhas():
+    conn = _make_notas_conn()
+    conn.executemany(
+        "INSERT INTO notas_explicativas "
+        "(cnpj_companhia, fonte, data_referencia, numero_sequencial_documento, "
+        " texto_extraido, extracao_falhou) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("88.610.126/0001-29", "ITR", "2026-03-31", 1, None, 1),  # falhou antes
+            ("88.610.126/0001-29", "ITR", "2026-06-30", 2, None, 0),  # nunca tentado
+        ],
+    )
+    conn.commit()
+
+    docs = _fetch_pendentes(
+        conn, {"88.610.126/0001-29"}, fonte="ITR", ano=2026, limite=10, retry_failed=True
+    )
+
+    assert len(docs) == 1
+    assert docs[0]["numero_sequencial_documento"] == 1
+
+
+def test_salvar_sucesso_grava_texto_e_limpa_falha():
+    conn = _make_notas_conn()
+    conn.execute(
+        "INSERT INTO notas_explicativas "
+        "(id, cnpj_companhia, fonte, data_referencia, numero_sequencial_documento, extracao_falhou) "
+        "VALUES (1, '88.610.126/0001-29', 'ITR', '2026-03-31', 156792, 1)"
+    )
+    conn.commit()
+
+    _salvar(conn, row_id=1, texto="texto extraído com sucesso")
+
+    row = conn.execute(
+        "SELECT texto_extraido, chars_extraidos, extracao_falhou FROM notas_explicativas WHERE id=1"
+    ).fetchone()
+    assert row == ("texto extraído com sucesso", len("texto extraído com sucesso"), 0)
+
+
+def test_salvar_falha_marca_extracao_falhou():
+    conn = _make_notas_conn()
+    conn.execute(
+        "INSERT INTO notas_explicativas "
+        "(id, cnpj_companhia, fonte, data_referencia, numero_sequencial_documento) "
+        "VALUES (1, '88.610.126/0001-29', 'ITR', '2026-03-31', 156792)"
+    )
+    conn.commit()
+
+    _salvar(conn, row_id=1, texto=None)
+
+    row = conn.execute(
+        "SELECT texto_extraido, extracao_falhou FROM notas_explicativas WHERE id=1"
+    ).fetchone()
+    assert row == (None, 1)

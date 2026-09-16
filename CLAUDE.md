@@ -100,6 +100,18 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 
 ⚠️ Bancos e seguradoras usam plano COSIF — retornarão NULL nas views. Diagnóstico: `SELECT cnpj_companhia FROM vw_dre WHERE receita_liquida IS NULL GROUP BY 1`
 
+### `notas_explicativas` — texto completo do ITR/DFP (com notas explicativas)
+`cnpj_companhia, fonte ('ITR'/'DFP'), data_referencia, versao,`
+`numero_sequencial_documento, texto_extraido (NULL = não extraído), chars_extraidos`
+
+Diferença para `demonstrativos_contabeis`: aquela tabela só tem os quadros
+padronizados (BPA/BPP/DRE/DFC_MI/DVA); esta tem o **PDF completo do documento**,
+incluindo notas explicativas (movimentação de Imobilizado/Intangível/Direito de
+Uso, provisões, etc.) — dado que não existe em nenhum feed estruturado da CVM.
+Populada sob demanda via `ingest_notas_explicativas.py` (não faz parte do fluxo
+semanal automático — ver script para detalhes). Busca full-text via
+`notas_explicativas_fts` (mesmo padrão de `ipe_docs_fts`).
+
 ---
 
 ## Queries de pesquisa padrão
@@ -364,12 +376,19 @@ python ingest_recompra.py   # programas de recompra
 python ingest_fre.py        # dados de capital, acionistas, remuneração
 python ingest_dfp.py        # demonstrativos anuais (ano corrente e anterior)
 python ingest_itr.py        # demonstrativo trimestral (ano corrente)
+python ingest_notas_explicativas.py --ano <ANO> --fonte ITR   # texto completo (com notas) do ITR
+python ingest_notas_explicativas.py --ano <ANO> --fonte DFP   # texto completo (com notas) do DFP anual
 
 # Histórico completo — rode uma vez ao migrar ou adicionar novas empresas
 python ingest_ipe.py   --desde 2009   # IPE disponível desde 2009 no CVM
 python ingest_dfp.py   --historico --desde 2010   # DFP desde 2010
 python ingest_itr.py   --desde 2011   # ITR desde 2011
 python ingest_vlmo.py  --desde 2018   # VLMO estruturado disponível desde 2018
+# Notas explicativas: sem --historico por padrão — cada PDF tem dezenas de MB
+# e centenas de empresas × anos vira um volume grande. Rodar sob demanda por
+# empresa/ano quando precisar de um dado que só existe em nota (ex: quebra de
+# depreciação por classe de ativo), como em:
+#   python ingest_notas_explicativas.py --cnpj <CNPJ> --ano <ANO> --fonte ITR
 python ingest_fre.py   --desde 2010   # FRE desde 2010
 ```
 

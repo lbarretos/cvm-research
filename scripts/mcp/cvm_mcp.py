@@ -75,7 +75,7 @@ def query(sql: str) -> list[dict]:
     Tabelas principais: companies, ipe_docs, vlmo_movimentacoes, vlmo_posicao,
     recompra_programas, fre_capital_social, fre_posicao_acionaria,
     fre_remuneracao_orgao, demonstrativos_contabeis, notas_explicativas.
-    Views: vw_dre, vw_balanco. Full-text: ipe_docs_fts, notas_explicativas_fts.
+    Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco. Full-text: ipe_docs_fts, notas_explicativas_fts.
     Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
     """
     s = sql.strip().rstrip(";")

@@ -70,11 +70,19 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 ### `demonstrativos_contabeis` — DFP (anual) e ITR (trimestral) estruturados
 `cnpj_companhia, fonte ('DFP'/'ITR'), tipo_doc ('BPA'/'BPP'/'DRE'/'DFC_MI'/'DVA'),`
 `data_referencia, versao, ordem_exercicio ('Último'/'Penúltimo'),`
-`dt_ini_exerc, dt_fim_exerc, cd_conta, ds_conta, vl_conta (em R$ — já normalizado MIL×1000)`
+`dt_ini_exerc, dt_fim_exerc, cd_conta, ds_conta, vl_conta (em R$ — já normalizado MIL×1000),`
+`st_conta_fixa ('S' = conta padrão CVM, 'N' = criada pela empresa)`
 
 **Views prontas (preferir sobre query direta):**
 - `vw_dre` — DRE resumida: `receita_liquida, custo_bens_servicos, resultado_bruto, ebit, resultado_financeiro, ebt, lucro_liquido`
 - `vw_balanco` — BPA + BPP: `ativo_total, ativo_circulante, caixa, divida_curto_prazo, divida_longo_prazo, patrimonio_liquido`
+
+**Períodos no ITR:** no 2T e 3T a DRE tem duas linhas por conta — trimestre isolado
+(`dt_ini_exerc` = início do trimestre) e acumulado no ano (`dt_ini_exerc` = início do
+exercício). `vw_dre` devolve o trimestre isolado; `vw_dre_acumulada` devolve o acumulado.
+DFC_MI e DVA só têm acumulado no ITR. BPA/BPP têm `dt_ini_exerc` NULL (posição na data).
+Ao consultar `demonstrativos_contabeis` direto para DRE de ITR, filtre `dt_ini_exerc`,
+senão as linhas dobram.
 
 ⚠️ Bancos e seguradoras usam plano COSIF — retornarão NULL nas views. Diagnóstico: `SELECT cnpj_companhia FROM vw_dre WHERE receita_liquida IS NULL GROUP BY 1`
 
@@ -207,6 +215,7 @@ LIMIT 20;
 
 ### DRE trimestral (últimos 8 trimestres) via view
 ```sql
+-- vw_dre = trimestre isolado; use vw_dre_acumulada para o acumulado no ano
 SELECT fonte, data_referencia, dt_ini_exerc, dt_fim_exerc,
        receita_liquida, ebit, lucro_liquido,
        ROUND(ebit / NULLIF(receita_liquida, 0) * 100, 1) AS margem_ebit_pct

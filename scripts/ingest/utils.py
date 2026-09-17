@@ -44,12 +44,26 @@ def watchlist_cnpjs() -> set[str]:
 EXCLUDED_FROM_UPDATE: frozenset = frozenset({'id', 'created_at'})
 
 _INDEX_COLUMNS: dict[str, str] = {
-    # nome_index -> colunas_csv para ON CONFLICT (col1,col2,...)
+    # nome_index -> alvo do ON CONFLICT (col1,col2,... ou expressões do índice único)
     # NULLS NOT DISTINCT está na definição do índice (migration 009), não aqui.
     "vlmo_mov_uniq": (
         "cnpj_companhia,data_referencia,versao,empresa,"
         "tipo_cargo,tipo_movimentacao,tipo_ativo,caracteristica,"
         "data_movimentacao,quantidade"
+    ),
+    # ux_dem_periodo em schema.sql — índice de expressão porque dt_ini_exerc é
+    # NULL em BPA/BPP e NULLs não conflitam entre si numa UNIQUE comum.
+    "dem_contabeis_uniq": (
+        "cnpj_companhia,fonte,tipo_doc,data_referencia,versao,cd_conta,ordem_exercicio,"
+        "COALESCE(dt_ini_exerc,'')"
+    ),
+}
+
+# Quando o alvo do conflito tem expressões, a deduplicação em Python precisa
+# das colunas puras (None == None já trata o NULL como igual).
+_DEDUP_COLUMNS: dict[str, str] = {
+    "dem_contabeis_uniq": (
+        "cnpj_companhia,fonte,tipo_doc,data_referencia,versao,cd_conta,ordem_exercicio,dt_ini_exerc"
     ),
 }
 
@@ -136,7 +150,8 @@ def _upsert_sqlite(conn, table: str, rows: list[dict], conflict: str, batch: int
     cols = list(rows[0].keys())
 
     conflict_cols = _INDEX_COLUMNS.get(conflict, conflict)
-    conflict_list = [c.strip() for c in conflict_cols.split(",")]
+    dedup_cols = _DEDUP_COLUMNS.get(conflict, conflict_cols)
+    conflict_list = [c.strip() for c in dedup_cols.split(",")]
 
     # Deduplica por chave de conflito (Python None == None trata NULLs como iguais)
     seen: dict = {}

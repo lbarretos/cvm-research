@@ -65,7 +65,7 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
         versao = versao_raw if versao_raw is not None else 1
 
         ordem_raw = (r.get("ORDEM_EXERC") or "").strip().upper()
-        st_fixa = (r.get("ST_CONTA_FIXA") or "").strip().upper()
+        st_fixa = str(r.get("ST_CONTA_FIXA") or "").strip().upper()
 
         rows.append({
             "cnpj_companhia":  r.get("CNPJ_CIA"),
@@ -89,8 +89,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--historico", action="store_true",
                         help="Reprocessa todos os anos desde --desde até hoje")
-    parser.add_argument("--desde", type=int, default=2021, metavar="ANO",
-                        help="Ano inicial para --historico (padrão: 2021)")
+    parser.add_argument("--desde", type=int, default=2010, metavar="ANO",
+                        help="Ano inicial para --historico (padrão: 2010)")
     args = parser.parse_args()
 
     hoje = date.today()

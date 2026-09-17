@@ -5,6 +5,7 @@ Cobre:
   - _upsert_sqlite com índice único de expressão (COALESCE(dt_ini_exerc,''))
   - process_df (ITR e DFP) preserva trimestre + acumulado e grava st_conta_fixa
 """
+import io
 import os
 import sqlite3
 import sys
@@ -113,3 +114,35 @@ def test_dfp_bpa_sem_dt_ini_fica_none():
     }])
     rows = ingest_dfp.process_df(df, {"84.429.695/0001-11"}, "BPA")
     assert rows[0]["dt_ini_exerc"] is None
+
+
+def test_dfp_st_conta_fixa_celula_em_branco_nao_quebra():
+    """Regressão: célula ST_CONTA_FIXA genuinamente vazia no CSV vira NaN (float) mesmo
+    com dtype=str (pandas detecta NA antes de aplicar dtype), e `(x or "").strip()`
+    quebra com AttributeError porque NaN é truthy. Precisa ser construído via
+    pd.read_csv (não pd.DataFrame([{...}]) direto) para reproduzir o bug real —
+    ver utils.download_year, que sempre usa pd.read_csv(..., dtype=str)."""
+    csv_text = (
+        "CNPJ_CIA;DT_REFER;VERSAO;ORDEM_EXERC;DT_INI_EXERC;DT_FIM_EXERC;"
+        "CD_CONTA;DS_CONTA;VL_CONTA;ESCALA_MOEDA;ST_CONTA_FIXA\n"
+        "84.429.695/0001-11;2024-12-31;1;ÚLTIMO;2024-01-01;2024-12-31;"
+        "3.01;Receita;1000;MIL;\n"
+    )
+    df = pd.read_csv(io.StringIO(csv_text), sep=";", dtype=str)
+    rows = ingest_dfp.process_df(df, {"84.429.695/0001-11"}, "DRE")
+    assert len(rows) == 1
+    assert rows[0]["st_conta_fixa"] is None
+
+
+def test_itr_st_conta_fixa_celula_em_branco_nao_quebra():
+    """Mesma regressão do teste acima, para ingest_itr.process_df."""
+    csv_text = (
+        "CNPJ_CIA;DT_REFER;VERSAO;ORDEM_EXERC;DT_INI_EXERC;DT_FIM_EXERC;"
+        "CD_CONTA;DS_CONTA;VL_CONTA;ESCALA_MOEDA;ST_CONTA_FIXA\n"
+        "84.429.695/0001-11;2024-06-30;1;ÚLTIMO;2024-01-01;2024-06-30;"
+        "3.01;Receita;1000;MIL;\n"
+    )
+    df = pd.read_csv(io.StringIO(csv_text), sep=";", dtype=str)
+    rows = ingest_itr.process_df(df, {"84.429.695/0001-11"}, "DRE")
+    assert len(rows) == 1
+    assert rows[0]["st_conta_fixa"] is None

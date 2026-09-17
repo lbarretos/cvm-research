@@ -35,7 +35,7 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
     Processa um DataFrame de um tipo de demonstrativo e retorna linhas para upsert.
     Ver ingest_dfp.process_df para detalhes do mapeamento de campos.
 
-    Diferença DFP vs ITR: ITR publica DT_INI_EXERC (trimestre tem início definido).
+    ITR's DRE/DFC/DVA publicam DT_INI_EXERC; BPA/BPP não (posição, não fluxo).
     """
     df = df[df["CNPJ_CIA"].isin(cnpjs)]
     # BPA/BPP não têm a coluna DT_INI_EXERC no CSV (balanço é posição, não fluxo) —
@@ -64,7 +64,7 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
         versao = versao_raw if versao_raw is not None else 1
 
         ordem_raw = (r.get("ORDEM_EXERC") or "").strip().upper()
-        st_fixa = (r.get("ST_CONTA_FIXA") or "").strip().upper()
+        st_fixa = str(r.get("ST_CONTA_FIXA") or "").strip().upper()
 
         rows.append({
             "cnpj_companhia":  r.get("CNPJ_CIA"),

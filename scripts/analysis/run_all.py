@@ -7,7 +7,8 @@ Orquestrador das camadas de consistência (scripts/analysis/).
 Os demais argumentos (--cnpj, --tipo-doc, --desde, --ate, --full, --tol-abs,
 --tol-rel) são repassados ao script de cada camada. Camadas disponíveis
 crescem a cada fase do plano (1 = soma hierárquica, 3 = granularidade,
-5 = trilha temporal, 6 = desacúmulo). Não entra em update_weekly.sh.
+5 = trilha temporal, 6 = desacúmulo). update_weekly.sh chama
+`run_all.py --layer 2 --full` logo após ingest_dfp/ingest_itr.
 """
 import argparse
 

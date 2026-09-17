@@ -145,14 +145,16 @@ def test_dva_total_resolvido_pelo_nome_do_documento():
 
 
 def test_tolerancia_piso_e_relativa():
-    ref = {"1": ("Ativo Total", 1e9), "1.01": ("Ativo Circulante", 100_000.0), "1.02": ("Ativo Não Circulante", 100_000.0)}
-    cmp = {"1": ("Ativo Total", 1e9 + 4e6),             # 0,4% < 0,5%
-           "1.01": ("Ativo Circulante", 100_900.0),       # +900 < piso 1000
-           "1.02": ("Ativo Não Circulante", 101_100.0)}   # +1100 > piso
+    ref = {"1": ("Ativo Total", 1e9), "1.01": ("Ativo Circulante", 50_000.0), "1.02": ("Ativo Não Circulante", 50_000.0)}
+    cmp = {"1": ("Ativo Total", 1e9 + 8e6),             # 0,8% < 1% (padrão)
+           "1.01": ("Ativo Circulante", 50_900.0),        # +900 < piso 1000 (1% de 50k = 500)
+           "1.02": ("Ativo Não Circulante", 51_100.0)}    # +1100 > piso
     flags, _ = ccp.check_cross_period(_df(_dfp23(ref), _itr1t24(cmp)))
     assert {f["cd_conta"] for f in _linhas(flags)} == {"1.02"}
     flags, _ = ccp.check_cross_period(_df(_dfp23(ref), _itr1t24(cmp)), tol_abs=500.0)
     assert {f["cd_conta"] for f in _linhas(flags)} == {"1.01", "1.02"}
+    flags, _ = ccp.check_cross_period(_df(_dfp23(ref), _itr1t24(cmp)), tol_rel=0.005)
+    assert {f["cd_conta"] for f in _linhas(flags)} == {"1", "1.02"}   # 0,8% > 0,5%
 
 
 def test_vl_conta_nulo_conta_como_zero():

@@ -115,7 +115,8 @@ reapresentação (nova `versao`) descarta o `texto_extraido` da versão anterior
 `fonte_ref, data_ref, ordem_ref (filing baseline), fonte_cmp, data_cmp, ordem_cmp (filing comparado),`
 `valor_ref, valor_cmp, diff_abs (cmp − ref), diff_rel, detalhe (JSON)`
 
-Gerada por `scripts/analysis/` (fora do job semanal; rodar à mão depois de reingerir DFP/ITR).
+Gerada por `scripts/analysis/`. Roda no job semanal (`update_weekly.sh`) logo após `ingest_dfp`/`ingest_itr`,
+na base inteira; também pode ser rodada à mão por empresa.
 Nunca altera `demonstrativos_contabeis`: o valor publicado pela CVM fica intacto e aqui ficam os metadados.
 A tabela guarda **a última execução de cada escopo** `(layer, check_type, cnpj[, tipo_doc])`; o histórico
 de execuções está em `consistency_runs` (`run_id, layer, check_type, escopo, started_at, finished_at,
@@ -125,7 +126,7 @@ total_checked, total_flagged, script_args`).
 (BPA 31/12/Y: DFP(Y) Último, ITR 1T/2T/3T(Y+1) Penúltimo, DFP(Y+1) Penúltimo). O baseline é sempre o
 filing mais antigo (o original, como reportado na época) e cada filing posterior é comparado a ele:
 - `reapresentacao` (`warn`): a conta-total do tipo_doc (`1`, `2`, `3.01`/`3.11`, `6.05`, "Valor Adicionado
-  Total a Distribuir") diverge acima da tolerância `max(R$ 1.000, 0,5% × |ref|)`; todas as linhas
+  Total a Distribuir") diverge acima da tolerância `max(R$ 1.000, 1% × |ref|)`; todas as linhas
   divergentes do par herdam a classe.
 - `reclassificacao` (`info`): totais batem, mas alguma sublinha diverge (mudou de conta).
 - Linha que existe só num dos filings **não** gera flag (Camada 3, futura); só entra nas contagens do
@@ -347,7 +348,7 @@ Se um documento recente não aparecer na base, informar ao usuário:
 - O documento pode ser consultado diretamente no portal da CVM: `https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx`
 - Rodar `python ingest_ipe.py` após a segunda-feira atualiza a base
 
-**VLMO / FRE / Recompra / DFP / ITR:** entram no mesmo job semanal (`scripts/update_weekly.sh`). Para forçar agora: `bash scripts/update_weekly.sh`. Logs em `logs/update_*.log`.
+**VLMO / FRE / Recompra / DFP / ITR / consistência (Camada 2):** entram no mesmo job semanal (`scripts/update_weekly.sh`). Para forçar agora: `bash scripts/update_weekly.sh`. Logs em `logs/update_*.log`.
 
 ## Anomalias conhecidas: `data_referencia` no futuro em `ipe_docs`
 

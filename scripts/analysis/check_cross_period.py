@@ -18,17 +18,19 @@ do tipo_doc (consistency_utils.total_codes):
   - totais batem e alguma linha diverge → 'reclassificacao' (info);
   - linha que existe só num lado não gera flag aqui (Camada 3, Fase 3); entra
     apenas nas contagens do resumo do par.
-Tolerância por linha: |cmp − ref| > max(tol_abs, tol_rel × |ref|); NULL = 0.
+Tolerância por linha: |cmp − ref| > max(tol_abs, tol_rel × |ref|), padrão
+R$ 1.000 e 1%; NULL = 0.
 
 Saída: uma flag por linha divergente + uma flag-resumo por par (cd_conta NULL)
 com detalhe = {linhas_comuns, linhas_divergentes, linhas_exclusivas_ref,
 linhas_exclusivas_cmp, total_disponivel}. Pares sem linha divergente não geram
 flag. Flags anteriores do mesmo (cnpj[, tipo_doc]) são apagadas antes de gravar.
 
-Uso (na pasta scripts/analysis, .venv ativo):
+Roda automaticamente no job semanal (scripts/update_weekly.sh) logo após
+ingest_dfp/ingest_itr, na base inteira. À mão (na pasta scripts/analysis, .venv ativo):
   python check_cross_period.py --cnpj 84.429.695/0001-11
   python check_cross_period.py --cnpj 84.429.695/0001-11 --tipo-doc BPA --desde 2023
-  python check_cross_period.py --full            # base inteira (~145 empresas, ~1 min)
+  python check_cross_period.py --full            # base inteira (~145 empresas, ~1,5 min)
 """
 import pandas as pd
 
@@ -45,7 +47,7 @@ RESUMO_KEYS = ["linhas_comuns", "linhas_divergentes", "linhas_exclusivas_ref",
 
 
 def compare_pair(ref: pd.DataFrame, cmp: pd.DataFrame, tipo_doc: str,
-                 tol_abs: float = 1000.0, tol_rel: float = 0.005) -> tuple[list[dict], dict]:
+                 tol_abs: float = 1000.0, tol_rel: float = 0.01) -> tuple[list[dict], dict]:
     """Compara as linhas de UM período em dois documentos (já filtradas).
 
     Retorna (flags_de_linha, resumo). As flags vêm só com os campos da linha
@@ -101,7 +103,7 @@ def _doc_rows(grupo: pd.DataFrame, doc) -> pd.DataFrame:
 
 
 def check_cross_period(df: pd.DataFrame, tol_abs: float = 1000.0,
-                       tol_rel: float = 0.005) -> tuple[list[dict], dict]:
+                       tol_rel: float = 0.01) -> tuple[list[dict], dict]:
     """df = saída de latest_rows (qualquer escopo). Retorna (flags, stats).
 
     stats[tipo_doc] = {"pares": n, "pares_divergentes": m, "reapresentacao": k},

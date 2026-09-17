@@ -124,10 +124,10 @@ cvm-research/
 ├── requirements.txt                # dependências Python (inclui mcp)
 ├── .env.example                    # template do .env (DATABASE_URL)
 ├── scripts/
-│   ├── update_weekly.sh            # roda todos os ingestores + extract_pdf (lock + log)
+│   ├── update_weekly.sh            # roda todos os ingestores + consistência + extract_pdf (lock + log)
 │   ├── install_weekly_launchd.sh   # agenda update_weekly.sh no launchd (segunda 9h)
 │   ├── mcp/cvm_mcp.py              # servidor MCP (stdio, somente leitura)
-│   └── ingest/
+│   ├── ingest/
 │       ├── utils.py                # conexão SQLite + helpers de download/conversão
 │       ├── catalog.py              # baixa catálogo B3+CVM → company_catalog.csv
 │       ├── add_companies.py        # adiciona empresas do catálogo à watchlist
@@ -140,7 +140,7 @@ cvm-research/
 │       ├── ingest_itr.py           # demonstrativos trimestrais — flag: --desde ANO
 │       ├── ingest_notas_explicativas.py  # texto completo do ITR/DFP (sob demanda)
 │       └── extract_pdf.py          # extração de texto dos PDFs do IPE
-│   └── analysis/                   # consistência dos demonstrativos (fora do job semanal)
+│   └── analysis/                   # consistência dos demonstrativos (no job semanal, após DFP/ITR)
 │       ├── consistency_utils.py    # latest_rows, tolerância, consistency_runs/flags
 │       ├── check_cross_period.py   # Camada 2: cruzamento entre filings (reapresentação)
 │       └── run_all.py              # orquestrador: --layer 2 --cnpj|--full
@@ -169,7 +169,8 @@ cvm-research/
 
 Scripts em `scripts/analysis/` cruzam os quadros de `demonstrativos_contabeis` e gravam achados em
 `consistency_runs` / `consistency_flags` (metadados; o valor publicado pela CVM nunca é alterado).
-Não entram no job semanal — rodar à mão depois de reingerir DFP/ITR:
+A Camada 2 roda no job semanal logo após `ingest_dfp`/`ingest_itr` (base inteira, ~1,5 min).
+À mão, para uma empresa ou para forçar agora:
 
 ```bash
 cd scripts/analysis && source ../../.venv/bin/activate

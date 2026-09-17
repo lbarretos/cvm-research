@@ -313,7 +313,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notas_explicativas_fts USING fts5(
 );
 
 -- ── 8. Consistência de dados financeiros ─────────────────────────────────────
--- Achados dos scripts de scripts/analysis/ (fora do job semanal). Nunca alteram
+-- Achados dos scripts de scripts/analysis/ (rodam no job semanal após DFP/ITR). Nunca alteram
 -- demonstrativos_contabeis: o valor publicado pela CVM é intocável; aqui ficam
 -- os metadados (reapresentação, reclassificação, etc.) linha a linha.
 -- Camadas: 2 = cruzamento entre filings (Fase 1); 1 = soma hierárquica (Fase 2);

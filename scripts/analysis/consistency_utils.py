@@ -7,8 +7,9 @@ Convenções:
   - "Documento" (filing) = (cnpj_companhia, fonte, tipo_doc, data_referencia)
     na versão máxima. "Período" = (periodo_ini, periodo_fim), com
     periodo_ini = COALESCE(dt_ini_exerc, 'NA') — BPA/BPP são posição na data.
-  - Tolerância por linha: max(tol_abs, tol_rel × |ref|), piso R$ 1.000
-    (plano-mãe: na DRE o piso sobe o acerto de 81% para 87,6%).
+  - Tolerância por linha: max(tol_abs, tol_rel × |ref|), piso R$ 1.000 e 1%
+    relativo (decisão do usuário em 2026-09-17; plano-mãe: na DRE o piso sobe
+    o acerto de 81% para 87,6%).
 """
 import argparse
 import json
@@ -47,7 +48,7 @@ DVA_TOTAL_DS = "valor adicionado total a distribuir"
 
 # ── Regras numéricas ─────────────────────────────────────────────────────────
 
-def tolerancia(valor_ref, tol_abs: float = 1000.0, tol_rel: float = 0.005):
+def tolerancia(valor_ref, tol_abs: float = 1000.0, tol_rel: float = 0.01):
     """max(tol_abs, tol_rel × |valor_ref|). Aceita escalar ou pd.Series (sem NaN)."""
     return np.maximum(tol_abs, tol_rel * np.abs(valor_ref))
 
@@ -194,5 +195,5 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--full", action="store_true", help="Confirma a execução na base inteira (sem --cnpj)")
     parser.add_argument("--tol-abs", dest="tol_abs", type=float, default=1000.0,
                         help="Tolerância absoluta em R$ (padrão 1000)")
-    parser.add_argument("--tol-rel", dest="tol_rel", type=float, default=0.005,
-                        help="Tolerância relativa sobre |ref| (padrão 0.005 = 0,5%%)")
+    parser.add_argument("--tol-rel", dest="tol_rel", type=float, default=0.01,
+                        help="Tolerância relativa sobre |ref| (padrão 0.01 = 1%%)")

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Atualização semanal da base CVM Research (SQLite local).
-# Roda todos os ingestores + extração de PDFs novos. Pensado para o launchd
+# Roda todos os ingestores + consistência dos demonstrativos (Camada 2) +
+# extração de PDFs novos. Pensado para o launchd
 # (segunda-feira ~9h, após a CVM publicar os ZIPs entre 8h00 e 8h30), mas pode
 # ser executado manualmente a qualquer momento:
 #   bash scripts/update_weekly.sh
@@ -64,6 +65,14 @@ run_step "recompra"  ingest_recompra.py
 run_step "fre"       ingest_fre.py
 run_step "dfp"       ingest_dfp.py
 run_step "itr"       ingest_itr.py
+# Consistência (Camada 2: reapresentações entre filings) — depende de DFP/ITR
+# recém-ingeridos; idempotente, ~1,5 min na base inteira. Pulado se os dois
+# ingestores falharam (não haveria dado novo para cruzar).
+if [[ " ${FAILED[*]} " == *" dfp "* && " ${FAILED[*]} " == *" itr "* ]]; then
+  log "==> consistency_l2: pulado (dfp e itr falharam)"
+else
+  run_step "consistency_l2" ../analysis/run_all.py --layer 2 --full
+fi
 run_step "extract_pdf" extract_pdf.py --limite "$EXTRACT_LIMIT"
 if [ "$RETRY_FAILED" = "1" ]; then
   run_step "extract_pdf_retry" extract_pdf.py --retry-failed --limite "$EXTRACT_LIMIT"

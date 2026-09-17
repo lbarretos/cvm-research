@@ -46,16 +46,16 @@ def _row(**kw):
 
 def test_tolerancia_piso_absoluto_e_relativo():
     assert cu.tolerancia(0.0) == 1000.0
-    assert cu.tolerancia(100_000.0) == 1000.0            # 0,5% = 500 < piso
-    assert cu.tolerancia(1_000_000_000.0) == 5_000_000.0  # 0,5% de 1 bi
-    assert cu.tolerancia(-1_000_000_000.0) == 5_000_000.0
-    assert cu.tolerancia(100_000.0, tol_abs=10.0, tol_rel=0.01) == 1000.0
+    assert cu.tolerancia(50_000.0) == 1000.0              # 1% = 500 < piso
+    assert cu.tolerancia(1_000_000_000.0) == 10_000_000.0  # 1% de 1 bi
+    assert cu.tolerancia(-1_000_000_000.0) == 10_000_000.0
+    assert cu.tolerancia(100_000.0, tol_abs=10.0, tol_rel=0.005) == 500.0
 
 
 def test_tolerancia_aceita_series():
-    s = pd.Series([0.0, 1_000_000_000.0, -200_000.0])
+    s = pd.Series([0.0, 1_000_000_000.0, -50_000.0])
     got = cu.tolerancia(s)
-    assert list(got) == [1000.0, 5_000_000.0, 1000.0]
+    assert list(got) == [1000.0, 10_000_000.0, 1000.0]
 
 
 def test_parent_code():
@@ -192,10 +192,10 @@ def test_add_common_args_defaults_e_parse():
     cu.add_common_args(p)
     a = p.parse_args([])
     assert (a.cnpj, a.tipo_doc, a.desde, a.ate, a.full, a.tol_abs, a.tol_rel) == \
-        (None, None, None, None, False, 1000.0, 0.005)
+        (None, None, None, None, False, 1000.0, 0.01)
     a = p.parse_args(["--cnpj", CNPJ, "--tipo-doc", "DFC_MI", "--desde", "2020", "--ate", "2024",
-                      "--tol-abs", "500", "--tol-rel", "0.01"])
+                      "--tol-abs", "500", "--tol-rel", "0.02"])
     assert (a.cnpj, a.tipo_doc, a.desde, a.ate, a.tol_abs, a.tol_rel) == \
-        (CNPJ, "DFC_MI", 2020, 2024, 500.0, 0.01)
+        (CNPJ, "DFC_MI", 2020, 2024, 500.0, 0.02)
     with pytest.raises(SystemExit):
         p.parse_args(["--tipo-doc", "XYZ"])

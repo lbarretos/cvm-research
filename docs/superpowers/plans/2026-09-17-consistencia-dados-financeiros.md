@@ -750,6 +750,7 @@ def latest_rows(conn, cnpj=None, tipo_doc=None, fonte=None, desde=None, ate=None
 | Desses, classificados `reapresentacao` (ativo total diverge) | ≈ 121 |
 | Pares DRE anual DFP(Y) × DFP(Y+1) com divergência | ≈ 38% (639 de 1.687); receita em ≈ 196, lucro em ≈ 113 |
 | Linhas BPA exatas entre pareadas | 93–96% |
+| **Medido em 2026-09-17, base pós-Fase 0, run `cross_period-20260917T210833Z-e77660`** (tolerância `max(R$ 1.000, 0,5% × \|ref\|)`, 76 s, 36.531 pares, 168.411 flags) | BPA DFP(Y) × ITR 1T(Y+1): **655 de 1.746 (37,5%)** divergentes; `reapresentacao` **75** — com tolerância só absoluta (> R$ 1.000) seriam 121, igual ao esperado: a diferença é o 0,5% relativo. DRE anual DFP × DFP: **638 de 1.641 (38,9%)**; receita (`3.01`) em **156**, lucro (`3.11`) em **94** pares (mesmo efeito da tolerância relativa). Linhas BPA exatas dentro dos pares divergentes: 89,4%. Âncora WEGE3 BPA 2023 DFP × ITR 1T24: 0 flags. Geral: `reapresentacao` 63.768 flags (3.330 pares), `reclassificacao` 104.643 (13.780 pares). |
 
 Se o resultado ficar perto de 0% ou acima de 60%, o agrupamento por período está errado, não os dados. Caso âncora: WEGE3 (`84.429.695/0001-11`), BPA 2023-12-31, DFP × ITR 2024-03-31 Penúltimo → zero flags.
 

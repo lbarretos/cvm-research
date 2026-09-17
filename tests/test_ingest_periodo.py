@@ -146,3 +146,85 @@ def test_itr_st_conta_fixa_celula_em_branco_nao_quebra():
     rows = ingest_itr.process_df(df, {"84.429.695/0001-11"}, "DRE")
     assert len(rows) == 1
     assert rows[0]["st_conta_fixa"] is None
+
+
+def test_reingestao_faz_backfill_de_st_conta_fixa_nulo():
+    """Migração futura zera st_conta_fixa nas linhas pré-existentes (coluna nova,
+    não dava pra herdar da tabela antiga). O plano é que a reingestao completa
+    (ingest_dfp.py --historico) preencha o valor real via ON CONFLICT DO UPDATE —
+    isso só funciona porque st_conta_fixa não está em EXCLUDED_FROM_UPDATE.
+    Este teste prova o backfill ponta a ponta, não só a ausência na exclusion set.
+    """
+    from utils import EXCLUDED_FROM_UPDATE
+    assert "st_conta_fixa" not in EXCLUDED_FROM_UPDATE
+
+    conn = _db()
+    # Linha "sobrevivente" da migração: st_conta_fixa NULL, mesma chave natural
+    # que será reingerida a seguir.
+    pre_migracao = _row("2024-01-01", 17_307_730_000.0)
+    pre_migracao["st_conta_fixa"] = None
+    _upsert_sqlite(conn, "demonstrativos_contabeis", [pre_migracao], "dem_contabeis_uniq")
+    antes = conn.execute(
+        "SELECT st_conta_fixa FROM demonstrativos_contabeis WHERE cd_conta = '3.01'"
+    ).fetchone()
+    assert antes == (None,)
+
+    # Reingestão: mesma chave natural (cnpj/fonte/tipo_doc/data_referencia/versao/
+    # cd_conta/ordem_exercicio/dt_ini_exerc), agora com ST_CONTA_FIXA populado.
+    df = pd.DataFrame([{
+        "CNPJ_CIA": "84.429.695/0001-11", "DT_REFER": "2024-06-30", "VERSAO": "1",
+        "ESCALA_MOEDA": "MIL", "ORDEM_EXERC": "ÚLTIMO",
+        "DT_INI_EXERC": "2024-01-01", "DT_FIM_EXERC": "2024-06-30",
+        "CD_CONTA": "3.01", "DS_CONTA": "Receita",
+        "VL_CONTA": "17307730.0000000000", "ST_CONTA_FIXA": "S",
+    }])
+    rows = ingest_itr.process_df(df, {"84.429.695/0001-11"}, "DRE")
+    _upsert_sqlite(conn, "demonstrativos_contabeis", rows, ingest_itr.CONFLICT)
+
+    depois = conn.execute(
+        "SELECT COUNT(*), st_conta_fixa FROM demonstrativos_contabeis WHERE cd_conta = '3.01'"
+    ).fetchone()
+    assert depois == (1, "S")  # backfill via ON CONFLICT DO UPDATE, não linha duplicada
+
+
+def test_ingestao_multi_tipo_doc_bpa_bpp_dre_convivem_nas_views():
+    """Um filing real traz BPA + BPP + DRE juntos no mesmo documento. Nada nos
+    outros testes prova que os três tipos coexistem em demonstrativos_contabeis
+    sem se atropelar nas views vw_balanco/vw_dre (ex: JOIN por tipo_doc errado
+    misturando cd_conta '1'/'2' do balanço com '3.x' da DRE)."""
+    conn = _db()
+    cnpj = "84.429.695/0001-11"
+    comum = {
+        "cnpj_companhia": cnpj, "fonte": "DFP", "data_referencia": "2024-12-31",
+        "versao": 1, "ordem_exercicio": "Último", "dt_fim_exerc": "2024-12-31",
+        "st_conta_fixa": "S",
+    }
+    bpa = {**comum, "tipo_doc": "BPA", "dt_ini_exerc": None,
+           "cd_conta": "1", "ds_conta": "Ativo Total", "vl_conta": 500_000.0}
+    bpp = {**comum, "tipo_doc": "BPP", "dt_ini_exerc": None,
+           "cd_conta": "2", "ds_conta": "Passivo Total", "vl_conta": 500_000.0}
+    dre_receita = {**comum, "tipo_doc": "DRE", "dt_ini_exerc": "2024-01-01",
+                   "cd_conta": "3.01", "ds_conta": "Receita", "vl_conta": 200_000.0}
+    dre_lucro = {**comum, "tipo_doc": "DRE", "dt_ini_exerc": "2024-01-01",
+                 "cd_conta": "3.11", "ds_conta": "Lucro Líquido", "vl_conta": 30_000.0}
+
+    _upsert_sqlite(conn, "demonstrativos_contabeis", [bpa, bpp, dre_receita, dre_lucro],
+                   "dem_contabeis_uniq")
+
+    n = conn.execute("SELECT COUNT(*) FROM demonstrativos_contabeis").fetchone()[0]
+    assert n == 4
+
+    balanco = conn.execute(
+        "SELECT ativo_total, patrimonio_liquido FROM vw_balanco "
+        "WHERE cnpj_companhia = ? AND fonte = 'DFP' AND data_referencia = '2024-12-31'",
+        (cnpj,),
+    ).fetchone()
+    # patrimonio_liquido vem de BPP cd_conta='2.03', não cadastrada aqui -> None
+    assert balanco == (500_000.0, None)
+
+    dre = conn.execute(
+        "SELECT receita_liquida, lucro_liquido FROM vw_dre "
+        "WHERE cnpj_companhia = ? AND fonte = 'DFP' AND data_referencia = '2024-12-31'",
+        (cnpj,),
+    ).fetchone()
+    assert dre == (200_000.0, 30_000.0)

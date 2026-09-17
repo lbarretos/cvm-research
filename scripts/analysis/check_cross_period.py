@@ -143,3 +143,63 @@ def check_cross_period(df: pd.DataFrame, tol_abs: float = 1000.0,
                 "detalhe": {k: resumo[k] for k in RESUMO_KEYS},
             })
     return flags, stats
+
+
+# ── CLI ──────────────────────────────────────────────────────────────────────
+
+def _escopo(args) -> str:
+    if not args.cnpj and not args.tipo_doc and not args.desde and not args.ate:
+        return "full"
+    partes = [f"cnpj={args.cnpj}" if args.cnpj else None,
+              f"tipo_doc={args.tipo_doc}" if args.tipo_doc else None,
+              f"desde={args.desde}" if args.desde else None,
+              f"ate={args.ate}" if args.ate else None]
+    return " ".join(p for p in partes if p)
+
+
+def main(argv=None) -> str:
+    """Roda a Camada 2 e devolve o run_id. `argv=None` lê sys.argv."""
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    add_common_args(parser)
+    args = parser.parse_args(argv)
+    if not args.cnpj and not args.full:
+        parser.error("informe --cnpj ou confirme a base inteira com --full")
+
+    conn = get_db()
+    if args.cnpj:
+        cnpjs = [args.cnpj]
+    else:
+        cnpjs = [r[0] for r in conn.execute("SELECT cnpj FROM companies ORDER BY cnpj")]
+    run_id = new_run(conn, LAYER, CHECK_TYPE, _escopo(args), vars(args))
+    print(f"run {run_id}: {len(cnpjs)} empresa(s), tol_abs={args.tol_abs} tol_rel={args.tol_rel}")
+
+    total_checked = total_flagged = 0
+    stats_total: dict = {}
+    for i, cnpj in enumerate(cnpjs, 1):
+        df = latest_rows(conn, cnpj=cnpj, tipo_doc=args.tipo_doc, desde=args.desde, ate=args.ate)
+        flags, stats = check_cross_period(df, args.tol_abs, args.tol_rel)
+        clear_flags(conn, LAYER, CHECK_TYPE, cnpj, args.tipo_doc)
+        n = write_flags(conn, run_id, flags)
+        pares = sum(s["pares"] for s in stats.values())
+        total_checked += pares
+        total_flagged += n
+        for tipo, s in stats.items():
+            acc = stats_total.setdefault(tipo, {"pares": 0, "pares_divergentes": 0, "reapresentacao": 0})
+            for k in acc:
+                acc[k] += s[k]
+        print(f"  [{i}/{len(cnpjs)}] {cnpj}: {len(df)} linhas, {pares} pares, {n} flags")
+
+    finish_run(conn, run_id, total_checked, total_flagged)
+    print(f"\nResumo por tipo_doc (pares = documento_ref × documento_cmp × período):")
+    for tipo in sorted(stats_total):
+        s = stats_total[tipo]
+        pct = 100.0 * s["pares_divergentes"] / s["pares"] if s["pares"] else 0.0
+        print(f"  {tipo:7s} pares={s['pares']} divergentes={s['pares_divergentes']} ({pct:.1f}%) "
+              f"reapresentacao={s['reapresentacao']}")
+    print(f"total_checked={total_checked} total_flagged={total_flagged}")
+    return run_id
+
+
+if __name__ == "__main__":
+    main()

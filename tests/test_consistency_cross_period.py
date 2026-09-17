@@ -178,3 +178,63 @@ def test_empresas_e_tipos_nao_se_cruzam():
     flags, stats = ccp.check_cross_period(_df(_dfp23(), _itr1t24(), outra, bpp))
     assert flags == []
     assert stats == {"BPA": {"pares": 1, "pares_divergentes": 0, "reapresentacao": 0}}
+
+
+# ── main(): ponta a ponta com banco em memória ───────────────────────────────
+
+import sqlite3
+
+SCHEMA = os.path.join(os.path.dirname(__file__), "..", "schema.sql")
+
+
+def _db_com_docs():
+    conn = sqlite3.connect(":memory:")
+    with open(SCHEMA, encoding="utf-8") as f:
+        conn.executescript(f.read())
+    conn.execute("INSERT INTO companies (cnpj, ticker, nome_cvm) VALUES (?, 'WEGE3', 'WEG')", (CNPJ,))
+    cmp = {"1": ("Ativo Total", 110e6), "1.01": ("Ativo Circulante", 70e6), "1.02": ("Ativo Não Circulante", 40e6)}
+    rows = _dfp23() + _itr1t24(cmp)
+    cols = ["cnpj_companhia", "fonte", "tipo_doc", "data_referencia", "versao", "ordem_exercicio",
+            "dt_fim_exerc", "cd_conta", "ds_conta", "vl_conta", "st_conta_fixa"]
+    conn.executemany(
+        f"INSERT INTO demonstrativos_contabeis ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+        [tuple(r["periodo_fim"] if c == "dt_fim_exerc" else r[c] for c in cols) for r in rows],
+    )
+    conn.commit()
+    return conn
+
+
+def test_main_grava_run_e_flags_e_substitui_anteriores(monkeypatch, capsys):
+    conn = _db_com_docs()
+    monkeypatch.setattr(ccp, "get_db", lambda: conn)
+
+    run1 = ccp.main(["--cnpj", CNPJ])
+    n1 = conn.execute("SELECT COUNT(*) FROM consistency_flags WHERE run_id = ?", (run1,)).fetchone()[0]
+    assert n1 == 3                                              # 2 linhas + 1 resumo
+    run = conn.execute("SELECT layer, check_type, escopo, total_checked, total_flagged, finished_at "
+                       "FROM consistency_runs WHERE run_id = ?", (run1,)).fetchone()
+    assert run[:5] == (2, "cross_period", f"cnpj={CNPJ}", 1, 3) and run[5] is not None
+
+    run2 = ccp.main(["--cnpj", CNPJ, "--tipo-doc", "BPA"])
+    assert conn.execute("SELECT COUNT(*) FROM consistency_flags").fetchone()[0] == 3   # substituiu, não somou
+    assert conn.execute("SELECT DISTINCT run_id FROM consistency_flags").fetchone()[0] == run2
+    assert conn.execute("SELECT COUNT(*) FROM consistency_runs").fetchone()[0] == 2
+
+    out = capsys.readouterr().out
+    assert "BPA" in out and "pares=1" in out and "reapresentacao=1" in out
+
+
+def test_main_exige_cnpj_ou_full(monkeypatch):
+    monkeypatch.setattr(ccp, "get_db", lambda: _db_com_docs())
+    import pytest
+    with pytest.raises(SystemExit):
+        ccp.main([])
+
+
+def test_main_full_percorre_companies(monkeypatch):
+    conn = _db_com_docs()
+    monkeypatch.setattr(ccp, "get_db", lambda: conn)
+    run_id = ccp.main(["--full"])
+    escopo = conn.execute("SELECT escopo FROM consistency_runs WHERE run_id = ?", (run_id,)).fetchone()[0]
+    assert escopo == "full"
+    assert conn.execute("SELECT COUNT(*) FROM consistency_flags").fetchone()[0] == 3

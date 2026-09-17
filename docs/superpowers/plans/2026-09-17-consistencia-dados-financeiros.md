@@ -651,6 +651,8 @@ git commit -m "docs: periodos trimestre/acumulado, st_conta_fixa e vw_dre_acumul
 
 ## Fase 1 — Tabelas de achados + Camada 2 (cruzamento entre filings)
 
+> **Plano de tarefas (executado):** `docs/superpowers/plans/2026-09-17-fase1-camada2-cross-period.md`.
+
 ### Schema (novo em `schema.sql`)
 
 ```sql

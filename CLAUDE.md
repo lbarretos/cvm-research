@@ -109,6 +109,31 @@ sensível a rate limit, por isso o `time.sleep(0.5)` entre documentos e o
 (que guarda todas as versões), aqui só a versão mais recente é mantida — uma
 reapresentação (nova `versao`) descarta o `texto_extraido` da versão anterior.
 
+### `consistency_flags` — achados de consistência dos demonstrativos (metadados, não valores)
+`run_id, layer, check_type, classificacao, severity ('info'/'warn'/'error'), cnpj_companhia, tipo_doc,`
+`cd_conta (NULL = resumo do par de documentos), cd_conta_pai, ds_conta, periodo_ini ('NA' em BPA/BPP), periodo_fim,`
+`fonte_ref, data_ref, ordem_ref (filing baseline), fonte_cmp, data_cmp, ordem_cmp (filing comparado),`
+`valor_ref, valor_cmp, diff_abs (cmp − ref), diff_rel, detalhe (JSON)`
+
+Gerada por `scripts/analysis/` (fora do job semanal; rodar à mão depois de reingerir DFP/ITR).
+Nunca altera `demonstrativos_contabeis`: o valor publicado pela CVM fica intacto e aqui ficam os metadados.
+A tabela guarda **a última execução de cada escopo** `(layer, check_type, cnpj[, tipo_doc])`; o histórico
+de execuções está em `consistency_runs` (`run_id, layer, check_type, escopo, started_at, finished_at,
+total_checked, total_flagged, script_args`).
+
+**Camada 2 (`layer = 2`, `check_type = 'cross_period'`)** — o mesmo período aparece em até 5 filings
+(BPA 31/12/Y: DFP(Y) Último, ITR 1T/2T/3T(Y+1) Penúltimo, DFP(Y+1) Penúltimo). O baseline é sempre o
+filing mais antigo (o original, como reportado na época) e cada filing posterior é comparado a ele:
+- `reapresentacao` (`warn`): a conta-total do tipo_doc (`1`, `2`, `3.01`/`3.11`, `6.05`, "Valor Adicionado
+  Total a Distribuir") diverge acima da tolerância `max(R$ 1.000, 0,5% × |ref|)`; todas as linhas
+  divergentes do par herdam a classe.
+- `reclassificacao` (`info`): totais batem, mas alguma sublinha diverge (mudou de conta).
+- Linha que existe só num dos filings **não** gera flag (Camada 3, futura); só entra nas contagens do
+  resumo do par (`detalhe = {"linhas_comuns", "linhas_divergentes", "linhas_exclusivas_ref",
+  "linhas_exclusivas_cmp", "total_disponivel"}`).
+
+Para rodar: `cd scripts/analysis && python run_all.py --layer 2 --cnpj <CNPJ>` (ou `--full` para a base).
+
 ---
 
 ## Queries de pesquisa padrão
@@ -256,6 +281,31 @@ WHERE cnpj_companhia = '<CNPJ>'
 ORDER BY cd_conta;
 ```
 
+### Reapresentações e reclassificações de uma empresa (Camada 2)
+```sql
+-- Resumo por par de filings: quais períodos foram reapresentados e por quem
+SELECT tipo_doc, periodo_ini, periodo_fim,
+       fonte_ref || ' ' || data_ref AS baseline,
+       fonte_cmp || ' ' || data_cmp || ' (' || ordem_cmp || ')' AS comparado,
+       classificacao, severity,
+       json_extract(detalhe, '$.linhas_divergentes') AS linhas_divergentes,
+       json_extract(detalhe, '$.linhas_exclusivas_cmp') AS linhas_novas
+FROM consistency_flags
+WHERE cnpj_companhia = '<CNPJ>' AND layer = 2 AND cd_conta IS NULL
+ORDER BY periodo_fim DESC, data_cmp;
+
+-- Linhas: o que mudou na DRE anual de <ANO> entre o DFP original e o DFP seguinte
+SELECT cd_conta, ds_conta, valor_ref AS original, valor_cmp AS reapresentado,
+       diff_abs, ROUND(diff_rel * 100, 2) AS diff_pct, classificacao
+FROM consistency_flags
+WHERE cnpj_companhia = '<CNPJ>' AND layer = 2 AND tipo_doc = 'DRE'
+  AND periodo_fim = '<ANO>-12-31' AND fonte_cmp = 'DFP' AND cd_conta IS NOT NULL
+ORDER BY cd_conta;
+```
+Se a empresa não tiver linhas em `consistency_flags`, a Camada 2 ainda não rodou para ela — informar o
+comando `run_all.py --layer 2 --cnpj <CNPJ>`. Ausência de flags para um período com filings pareados
+significa que os valores bateram dentro da tolerância.
+
 ### Busca full-text no conteúdo de documentos (SQLite FTS5)
 
 ```sql
@@ -283,7 +333,10 @@ LIMIT 20;
 4. **Para fatos relevantes**: classifique o impacto — M&A, guidance, regulatório, operacional, financeiro.
 5. **Para insider trading**: correlacione compras/vendas com fatos relevantes próximos e recompras vigentes.
 6. **Para financeiros (DRE/Balanço)**: use `vw_dre` e `vw_balanco` primeiro. Se NULL nos campos chave, verifique se a empresa é banco/seguradora (COSIF). Para contas específicas não nas views, consulte `demonstrativos_contabeis` diretamente filtrando por `cd_conta`.
-7. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
+7. **Para "esse número foi reapresentado?"**: consulte `consistency_flags` (Camada 2) filtrando por
+   `cnpj_companhia`, `tipo_doc` e `periodo_fim`. Apresente sempre o valor original (`valor_ref`) e o
+   reapresentado (`valor_cmp`) lado a lado — o padrão do banco é o original, nunca substituir.
+8. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
 
 ## Defasagem dos dados
 

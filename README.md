@@ -140,6 +140,10 @@ cvm-research/
 │       ├── ingest_itr.py           # demonstrativos trimestrais — flag: --desde ANO
 │       ├── ingest_notas_explicativas.py  # texto completo do ITR/DFP (sob demanda)
 │       └── extract_pdf.py          # extração de texto dos PDFs do IPE
+│   └── analysis/                   # consistência dos demonstrativos (fora do job semanal)
+│       ├── consistency_utils.py    # latest_rows, tolerância, consistency_runs/flags
+│       ├── check_cross_period.py   # Camada 2: cruzamento entre filings (reapresentação)
+│       └── run_all.py              # orquestrador: --layer 2 --cnpj|--full
 ├── tests/                          # pytest (sem rede, tudo mockado)
 ├── docs/superpowers/plans/         # registros de design de features já implementadas
 └── logs/                           # logs do update semanal (não versionado)
@@ -160,6 +164,24 @@ cvm-research/
 | `ingest_dfp.py` | DFP ZIPs anuais | `demonstrativos_contabeis` (fonte='DFP'; grava `st_conta_fixa`) | semanal |
 | `ingest_itr.py` | ITR ZIPs anuais | `demonstrativos_contabeis` (fonte='ITR'; trimestre isolado + acumulado; grava `st_conta_fixa`) | semanal |
 | `ingest_notas_explicativas.py` | Pacote ZIP do filing (rad.cvm.gov.br) | `notas_explicativas`, `notas_explicativas_fts` | sob demanda |
+
+## Análise de consistência dos demonstrativos
+
+Scripts em `scripts/analysis/` cruzam os quadros de `demonstrativos_contabeis` e gravam achados em
+`consistency_runs` / `consistency_flags` (metadados; o valor publicado pela CVM nunca é alterado).
+Não entram no job semanal — rodar à mão depois de reingerir DFP/ITR:
+
+```bash
+cd scripts/analysis && source ../../.venv/bin/activate
+python run_all.py --layer 2 --cnpj 84.429.695/0001-11   # uma empresa (~1 s)
+python run_all.py --layer 2 --full                       # base inteira (145 empresas, ~1,5 min)
+```
+
+| Camada | Script | O que detecta |
+|---|---|---|
+| 2 | `check_cross_period.py` | O mesmo período em filings diferentes (DFP × ITRs seguintes × DFP seguinte): `reapresentacao` quando o total diverge, `reclassificacao` quando só sublinhas mudam. Baseline = filing mais antigo. |
+
+Plano e camadas seguintes: `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md`.
 
 ---
 

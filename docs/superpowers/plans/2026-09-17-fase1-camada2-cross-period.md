@@ -43,7 +43,7 @@ Convenção de import: os scripts rodam com `cd scripts/analysis` (como `scripts
 
 Worktree não serve aqui: `.env` e `cvm_research.db` (12 GB) ficam fora do git e o `.venv` é relativo à raiz. Trabalhar num branch no mesmo diretório.
 
-- [ ] **Step 1: Criar o branch a partir de `main` limpo**
+- [x] **Step 1: Criar o branch a partir de `main` limpo**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git status --short && git checkout -b fase-1-camada-2
@@ -58,7 +58,7 @@ Expected: `git status --short` vazio; `Switched to a new branch 'fase-1-camada-2
 **Files:**
 - Modify: `schema.sql` (inserir antes da linha `-- ── Views ───`)
 
-- [ ] **Step 1: Adicionar a seção ao `schema.sql`**
+- [x] **Step 1: Adicionar a seção ao `schema.sql`**
 
 Inserir imediatamente antes de `-- ── Views ─────` (a linha que abre a seção das views, logo depois da `CREATE VIRTUAL TABLE ... notas_explicativas_fts`):
 
@@ -116,7 +116,7 @@ CREATE INDEX IF NOT EXISTS idx_cflags_run   ON consistency_flags (run_id);
 
 ```
 
-- [ ] **Step 2: Validar o schema num banco vazio**
+- [x] **Step 2: Validar o schema num banco vazio**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && rm -f /tmp/cvm_schema_check.db && sqlite3 /tmp/cvm_schema_check.db < schema.sql && sqlite3 /tmp/cvm_schema_check.db ".tables" && sqlite3 /tmp/cvm_schema_check.db "PRAGMA table_info(consistency_flags);" | wc -l && rm /tmp/cvm_schema_check.db
@@ -124,7 +124,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && rm -f /tmp/cvm_schema_ch
 
 Expected: a lista de tabelas inclui `consistency_flags` e `consistency_runs`; o `wc -l` responde `25` (colunas).
 
-- [ ] **Step 3: Aplicar no banco real (idempotente)**
+- [x] **Step 3: Aplicar no banco real (idempotente)**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 cvm_research.db < schema.sql && sqlite3 -readonly cvm_research.db "SELECT name FROM sqlite_master WHERE name LIKE 'consistency%' OR name LIKE 'idx_cflags%' ORDER BY 1;"
@@ -132,7 +132,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 cvm_research.db 
 
 Expected: 5 linhas (`consistency_flags`, `consistency_runs`, `idx_cflags_class`, `idx_cflags_cnpj`, `idx_cflags_run`). Nenhum erro — todo o `schema.sql` é `IF NOT EXISTS`.
 
-- [ ] **Step 4: Rodar a suíte existente (as views não mudaram, mas o arquivo sim)**
+- [x] **Step 4: Rodar a suíte existente (as views não mudaram, mas o arquivo sim)**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/ -q
@@ -140,7 +140,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: tudo PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add schema.sql && git commit -m "feat(schema): consistency_runs e consistency_flags (Fase 1, achados de consistência)
@@ -156,7 +156,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Create: `scripts/analysis/consistency_utils.py`
 - Create: `tests/test_consistency_utils.py`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Criar `tests/test_consistency_utils.py`:
 
@@ -364,7 +364,7 @@ def test_add_common_args_defaults_e_parse():
         p.parse_args(["--tipo-doc", "XYZ"])
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_utils.py -q 2>&1 | tail -5
@@ -372,7 +372,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: erro de coleta `ModuleNotFoundError: No module named 'consistency_utils'`.
 
-- [ ] **Step 3: Implementar `scripts/analysis/consistency_utils.py` completo**
+- [x] **Step 3: Implementar `scripts/analysis/consistency_utils.py` completo**
 
 ```python
 """
@@ -575,7 +575,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
                         help="Tolerância relativa sobre |ref| (padrão 0.005 = 0,5%%)")
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_utils.py -v 2>&1 | tail -20
@@ -583,7 +583,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 12 PASS. Se `test_total_codes_fixos_por_tipo_doc` falhar com `KeyError` no DataFrame vazio, é porque `doc["cd_conta"]` de um `DataFrame(columns=[...])` tem dtype object — o `.astype(str)` cobre isso; conferir que a implementação está idêntica.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/consistency_utils.py tests/test_consistency_utils.py && git commit -m "feat(analysis): consistency_utils — latest_rows por documento, tolerancia, runs e flags
@@ -599,7 +599,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Create: `scripts/analysis/check_cross_period.py`
 - Create: `tests/test_consistency_cross_period.py`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Criar `tests/test_consistency_cross_period.py`:
 
@@ -786,7 +786,7 @@ def test_empresas_e_tipos_nao_se_cruzam():
     assert stats == {"BPA": {"pares": 1, "pares_divergentes": 0, "reapresentacao": 0}}
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_cross_period.py -q 2>&1 | tail -5
@@ -794,7 +794,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: `ModuleNotFoundError: No module named 'check_cross_period'`.
 
-- [ ] **Step 3: Implementar a lógica pura em `scripts/analysis/check_cross_period.py`**
+- [x] **Step 3: Implementar a lógica pura em `scripts/analysis/check_cross_period.py`**
 
 (O `main()` entra na Task 4; por enquanto o arquivo termina em `check_cross_period`.)
 
@@ -946,7 +946,7 @@ def check_cross_period(df: pd.DataFrame, tol_abs: float = 1000.0,
     return flags, stats
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_cross_period.py -v 2>&1 | tail -20
@@ -958,7 +958,7 @@ Armadilhas conhecidas se algo falhar:
 - `test_vl_conta_nulo_conta_como_zero`: `vl_conta` com `None` num `DataFrame` misto vira `object`; o `.astype(float)` antes do `.fillna(0.0)` resolve. Não inverter a ordem.
 - `test_baseline_e_o_filing_mais_antigo...`: o baseline vem de `sort_values(DOC_COLS)` — `data_referencia` é string ISO, ordena lexicograficamente certo.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/check_cross_period.py tests/test_consistency_cross_period.py && git commit -m "feat(analysis): Camada 2 cross_period — baseline por periodo, reapresentacao vs reclassificacao
@@ -975,7 +975,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Create: `scripts/analysis/run_all.py`
 - Modify: `tests/test_consistency_cross_period.py` (teste de `main` com banco em memória via monkeypatch)
 
-- [ ] **Step 1: Escrever o teste que falha (ponta a ponta, banco em memória)**
+- [x] **Step 1: Escrever o teste que falha (ponta a ponta, banco em memória)**
 
 Acrescentar ao final de `tests/test_consistency_cross_period.py`:
 
@@ -1040,7 +1040,7 @@ def test_main_full_percorre_companies(monkeypatch):
     assert conn.execute("SELECT COUNT(*) FROM consistency_flags").fetchone()[0] == 3
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_cross_period.py -q -k main 2>&1 | tail -5
@@ -1048,7 +1048,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 3 FAIL com `AttributeError: module 'check_cross_period' has no attribute 'main'`.
 
-- [ ] **Step 3: Acrescentar `main()` ao final de `scripts/analysis/check_cross_period.py`**
+- [x] **Step 3: Acrescentar `main()` ao final de `scripts/analysis/check_cross_period.py`**
 
 ```python
 
@@ -1113,7 +1113,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Criar `scripts/analysis/run_all.py`**
+- [x] **Step 4: Criar `scripts/analysis/run_all.py`**
 
 ```python
 """
@@ -1158,7 +1158,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 5: Rodar todos os testes**
+- [x] **Step 5: Rodar todos os testes**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -5
@@ -1166,7 +1166,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: tudo PASS (suíte anterior + 12 utils + 16 cross_period).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/check_cross_period.py scripts/analysis/run_all.py tests/test_consistency_cross_period.py && git commit -m "feat(analysis): CLI de check_cross_period (loop por CNPJ, flags idempotentes) e run_all --layer
@@ -1180,7 +1180,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:** nenhum (só execução).
 
-- [ ] **Step 1: Conferir a premissa de `periodo_fim` não nulo**
+- [x] **Step 1: Conferir a premissa de `periodo_fim` não nulo**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly cvm_research.db "SELECT COUNT(*) FROM demonstrativos_contabeis WHERE dt_fim_exerc IS NULL;"
@@ -1188,7 +1188,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly cvm_re
 
 Expected: `0`. Se não for zero, essas linhas são ignoradas pela Camada 2 (documentado na docstring de `check_cross_period`); anotar a contagem no commit da Task 7.
 
-- [ ] **Step 2: Rodar a Camada 2 só para a WEG**
+- [x] **Step 2: Rodar a Camada 2 só para a WEG**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.venv/bin/python run_all.py --layer 2 --cnpj 84.429.695/0001-11
@@ -1196,7 +1196,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.
 
 Expected: uma linha `[1/1] 84.429.695/0001-11: ~35000 linhas, N pares, M flags` e o resumo por tipo_doc (BPA, BPP, DRE, DFC_MI, DVA). Sem traceback.
 
-- [ ] **Step 3: Verificar o caso âncora e a forma das flags**
+- [x] **Step 3: Verificar o caso âncora e a forma das flags**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly -header cvm_research.db "SELECT COUNT(*) AS ancora_deve_ser_0 FROM consistency_flags WHERE cnpj_companhia='84.429.695/0001-11' AND tipo_doc='BPA' AND periodo_fim='2023-12-31' AND fonte_cmp='ITR' AND data_cmp='2024-03-31'; SELECT tipo_doc, classificacao, severity, COUNT(*) n FROM consistency_flags WHERE cnpj_companhia='84.429.695/0001-11' GROUP BY 1,2,3 ORDER BY 1,2; SELECT tipo_doc, cd_conta, ds_conta, periodo_ini, periodo_fim, fonte_ref, data_ref, fonte_cmp, data_cmp, valor_ref, valor_cmp, diff_rel, classificacao FROM consistency_flags WHERE cnpj_companhia='84.429.695/0001-11' AND cd_conta IS NOT NULL ORDER BY periodo_fim DESC, tipo_doc LIMIT 15; SELECT tipo_doc, periodo_fim, fonte_cmp, data_cmp, detalhe FROM consistency_flags WHERE cnpj_companhia='84.429.695/0001-11' AND cd_conta IS NULL ORDER BY periodo_fim DESC LIMIT 10;"
@@ -1204,7 +1204,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly -heade
 
 Expected: `ancora_deve_ser_0 = 0`. As demais queries são inspeção manual: os `detalhe` são JSON com as 5 chaves; `periodo_ini` = `NA` em BPA/BPP e data em DRE/DFC/DVA; `fonte_ref`/`data_ref` sempre ≤ `data_cmp`. Se aparecer alguma linha com `data_ref > data_cmp`, o baseline está errado — parar e revisar `DOC_COLS`.
 
-- [ ] **Step 4: Verificar a idempotência (rodar de novo não duplica)**
+- [x] **Step 4: Verificar a idempotência (rodar de novo não duplica)**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.venv/bin/python check_cross_period.py --cnpj 84.429.695/0001-11 --tipo-doc DRE >/dev/null && sqlite3 -readonly ../../cvm_research.db "SELECT tipo_doc, COUNT(DISTINCT run_id) runs, COUNT(*) n FROM consistency_flags WHERE cnpj_companhia='84.429.695/0001-11' GROUP BY 1;"
@@ -1218,7 +1218,7 @@ Expected: `DRE` com `runs = 1` (o run novo) e os outros tipos com `runs = 1` (o 
 
 **Files:** nenhum (só execução). Referência: tabela "Verificação da Fase 1" do plano-mãe (números medidos pré-Fase 0; esperar ordem de grandeza, não igualdade).
 
-- [ ] **Step 1: Rodar a base inteira**
+- [x] **Step 1: Rodar a base inteira**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && time ../../.venv/bin/python run_all.py --layer 2 --full 2>&1 | tail -12
@@ -1226,7 +1226,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && time ..
 
 Expected: 145 empresas processadas, resumo por tipo_doc, `total_flagged` na casa de dezenas de milhares. Tempo esperado: 1–5 min.
 
-- [ ] **Step 2: Distribuição geral (checar via MCP ou sqlite3)**
+- [x] **Step 2: Distribuição geral (checar via MCP ou sqlite3)**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly -header cvm_research.db "SELECT layer, classificacao, severity, COUNT(*) n, SUM(cd_conta IS NULL) resumos FROM consistency_flags GROUP BY 1,2,3;"
@@ -1234,7 +1234,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly -heade
 
 Expected: só `layer = 2`; duas classes (`reapresentacao`/`warn`, `reclassificacao`/`info`).
 
-- [ ] **Step 3: Pares BPA DFP(Y) × ITR 1T(Y+1) — esperado ≈ 38% divergentes (669 de 1.746), ≈ 121 reapresentações**
+- [x] **Step 3: Pares BPA DFP(Y) × ITR 1T(Y+1) — esperado ≈ 38% divergentes (669 de 1.746), ≈ 121 reapresentações**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly -header cvm_research.db "
@@ -1262,7 +1262,7 @@ FROM pares p LEFT JOIN div d USING (cnpj_companhia, data_ref);"
 
 Expected: `pct` entre 25 e 50; `reapresentacoes` na casa de 100–150. Fora de 0–60% ⇒ agrupamento por período errado (não os dados) — parar e revisar `GROUP_COLS`/`latest_rows`.
 
-- [ ] **Step 4: DRE anual DFP(Y) × DFP(Y+1) — esperado ≈ 38% (639 de 1.687); receita em ≈ 196, lucro em ≈ 113**
+- [x] **Step 4: DRE anual DFP(Y) × DFP(Y+1) — esperado ≈ 38% (639 de 1.687); receita em ≈ 196, lucro em ≈ 113**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly -header cvm_research.db "
@@ -1278,7 +1278,7 @@ GROUP BY 1;"
 
 Expected: `pares_divergentes` ≈ 500–800; `3.01` ≈ 150–250; `3.11` ≈ 80–150.
 
-- [ ] **Step 5: Linhas BPA exatas entre pareadas — esperado 93–96%**
+- [x] **Step 5: Linhas BPA exatas entre pareadas — esperado 93–96%**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && sqlite3 -readonly -header cvm_research.db "
@@ -1288,11 +1288,11 @@ FROM consistency_flags WHERE layer = 2 AND tipo_doc = 'BPA' AND cd_conta IS NULL
 
 Expected: esse número é só sobre pares divergentes (os pares exatos não geram resumo), então fica abaixo dos 93–96% globais — algo como 60–85%. Serve para detectar um bug grosseiro (ex: 0% = todas as linhas divergindo = escala ou período errado).
 
-- [ ] **Step 6: Registrar os números medidos no plano-mãe**
+- [x] **Step 6: Registrar os números medidos no plano-mãe**
 
 Em `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md`, seção "Verificação da Fase 1", acrescentar ao final da tabela uma linha por medida com o valor **medido** (ex: `| Medido em 2026-09-17 (pós-Fase 0, run <run_id>) | BPA 1T: X de Y (Z%), reapres. W; DRE anual: ... |`). Sem código — é registro.
 
-- [ ] **Step 7: Commit do registro**
+- [x] **Step 7: Commit do registro**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md && git commit -m "docs(plano): numeros medidos da Camada 2 na base pos-Fase 0
@@ -1310,7 +1310,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Modify: `scripts/mcp/cvm_mcp.py` (docstring de `query`, linhas 73–80)
 - Modify: `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md` (ponteiro na seção Fase 1)
 
-- [ ] **Step 1: `CLAUDE.md` — subseção da tabela**
+- [x] **Step 1: `CLAUDE.md` — subseção da tabela**
 
 Inserir logo depois do parágrafo final da seção `### notas_explicativas` (o que termina em "...descarta o `texto_extraido` da versão anterior."), antes da linha `---`:
 
@@ -1342,7 +1342,7 @@ Para rodar: `cd scripts/analysis && python run_all.py --layer 2 --cnpj <CNPJ>` (
 
 ```
 
-- [ ] **Step 2: `CLAUDE.md` — query padrão**
+- [x] **Step 2: `CLAUDE.md` — query padrão**
 
 Inserir depois da query "DRE linha a linha (quando a view não tiver a conta que você quer)" e antes de "### Busca full-text":
 
@@ -1374,7 +1374,7 @@ significa que os valores bateram dentro da tolerância.
 
 ```
 
-- [ ] **Step 3: `CLAUDE.md` — item no "Comportamento esperado ao pesquisar"**
+- [x] **Step 3: `CLAUDE.md` — item no "Comportamento esperado ao pesquisar"**
 
 Acrescentar depois do item 6 (financeiros) e renumerar o antigo 7 para 8:
 
@@ -1384,7 +1384,7 @@ Acrescentar depois do item 6 (financeiros) e renumerar o antigo 7 para 8:
    reapresentado (`valor_cmp`) lado a lado — o padrão do banco é o original, nunca substituir.
 ```
 
-- [ ] **Step 4: `README.md` — árvore e seção**
+- [x] **Step 4: `README.md` — árvore e seção**
 
 Na árvore de "Estrutura do projeto", logo depois do bloco `scripts/ingest/`, acrescentar:
 
@@ -1420,7 +1420,7 @@ Plano e camadas seguintes: `docs/superpowers/plans/2026-09-17-consistencia-dados
 
 A seção `## Testes` só tem o comando `pytest` — deixar como está.
 
-- [ ] **Step 5: `scripts/mcp/cvm_mcp.py` — docstring de `query`**
+- [x] **Step 5: `scripts/mcp/cvm_mcp.py` — docstring de `query`**
 
 Na docstring de `query` (linhas 73–80), na lista de tabelas, acrescentar `consistency_runs, consistency_flags` depois de `notas_explicativas`, e uma linha:
 
@@ -1429,7 +1429,7 @@ Na docstring de `query` (linhas 73–80), na lista de tabelas, acrescentar `cons
     cd_conta NULL = resumo do par; detalhe é JSON — use json_extract).
 ```
 
-- [ ] **Step 6: Ponteiro no plano-mãe**
+- [x] **Step 6: Ponteiro no plano-mãe**
 
 Em `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md`, logo abaixo do título `## Fase 1 — Tabelas de achados + Camada 2 (cruzamento entre filings)`, inserir:
 
@@ -1437,7 +1437,7 @@ Em `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md`, logo a
 > **Plano de tarefas (executado):** `docs/superpowers/plans/2026-09-17-fase1-camada2-cross-period.md`.
 ```
 
-- [ ] **Step 7: Conferir que o MCP ainda sobe e vê a tabela**
+- [x] **Step 7: Conferir que o MCP ainda sobe e vê a tabela**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -c "import ast,sys; ast.parse(open('scripts/mcp/cvm_mcp.py').read()); print('ok')" && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -3
@@ -1445,7 +1445,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -c "imp
 
 Expected: `ok` e suíte PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add CLAUDE.md README.md scripts/mcp/cvm_mcp.py docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md && git commit -m "docs: consistency_flags (Camada 2) no CLAUDE.md, README e docstring do MCP

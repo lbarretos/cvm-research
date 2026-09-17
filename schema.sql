@@ -312,6 +312,57 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notas_explicativas_fts USING fts5(
     content_rowid='id'
 );
 
+-- ── 8. Consistência de dados financeiros ─────────────────────────────────────
+-- Achados dos scripts de scripts/analysis/ (fora do job semanal). Nunca alteram
+-- demonstrativos_contabeis: o valor publicado pela CVM é intocável; aqui ficam
+-- os metadados (reapresentação, reclassificação, etc.) linha a linha.
+-- Camadas: 2 = cruzamento entre filings (Fase 1); 1 = soma hierárquica (Fase 2);
+-- 3 = granularidade (Fase 3); 4/5 = texto (Fase 4); 6 = desacúmulo (Fase 5).
+
+CREATE TABLE IF NOT EXISTS consistency_runs (
+    run_id          TEXT PRIMARY KEY,
+    layer           INTEGER NOT NULL,      -- 1, 2, 3, 5, 6
+    check_type      TEXT NOT NULL,         -- ex: 'cross_period'
+    escopo          TEXT,                  -- 'full' ou 'cnpj=... tipo_doc=... desde=... ate=...'
+    started_at      TEXT DEFAULT (datetime('now')),
+    finished_at     TEXT,
+    total_checked   INTEGER,               -- unidades checadas (Camada 2: pares documento×período)
+    total_flagged   INTEGER,
+    script_args     TEXT                   -- JSON dos argumentos do script
+);
+
+-- Uma flag por linha divergente; linhas com cd_conta NULL são o resumo do par
+-- de documentos (detalhe JSON com contagens). Flags são substituídas por
+-- (layer, check_type, cnpj_companhia[, tipo_doc]) a cada execução — a tabela
+-- reflete sempre a última execução de cada escopo; o histórico fica em runs.
+CREATE TABLE IF NOT EXISTS consistency_flags (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id          TEXT NOT NULL REFERENCES consistency_runs(run_id),
+    layer           INTEGER NOT NULL,
+    check_type      TEXT NOT NULL,
+    classificacao   TEXT NOT NULL,         -- Camada 2: 'reapresentacao' | 'reclassificacao'
+    severity        TEXT NOT NULL CHECK (severity IN ('info', 'warn', 'error')),
+    cnpj_companhia  TEXT NOT NULL,
+    tipo_doc        TEXT,
+    cd_conta        TEXT,                  -- NULL = resumo do par de documentos
+    cd_conta_pai    TEXT,
+    ds_conta        TEXT,
+    periodo_ini     TEXT,                  -- COALESCE(dt_ini_exerc, 'NA')
+    periodo_fim     TEXT,                  -- dt_fim_exerc
+    fonte_ref       TEXT,  data_ref  TEXT, ordem_ref  TEXT,   -- filing de referência (baseline)
+    fonte_cmp       TEXT,  data_cmp  TEXT, ordem_cmp  TEXT,   -- filing comparado
+    valor_ref       REAL,
+    valor_cmp       REAL,
+    diff_abs        REAL,                  -- valor_cmp − valor_ref
+    diff_rel        REAL,                  -- diff_abs / |valor_ref| (NULL se valor_ref = 0)
+    detalhe         TEXT,                  -- JSON livre
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_cflags_cnpj  ON consistency_flags (cnpj_companhia, periodo_fim DESC);
+CREATE INDEX IF NOT EXISTS idx_cflags_class ON consistency_flags (layer, classificacao, severity);
+CREATE INDEX IF NOT EXISTS idx_cflags_run   ON consistency_flags (run_id);
+
 -- ── Views ─────────────────────────────────────────────────────────────────────
 -- DISTINCT ON (PostgreSQL) replaced by MAX(versao) CTE — semantically equivalent.
 

@@ -4,7 +4,7 @@ Ingere os demonstrativos financeiros anuais (DFP) da CVM no banco local.
 Fonte: https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_{ano}.zip
 Tipos ingeridos (consolidado): BPA, BPP, DRE, DFC_MI, DVA
 Tabela destino: demonstrativos_contabeis (fonte='DFP')
-Cobertura: 2021-atual, somente empresas da watchlist
+Cobertura: 2010-atual, somente empresas da watchlist
 
 Normalização de escala:
   ESCALA_MOEDA = 'MIL'      → vl_conta = VL_CONTA × 1000
@@ -21,7 +21,7 @@ from utils import _date, _float, _int, _sanitize, download_year, get_db, upsert,
 FONTE = "DFP"
 TIPOS = ["BPA", "BPP", "DRE", "DFC_MI", "DVA"]
 SCALE = {"MIL": 1000, "UNIDADE": 1}
-CONFLICT = "cnpj_companhia,fonte,tipo_doc,data_referencia,versao,cd_conta,ordem_exercicio"
+CONFLICT = "dem_contabeis_uniq"   # ver utils._INDEX_COLUMNS — chave inclui o período
 
 # CVM grava ORDEM_EXERC em caixa alta; normaliza para o valor do CHECK constraint
 ORDEM_MAP = {"ÚLTIMO": "Último", "PENÚLTIMO": "Penúltimo"}
@@ -38,14 +38,18 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
       CNPJ_CIA, DT_REFER, VERSAO, ORDEM_EXERC,
       DT_FIM_EXERC, CD_CONTA, DS_CONTA,
       VL_CONTA, ESCALA_MOEDA
-    Nota: DFP não tem DT_INI_EXERC — armazenado como NULL.
+    Nota: BPA/BPP não têm DT_INI_EXERC (posição na data); DRE/DFC/DVA têm.
     """
     df = df[df["CNPJ_CIA"].isin(cnpjs)]
+    # BPA/BPP não têm a coluna DT_INI_EXERC no CSV (balanço é posição, não fluxo) —
+    # garante a coluna antes do dedup/leitura para não estourar KeyError.
+    if "DT_INI_EXERC" not in df.columns:
+        df = df.assign(DT_INI_EXERC=None)
     # CVM publica linhas genuinamente repetidas (mesmo valor) em alguns anos/tipos.
     # Deduplicamos apenas linhas 100% idênticas (chave + VL_CONTA).
     # Se a chave se repetir com VL_CONTA diferente, _upsert_sqlite mantém a última
     # ocorrência silenciosamente — investigar se o relatório mostrar valores inesperados.
-    KEY_COLS = ["CNPJ_CIA", "DT_REFER", "VERSAO", "CD_CONTA", "ORDEM_EXERC"]
+    KEY_COLS = ["CNPJ_CIA", "DT_REFER", "VERSAO", "CD_CONTA", "ORDEM_EXERC", "DT_INI_EXERC"]
     df = df.drop_duplicates(subset=KEY_COLS + ["VL_CONTA"])
     rows = []
     for _, r in df.iterrows():
@@ -61,6 +65,7 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
         versao = versao_raw if versao_raw is not None else 1
 
         ordem_raw = (r.get("ORDEM_EXERC") or "").strip().upper()
+        st_fixa = (r.get("ST_CONTA_FIXA") or "").strip().upper()
 
         rows.append({
             "cnpj_companhia":  r.get("CNPJ_CIA"),
@@ -69,11 +74,12 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
             "data_referencia": _date(r.get("DT_REFER")),
             "versao":          versao,
             "ordem_exercicio": ORDEM_MAP.get(ordem_raw, ordem_raw),
-            "dt_ini_exerc":    None,  # DFP não publica DT_INI_EXERC
+            "dt_ini_exerc":    _date(r.get("DT_INI_EXERC")),
             "dt_fim_exerc":    _date(r.get("DT_FIM_EXERC")),
             "cd_conta":        r.get("CD_CONTA"),
             "ds_conta":        r.get("DS_CONTA"),
             "vl_conta":        vl,
+            "st_conta_fixa":   st_fixa if st_fixa in ("S", "N") else None,
         })
     return rows
 

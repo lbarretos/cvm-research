@@ -57,3 +57,59 @@ def test_upsert_dt_ini_null_conflita_consigo_mesmo():
     _upsert_sqlite(conn, "demonstrativos_contabeis", [r], "dem_contabeis_uniq")
     got = conn.execute("SELECT COUNT(*), MAX(vl_conta) FROM demonstrativos_contabeis").fetchone()
     assert got == (1, 2.0)
+
+
+def _csv_rows_itr_2t24():
+    """As 4 linhas reais de 3.01 da WEG no ITR 2T24 (itr_cia_aberta_DRE_con_2024.csv)."""
+    base = {"CNPJ_CIA": "84.429.695/0001-11", "DT_REFER": "2024-06-30", "VERSAO": "1",
+            "ESCALA_MOEDA": "MIL", "CD_CONTA": "3.01",
+            "DS_CONTA": "Receita de Venda de Bens e/ou Serviços", "ST_CONTA_FIXA": "S"}
+    return pd.DataFrame([
+        {**base, "ORDEM_EXERC": "PENÚLTIMO", "DT_INI_EXERC": "2023-01-01", "DT_FIM_EXERC": "2023-06-30", "VL_CONTA": "15867479.0000000000"},
+        {**base, "ORDEM_EXERC": "PENÚLTIMO", "DT_INI_EXERC": "2023-04-01", "DT_FIM_EXERC": "2023-06-30", "VL_CONTA": "8171322.0000000000"},
+        {**base, "ORDEM_EXERC": "ÚLTIMO",    "DT_INI_EXERC": "2024-01-01", "DT_FIM_EXERC": "2024-06-30", "VL_CONTA": "17307730.0000000000"},
+        {**base, "ORDEM_EXERC": "ÚLTIMO",    "DT_INI_EXERC": "2024-04-01", "DT_FIM_EXERC": "2024-06-30", "VL_CONTA": "9274426.0000000000"},
+    ])
+
+
+def test_itr_process_df_preserva_trimestre_e_acumulado():
+    rows = ingest_itr.process_df(_csv_rows_itr_2t24(), {"84.429.695/0001-11"}, "DRE")
+    assert len(rows) == 4
+    ultimo = sorted((r["dt_ini_exerc"], r["vl_conta"]) for r in rows if r["ordem_exercicio"] == "Último")
+    assert ultimo == [("2024-01-01", 17_307_730_000.0), ("2024-04-01", 9_274_426_000.0)]
+    assert {r["st_conta_fixa"] for r in rows} == {"S"}
+
+
+def test_itr_upsert_ponta_a_ponta_nao_mistura_periodos():
+    conn = _db()
+    rows = ingest_itr.process_df(_csv_rows_itr_2t24(), {"84.429.695/0001-11"}, "DRE")
+    _upsert_sqlite(conn, "demonstrativos_contabeis", rows, ingest_itr.CONFLICT)
+    n = conn.execute("SELECT COUNT(*) FROM demonstrativos_contabeis").fetchone()[0]
+    assert n == 4
+    tri = conn.execute("SELECT receita_liquida FROM vw_dre").fetchone()[0]
+    acu = conn.execute("SELECT receita_liquida FROM vw_dre_acumulada").fetchone()[0]
+    assert (tri, acu) == (9_274_426_000.0, 17_307_730_000.0)
+
+
+def test_dfp_process_df_grava_dt_ini_e_st_conta_fixa():
+    df = pd.DataFrame([{
+        "CNPJ_CIA": "84.429.695/0001-11", "DT_REFER": "2024-12-31", "VERSAO": "1",
+        "ESCALA_MOEDA": "MIL", "ORDEM_EXERC": "ÚLTIMO",
+        "DT_INI_EXERC": "2024-01-01", "DT_FIM_EXERC": "2024-12-31",
+        "CD_CONTA": "3.04.01.02", "DS_CONTA": "Outras Despesas de Vendas",
+        "VL_CONTA": "-2500000.0", "ST_CONTA_FIXA": "N",
+    }])
+    rows = ingest_dfp.process_df(df, {"84.429.695/0001-11"}, "DRE")
+    assert rows[0]["dt_ini_exerc"] == "2024-01-01"
+    assert rows[0]["st_conta_fixa"] == "N"
+
+
+def test_dfp_bpa_sem_dt_ini_fica_none():
+    df = pd.DataFrame([{
+        "CNPJ_CIA": "84.429.695/0001-11", "DT_REFER": "2024-12-31", "VERSAO": "1",
+        "ESCALA_MOEDA": "MIL", "ORDEM_EXERC": "ÚLTIMO",
+        "DT_FIM_EXERC": "2024-12-31", "CD_CONTA": "1", "DS_CONTA": "Ativo Total",
+        "VL_CONTA": "1.0", "ST_CONTA_FIXA": "S",
+    }])
+    rows = ingest_dfp.process_df(df, {"84.429.695/0001-11"}, "BPA")
+    assert rows[0]["dt_ini_exerc"] is None

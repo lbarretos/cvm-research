@@ -95,7 +95,7 @@ def main():
 
     hoje = date.today()
     if args.historico:
-        # Revisão completa: 2021 até ano corrente
+        # Revisão completa: 2010 até ano corrente (padrão de --desde)
         anos = range(args.desde, hoje.year + 1)
         print(f"Modo histórico: processando {args.desde} → {hoje.year}")
     else:

@@ -245,6 +245,11 @@ CREATE INDEX IF NOT EXISTS idx_fre_rem_cnpj ON fre_remuneracao_orgao (cnpj_compa
 
 -- ── 7. demonstrativos_contabeis ───────────────────────────────────────────────
 
+-- Chave natural inclui o período (dt_ini_exerc): no ITR de 2T/3T a CVM publica
+-- cada conta da DRE duas vezes (trimestre isolado e acumulado no ano). Sem
+-- dt_ini_exerc na chave, o upsert guardava uma das duas por acaso.
+-- A UNIQUE é um índice de expressão porque dt_ini_exerc é NULL em BPA/BPP e
+-- NULLs são distintos entre si numa UNIQUE comum (o upsert nunca conflitaria).
 CREATE TABLE IF NOT EXISTS demonstrativos_contabeis (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     cnpj_companhia  TEXT NOT NULL,
@@ -253,19 +258,21 @@ CREATE TABLE IF NOT EXISTS demonstrativos_contabeis (
     data_referencia TEXT NOT NULL,
     versao          INTEGER NOT NULL DEFAULT 1,
     ordem_exercicio TEXT NOT NULL CHECK (ordem_exercicio IN ('Último', 'Penúltimo')),
-    dt_ini_exerc    TEXT,
+    dt_ini_exerc    TEXT,                 -- NULL em BPA/BPP (posição, não fluxo)
     dt_fim_exerc    TEXT,
     cd_conta        TEXT NOT NULL,
     ds_conta        TEXT,
     vl_conta        REAL,
-    created_at      TEXT DEFAULT (datetime('now')),
-    UNIQUE (cnpj_companhia, fonte, tipo_doc, data_referencia, versao, cd_conta, ordem_exercicio)
+    st_conta_fixa   TEXT CHECK (st_conta_fixa IN ('S', 'N')),  -- S = conta padrão CVM, N = criada pela empresa; NULL = linha anterior à migração 2026-09-17
+    created_at      TEXT DEFAULT (datetime('now'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_dem_periodo ON demonstrativos_contabeis
+    (cnpj_companhia, fonte, tipo_doc, data_referencia, versao, cd_conta, ordem_exercicio, COALESCE(dt_ini_exerc, ''));
 
 CREATE INDEX IF NOT EXISTS idx_dem_cnpj_fonte ON demonstrativos_contabeis (cnpj_companhia, fonte, data_referencia DESC);
 CREATE INDEX IF NOT EXISTS idx_dem_tipo_conta ON demonstrativos_contabeis (tipo_doc, cd_conta);
 CREATE INDEX IF NOT EXISTS idx_dem_cnpj_tipo  ON demonstrativos_contabeis (cnpj_companhia, tipo_doc, data_referencia DESC);
-CREATE INDEX IF NOT EXISTS idx_dem_versao     ON demonstrativos_contabeis (cnpj_companhia, fonte, tipo_doc, data_referencia, cd_conta, ordem_exercicio, versao DESC);
 
 -- ── Notas Explicativas (ITR/DFP) ────────────────────────────────────────────
 -- Texto completo extraído do PDF oficial do ITR/DFP (o mesmo documento
@@ -308,23 +315,83 @@ CREATE VIRTUAL TABLE IF NOT EXISTS notas_explicativas_fts USING fts5(
 -- ── Views ─────────────────────────────────────────────────────────────────────
 -- DISTINCT ON (PostgreSQL) replaced by MAX(versao) CTE — semantically equivalent.
 
+-- vw_dre: DRE do período "curto" de cada filing — trimestre isolado no ITR
+-- (dt_ini_exerc mais recente entre as linhas do documento) e exercício no DFP.
+-- Versão resolvida por documento, não por conta.
 CREATE VIEW IF NOT EXISTS vw_dre AS
 WITH versao_max AS (
-    SELECT cnpj_companhia, fonte, data_referencia, cd_conta, MAX(versao) AS versao
+    SELECT cnpj_companhia, fonte, data_referencia, MAX(versao) AS versao
     FROM demonstrativos_contabeis
     WHERE tipo_doc = 'DRE' AND ordem_exercicio = 'Último'
-    GROUP BY cnpj_companhia, fonte, data_referencia, cd_conta
+    GROUP BY cnpj_companhia, fonte, data_referencia
+),
+periodo AS (
+    SELECT d.cnpj_companhia, d.fonte, d.data_referencia, MAX(d.dt_ini_exerc) AS dt_ini_exerc
+    FROM demonstrativos_contabeis d
+    JOIN versao_max v
+      ON  d.cnpj_companhia = v.cnpj_companhia AND d.fonte = v.fonte
+      AND d.data_referencia = v.data_referencia AND d.versao = v.versao
+    WHERE d.tipo_doc = 'DRE' AND d.ordem_exercicio = 'Último'
+    GROUP BY d.cnpj_companhia, d.fonte, d.data_referencia
 ),
 latest AS (
     SELECT d.cnpj_companhia, d.fonte, d.data_referencia,
            d.dt_ini_exerc, d.dt_fim_exerc, d.cd_conta, d.vl_conta
     FROM demonstrativos_contabeis d
     JOIN versao_max v
-      ON  d.cnpj_companhia  = v.cnpj_companhia
-      AND d.fonte           = v.fonte
-      AND d.data_referencia = v.data_referencia
-      AND d.cd_conta        = v.cd_conta
-      AND d.versao          = v.versao
+      ON  d.cnpj_companhia = v.cnpj_companhia AND d.fonte = v.fonte
+      AND d.data_referencia = v.data_referencia AND d.versao = v.versao
+    JOIN periodo p
+      ON  p.cnpj_companhia = d.cnpj_companhia AND p.fonte = d.fonte
+      AND p.data_referencia = d.data_referencia
+      AND COALESCE(p.dt_ini_exerc, '') = COALESCE(d.dt_ini_exerc, '')
+    WHERE d.tipo_doc = 'DRE' AND d.ordem_exercicio = 'Último'
+)
+SELECT
+    cnpj_companhia,
+    fonte,
+    data_referencia,
+    MIN(dt_ini_exerc) AS dt_ini_exerc,
+    MIN(dt_fim_exerc) AS dt_fim_exerc,
+    MAX(CASE WHEN cd_conta = '3.01' THEN vl_conta END) AS receita_liquida,
+    MAX(CASE WHEN cd_conta = '3.02' THEN vl_conta END) AS custo_bens_servicos,
+    MAX(CASE WHEN cd_conta = '3.03' THEN vl_conta END) AS resultado_bruto,
+    MAX(CASE WHEN cd_conta = '3.05' THEN vl_conta END) AS ebit,
+    MAX(CASE WHEN cd_conta = '3.06' THEN vl_conta END) AS resultado_financeiro,
+    MAX(CASE WHEN cd_conta = '3.08' THEN vl_conta END) AS ebt,
+    MAX(CASE WHEN cd_conta = '3.11' THEN vl_conta END) AS lucro_liquido
+FROM latest
+GROUP BY cnpj_companhia, fonte, data_referencia;
+
+-- vw_dre_acumulada: mesma coisa com o período acumulado no ano (dt_ini_exerc
+-- mais antigo). No 1T e no DFP coincide com vw_dre.
+CREATE VIEW IF NOT EXISTS vw_dre_acumulada AS
+WITH versao_max AS (
+    SELECT cnpj_companhia, fonte, data_referencia, MAX(versao) AS versao
+    FROM demonstrativos_contabeis
+    WHERE tipo_doc = 'DRE' AND ordem_exercicio = 'Último'
+    GROUP BY cnpj_companhia, fonte, data_referencia
+),
+periodo AS (
+    SELECT d.cnpj_companhia, d.fonte, d.data_referencia, MIN(d.dt_ini_exerc) AS dt_ini_exerc
+    FROM demonstrativos_contabeis d
+    JOIN versao_max v
+      ON  d.cnpj_companhia = v.cnpj_companhia AND d.fonte = v.fonte
+      AND d.data_referencia = v.data_referencia AND d.versao = v.versao
+    WHERE d.tipo_doc = 'DRE' AND d.ordem_exercicio = 'Último'
+    GROUP BY d.cnpj_companhia, d.fonte, d.data_referencia
+),
+latest AS (
+    SELECT d.cnpj_companhia, d.fonte, d.data_referencia,
+           d.dt_ini_exerc, d.dt_fim_exerc, d.cd_conta, d.vl_conta
+    FROM demonstrativos_contabeis d
+    JOIN versao_max v
+      ON  d.cnpj_companhia = v.cnpj_companhia AND d.fonte = v.fonte
+      AND d.data_referencia = v.data_referencia AND d.versao = v.versao
+    JOIN periodo p
+      ON  p.cnpj_companhia = d.cnpj_companhia AND p.fonte = d.fonte
+      AND p.data_referencia = d.data_referencia
+      AND COALESCE(p.dt_ini_exerc, '') = COALESCE(d.dt_ini_exerc, '')
     WHERE d.tipo_doc = 'DRE' AND d.ordem_exercicio = 'Último'
 )
 SELECT
@@ -345,10 +412,10 @@ GROUP BY cnpj_companhia, fonte, data_referencia;
 
 CREATE VIEW IF NOT EXISTS vw_balanco AS
 WITH versao_max AS (
-    SELECT cnpj_companhia, fonte, tipo_doc, data_referencia, cd_conta, MAX(versao) AS versao
+    SELECT cnpj_companhia, fonte, tipo_doc, data_referencia, MAX(versao) AS versao
     FROM demonstrativos_contabeis
     WHERE tipo_doc IN ('BPA', 'BPP') AND ordem_exercicio = 'Último'
-    GROUP BY cnpj_companhia, fonte, tipo_doc, data_referencia, cd_conta
+    GROUP BY cnpj_companhia, fonte, tipo_doc, data_referencia
 ),
 latest AS (
     SELECT d.cnpj_companhia, d.fonte, d.tipo_doc, d.data_referencia,
@@ -359,7 +426,6 @@ latest AS (
       AND d.fonte           = v.fonte
       AND d.tipo_doc        = v.tipo_doc
       AND d.data_referencia = v.data_referencia
-      AND d.cd_conta        = v.cd_conta
       AND d.versao          = v.versao
     WHERE d.tipo_doc IN ('BPA', 'BPP') AND d.ordem_exercicio = 'Último'
 )

@@ -42,7 +42,7 @@
 
 **Files:** nenhum.
 
-- [ ] **Step 1: Criar o branch a partir de `main` limpo**
+- [x] **Step 1: Criar o branch a partir de `main` limpo**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git status --short && git checkout -b fase-2-camada-1
@@ -58,7 +58,7 @@ Expected: `git status --short` vazio; `Switched to a new branch 'fase-2-camada-1
 - Modify: `scripts/analysis/consistency_utils.py`
 - Test: `tests/test_consistency_utils.py`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Acrescentar ao final da seção `# ── tolerancia / parent_code / total_codes` de `tests/test_consistency_utils.py`:
 
@@ -94,7 +94,7 @@ def test_cnpjs_financeiros():
     assert cu.cnpjs_financeiros(conn) == {"60.746.948/0001-12", "00.000.000/0001-91"}
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_utils.py -q -k "parse_hierarchy or excecoes or financeiros" 2>&1 | tail -5
@@ -102,7 +102,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 4 failed com `AttributeError: module 'consistency_utils' has no attribute 'parse_hierarchy'` (e `EXCECOES_SOMA`, `cnpjs_financeiros`).
 
-- [ ] **Step 3: Implementar em `scripts/analysis/consistency_utils.py`**
+- [x] **Step 3: Implementar em `scripts/analysis/consistency_utils.py`**
 
 Atualizar `__all__`:
 
@@ -161,7 +161,7 @@ def cnpjs_financeiros(conn: sqlite3.Connection) -> set[str]:
     return {r[0] for r in conn.execute("SELECT cnpj FROM companies WHERE setor = ?", (SETOR_FINANCEIRO,))}
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_utils.py -q 2>&1 | tail -3
@@ -169,7 +169,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: todos passam (17 testes: 13 anteriores + 4 novos).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/consistency_utils.py tests/test_consistency_utils.py && git commit -q -m "feat(analysis): parse_hierarchy, EXCECOES_SOMA, FORMULAS_NIVEL2 e cnpjs_financeiros (Camada 1)" && git log --oneline -1
@@ -183,7 +183,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis
 - Create: `scripts/analysis/check_hierarchy_sums.py`
 - Test: `tests/test_consistency_hierarchy.py`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Criar `tests/test_consistency_hierarchy.py`:
 
@@ -425,7 +425,7 @@ def test_main_exige_cnpj_ou_full(monkeypatch):
         chs.main([])
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_hierarchy.py -q 2>&1 | tail -3
@@ -433,7 +433,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: erro de coleta `ModuleNotFoundError: No module named 'check_hierarchy_sums'`.
 
-- [ ] **Step 3: Criar `scripts/analysis/check_hierarchy_sums.py` (lógica pura + CLI)**
+- [x] **Step 3: Criar `scripts/analysis/check_hierarchy_sums.py` (lógica pura + CLI)**
 
 ```python
 """
@@ -648,7 +648,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_hierarchy.py -q 2>&1 | tail -3
@@ -656,7 +656,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 15 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/check_hierarchy_sums.py tests/test_consistency_hierarchy.py && git commit -q -m "feat(analysis): Camada 1 — check_hierarchy_sums (soma hierárquica, exceções 6.05/3.99, fórmulas de nível 2)" && git log --oneline -1
@@ -670,7 +670,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis
 - Modify: `scripts/analysis/run_all.py`
 - Modify: `scripts/update_weekly.sh`
 
-- [ ] **Step 1: Registrar a camada 1 em `run_all.py`**
+- [x] **Step 1: Registrar a camada 1 em `run_all.py`**
 
 Substituir o import e o registro:
 
@@ -686,7 +686,7 @@ LAYERS = {
 
 E atualizar a docstring: trocar `Camadas disponíveis crescem a cada fase do plano (1 = soma hierárquica, 3 = granularidade, 5 = trilha temporal, 6 = desacúmulo). update_weekly.sh chama `run_all.py --layer 2 --full`` por `Camadas disponíveis crescem a cada fase do plano (3 = granularidade, 5 = trilha temporal, 6 = desacúmulo). update_weekly.sh chama `run_all.py --layer 1 --full` e `--layer 2 --full``, e acrescentar o exemplo `python run_all.py --layer 1,2 --cnpj 84.429.695/0001-11`.
 
-- [ ] **Step 2: Passo `consistency_l1` no `update_weekly.sh`**
+- [x] **Step 2: Passo `consistency_l1` no `update_weekly.sh`**
 
 Trocar o bloco de consistência por:
 
@@ -705,7 +705,7 @@ fi
 
 E no cabeçalho do arquivo trocar `consistência dos demonstrativos (Camada 2)` por `consistência dos demonstrativos (Camadas 1 e 2)`.
 
-- [ ] **Step 3: Conferir que o orquestrador aceita as duas camadas e que o shell é válido**
+- [x] **Step 3: Conferir que o orquestrador aceita as duas camadas e que o shell é válido**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.venv/bin/python run_all.py --help | head -12 && bash -n ../update_weekly.sh && echo shell-ok && cd ../.. && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -2
@@ -713,7 +713,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.
 
 Expected: `--help` lista `disponíveis: 1,2`; `shell-ok`; suíte inteira verde.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/run_all.py scripts/update_weekly.sh && git commit -q -m "feat(analysis): run_all --layer 1; Camada 1 no update_weekly.sh antes da Camada 2" && git log --oneline -1
@@ -725,7 +725,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis
 
 **Files:** nenhum (só execução).
 
-- [ ] **Step 1: Rodar a Camada 1 só para a WEG**
+- [x] **Step 1: Rodar a Camada 1 só para a WEG**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.venv/bin/python run_all.py --layer 1 --cnpj 84.429.695/0001-11
@@ -733,7 +733,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.
 
 Expected: termina em poucos segundos; resumo por tipo_doc com `divergencia=0` em BPA/BPP; `nao_detalhado` pequeno (≤ dezenas).
 
-- [ ] **Step 2: Verificar a forma das flags e a idempotência**
+- [x] **Step 2: Verificar a forma das flags e a idempotência**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python - <<'EOF'
@@ -757,7 +757,7 @@ Expected: `fonte_cmp sempre NULL: (0,)`; após a segunda execução, 2 runs em `
 **Files:**
 - Modify: `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md` (seção "Verificação da Fase 2")
 
-- [ ] **Step 1: Rodar a base inteira**
+- [x] **Step 1: Rodar a base inteira**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && time ../../.venv/bin/python run_all.py --layer 1 --full 2>&1 | tail -12
@@ -765,7 +765,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && time ..
 
 Expected: ~145 empresas; resumo por tipo_doc; `divergencia` em BPA/BPP próximo de 0 na base inteira.
 
-- [ ] **Step 2: Distribuição geral e os números do plano-mãe (DFP 2023 e 2024, `Último`)**
+- [x] **Step 2: Distribuição geral e os números do plano-mãe (DFP 2023 e 2024, `Último`)**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python - <<'EOF'
@@ -785,11 +785,11 @@ EOF
 
 Expected (plano-mãe): `nao_detalhado` ≈ 424 em BPA e ≈ 423 em BPP; `divergencia`: BPA 0, BPP 0, DRE ≈ 8, DVA ≈ 3. **Qualquer contagem de `divergencia` em BPA/BPP acima de ~10 indica bug no `parse_hierarchy` ou na resolução de versão** — parar e investigar antes de seguir.
 
-- [ ] **Step 3: Registrar os números medidos no plano-mãe**
+- [x] **Step 3: Registrar os números medidos no plano-mãe**
 
 Acrescentar à tabela/seção "Verificação da Fase 2" do plano-mãe uma linha `**Medido em 2026-09-18, base pós-Fase 1, run `<run_id>`**` com: tempo, `total_checked`, `total_flagged`, contagens por classe em DFP 2023+2024 `Último` e o geral, e as `divergencia` em BPA/BPP encontradas (se houver, com CNPJ e conta). Acrescentar também, no topo da seção Fase 2, o ponteiro `> **Plano de tarefas (executado):** `docs/superpowers/plans/2026-09-18-fase2-camada1-hierarchy-sums.md`.`
 
-- [ ] **Step 4: Commit do registro**
+- [x] **Step 4: Commit do registro**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md && git commit -q -m "docs(plano): numeros medidos da Camada 1 na base; ponteiro para o plano da Fase 2" && git log --oneline -1
@@ -804,7 +804,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add docs/superpowers
 - Modify: `README.md` (árvore e tabela de camadas)
 - Modify: `scripts/mcp/cvm_mcp.py` (docstring de `query`)
 
-- [ ] **Step 1: `CLAUDE.md` — subseção da tabela**
+- [x] **Step 1: `CLAUDE.md` — subseção da tabela**
 
 Na subseção `### consistency_flags`, trocar a frase `Gerada por `scripts/analysis/`. Roda no job semanal (`update_weekly.sh`) logo após `ingest_dfp`/`ingest_itr`, na base inteira; também pode ser rodada à mão por empresa.` por `Gerada por `scripts/analysis/`. As Camadas 1 e 2 rodam no job semanal (`update_weekly.sh`) logo após `ingest_dfp`/`ingest_itr`, na base inteira; também podem ser rodadas à mão por empresa.`
 
@@ -825,7 +825,7 @@ período), cada conta-pai presente é comparada à soma dos filhos diretos (tole
 Para rodar: `cd scripts/analysis && python run_all.py --layer 1 --cnpj <CNPJ>` (`--layer 1,2` roda as duas).
 ```
 
-- [ ] **Step 2: `CLAUDE.md` — query padrão**
+- [x] **Step 2: `CLAUDE.md` — query padrão**
 
 Logo depois da query "Reapresentações e reclassificações de uma empresa (Camada 2)" (e do parágrafo que a segue), inserir:
 
@@ -845,7 +845,7 @@ Ausência de flags para um documento significa que todas as somas fecharam. `nao
 (a empresa publica só o total da conta) e não indica problema no valor do pai.
 ```
 
-- [ ] **Step 3: `CLAUDE.md` — item no "Comportamento esperado ao pesquisar"**
+- [x] **Step 3: `CLAUDE.md` — item no "Comportamento esperado ao pesquisar"**
 
 Depois do item 7, inserir (renumerando o antigo 8 para 9):
 
@@ -856,7 +856,7 @@ Depois do item 7, inserir (renumerando o antigo 8 para 9):
    está inconsistente na própria fonte; informe ao usuário e mostre pai e soma lado a lado.
 ```
 
-- [ ] **Step 4: `README.md` — árvore e tabela**
+- [x] **Step 4: `README.md` — árvore e tabela**
 
 Na árvore, logo depois da linha `check_cross_period.py`, acrescentar:
 
@@ -870,11 +870,11 @@ Na seção "Análise de consistência dos demonstrativos": trocar `A Camada 2 ro
 | 1 | `check_hierarchy_sums.py` | Dentro de cada documento, pai = Σ filhos diretos e fórmulas de nível 2 (DRE/DFC): `nao_detalhado` (pai sem abertura), `pai_vazio`, `divergencia`, `divergencia_formula`. Exceções: `6.05` = saldo final − inicial, `3.99` ignorada. |
 ```
 
-- [ ] **Step 5: `scripts/mcp/cvm_mcp.py` — docstring de `query`**
+- [x] **Step 5: `scripts/mcp/cvm_mcp.py` — docstring de `query`**
 
 Na linha que descreve `consistency_flags`, acrescentar a Camada 1: `consistency_flags: achados de consistência (layer=1 hierarchy_sum: nao_detalhado/pai_vazio/divergencia/divergencia_formula dentro de um documento; layer=2 cross_period: ...)`.
 
-- [ ] **Step 6: Conferir que o MCP ainda sobe e a suíte está verde**
+- [x] **Step 6: Conferir que o MCP ainda sobe e a suíte está verde**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -c "import ast,sys; ast.parse(open('scripts/mcp/cvm_mcp.py').read()); print('mcp ok')" && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -2
@@ -882,7 +882,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -c "imp
 
 Expected: `mcp ok`; suíte verde.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add CLAUDE.md README.md scripts/mcp/cvm_mcp.py && git commit -q -m "docs: Camada 1 (hierarchy_sum) no CLAUDE.md, README e docstring do MCP" && git log --oneline -1

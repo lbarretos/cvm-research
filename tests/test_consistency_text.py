@@ -263,3 +263,23 @@ def test_compare_filings_devolve_o_mapa_anterior_para_atual():
     rows, estaveis, mapa = cts.compare_filings(anterior, atual)
     assert mapa == {"6.01": "6.01", "6.01.01": "6.01.07"} and estaveis == 1
     assert [r["classificacao"] for r in rows] == ["renumerado"]
+
+
+def test_match_filings_nao_confia_cegamente_no_codigo_fixo_da_cvm():
+    """Itaú, DRE 2017: a CVM re-letrou o plano dos bancos e 3.01.02 deixou de ser
+    'Receita de Dividendos' para virar o resultado de câmbio. Casar contas 'S' pelo
+    código, como a Camada 5 faz, subtrairia uma linha da outra na Camada 6."""
+    anterior = {"3.01": ("Receitas", "S"), "3.01.02": ("Receita de Dividendos", "S"),
+                "3.01.03": ("Resultado de Operações de Câmbio", "S")}
+    atual = {"3.01": ("Receitas", "S"), "3.01.02": ("Resultado de Operações de Câmbio", "S"),
+             "3.01.03": ("Ganho (Perda) Líquido com Ativos Financeiros", "S")}
+    par = cts.match_filings(anterior, atual)
+    assert par["3.01"] == ("3.01", "estavel", None)
+    assert par["3.01.02"] == ("3.01.03", "renumerado", 1.0)      # o câmbio veio do 3.01.03
+    assert "3.01.03" not in par                                   # 'Ganho (Perda)' é linha nova
+
+    # A Camada 5 mantém a regra documentada: código fixo igual é estável mesmo com outro nome.
+    _rows, estaveis, mapa = cts.compare_filings(anterior, atual)
+    assert mapa["3.01.02"] == "3.01.02" and estaveis == 3
+    # E match_filings devolve a mesma coisa quando se pede a regra da Camada 5.
+    assert cts.match_filings(anterior, atual, codigo_fixo_confiavel=True)["3.01.02"] == ("3.01.02", "estavel", None)

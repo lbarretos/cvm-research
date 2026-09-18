@@ -45,7 +45,7 @@ Pais de A sem correspondente em B → todos os filhos `removida`; pais de B sem 
 
 ### Task 0: Branch de trabalho
 
-- [ ] **Step 1: Criar o branch a partir de `main` limpo**
+- [x] **Step 1: Criar o branch a partir de `main` limpo**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git status --short && git checkout -b fase-4-camada-5
@@ -57,7 +57,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git status --short && gi
 
 **Files:** `schema.sql`, `scripts/analysis/consistency_utils.py`, `tests/test_consistency_text.py` (criar), `tests/test_consistency_utils.py`
 
-- [ ] **Step 1: Testes que falham**
+- [x] **Step 1: Testes que falham**
 
 Em `tests/test_consistency_utils.py`, logo antes de `# ── latest_rows`:
 
@@ -114,7 +114,7 @@ def test_schema_timeline_unique_inclui_classificacao():
         conn.execute(sql, base + ("inventada",))   # CHECK
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_utils.py tests/test_consistency_text.py -q -k "similarity or schema_timeline" 2>&1 | tail -3
@@ -122,7 +122,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 2 failed (`AttributeError: text_similarity`; `no such table: cd_conta_ds_timeline`).
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `schema.sql`, logo depois de `CREATE INDEX IF NOT EXISTS idx_cflags_run ...;`:
 
@@ -175,7 +175,7 @@ def text_similarity(a, b) -> float:
     return max(direto, ordenado)
 ```
 
-- [ ] **Step 4: Rodar e ver passar; aplicar o schema no banco real (idempotente)**
+- [x] **Step 4: Rodar e ver passar; aplicar o schema no banco real (idempotente)**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -1 && sqlite3 cvm_research.db < schema.sql && sqlite3 cvm_research.db "SELECT name FROM sqlite_master WHERE name LIKE '%timeline%'"
@@ -183,7 +183,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 135 passed; `cd_conta_ds_timeline`, `idx_timeline_chave`, `idx_timeline_class`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add schema.sql scripts/analysis/consistency_utils.py tests/test_consistency_utils.py tests/test_consistency_text.py && git commit -q -m "feat(analysis): cd_conta_ds_timeline no schema; text_similarity com token-sort (Fase 4)" && git log --oneline -1
@@ -195,7 +195,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add schema.sql scrip
 
 **Files:** `scripts/analysis/check_text_stability.py` (criar), `tests/test_consistency_text.py`
 
-- [ ] **Step 1: Testes que falham** — acrescentar a `tests/test_consistency_text.py`:
+- [x] **Step 1: Testes que falham** — acrescentar a `tests/test_consistency_text.py`:
 
 ```python
 import check_text_stability as cts
@@ -383,9 +383,9 @@ def test_main_full_e_exigencia_de_cnpj(monkeypatch):
         cts.main([])
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**: `pytest tests/test_consistency_text.py -q` → `ModuleNotFoundError: check_text_stability`.
+- [x] **Step 2: Rodar e ver falhar**: `pytest tests/test_consistency_text.py -q` → `ModuleNotFoundError: check_text_stability`.
 
-- [ ] **Step 3: Criar `scripts/analysis/check_text_stability.py`**
+- [x] **Step 3: Criar `scripts/analysis/check_text_stability.py`**
 
 ```python
 """
@@ -688,9 +688,9 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Rodar e ver passar**: `pytest tests/test_consistency_text.py -q` → 14 passed.
+- [x] **Step 4: Rodar e ver passar**: `pytest tests/test_consistency_text.py -q` → 14 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/check_text_stability.py tests/test_consistency_text.py && git commit -q -m "feat(analysis): Camada 5 — check_text_stability (trilha temporal por pai + nome, similaridade com token-sort)" && git log --oneline -1
@@ -700,30 +700,30 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis
 
 ### Task 3: `run_all.py` + `update_weekly.sh`
 
-- [ ] **Step 1:** `run_all.py`: `import check_text_stability`; `5: check_text_stability.main` no `LAYERS`; docstring `(5 = trilha temporal, 6 = desacúmulo)` → `(6 = desacúmulo; a Camada 4, similaridade, está dentro da 5)`; `para N = 1, 2, 3` → `para N = 1, 2, 3, 5`.
-- [ ] **Step 2:** `update_weekly.sh`: `run_step "consistency_l5" ../analysis/run_all.py --layer 5 --full` depois de `consistency_l3`; comentário `e Camada 3 (linhas sem par entre filings)` → `, Camada 3 (linhas sem par entre filings) e Camada 5 (trilha temporal de nomes/códigos)`; cabeçalho `(Camadas 1 a 3)` → `(Camadas 1 a 5)`.
-- [ ] **Step 3:** conferir `--help` (`disponíveis: 1,2,3,5`), `bash -n`, suíte (149 passed); commit `feat(analysis): run_all --layer 5; Camada 5 no update_weekly.sh`.
+- [x] **Step 1:** `run_all.py`: `import check_text_stability`; `5: check_text_stability.main` no `LAYERS`; docstring `(5 = trilha temporal, 6 = desacúmulo)` → `(6 = desacúmulo; a Camada 4, similaridade, está dentro da 5)`; `para N = 1, 2, 3` → `para N = 1, 2, 3, 5`.
+- [x] **Step 2:** `update_weekly.sh`: `run_step "consistency_l5" ../analysis/run_all.py --layer 5 --full` depois de `consistency_l3`; comentário `e Camada 3 (linhas sem par entre filings)` → `, Camada 3 (linhas sem par entre filings) e Camada 5 (trilha temporal de nomes/códigos)`; cabeçalho `(Camadas 1 a 3)` → `(Camadas 1 a 5)`.
+- [x] **Step 3:** conferir `--help` (`disponíveis: 1,2,3,5`), `bash -n`, suíte (149 passed); commit `feat(analysis): run_all --layer 5; Camada 5 no update_weekly.sh`.
 
 ---
 
 ### Task 4: Fumaça na WEG
 
-- [ ] **Step 1:** rodar `run_all.py --layer 5 --cnpj 84.429.695/0001-11` duas vezes; conferir: contagens por classe plausíveis, `SELECT COUNT(*), COUNT(DISTINCT run_id)` na timeline da WEG = 1 run; flags de layer 1–3 intactas; amostra de `renumerado` da DFC 6.01.02 entre ITR 3T22 e 3T23 (o caso de cascata da Fase 3) mostrando `cd_conta_anterior` deslocado.
+- [x] **Step 1:** rodar `run_all.py --layer 5 --cnpj 84.429.695/0001-11` duas vezes; conferir: contagens por classe plausíveis, `SELECT COUNT(*), COUNT(DISTINCT run_id)` na timeline da WEG = 1 run; flags de layer 1–3 intactas; amostra de `renumerado` da DFC 6.01.02 entre ITR 3T22 e 3T23 (o caso de cascata da Fase 3) mostrando `cd_conta_anterior` deslocado.
 
 ---
 
 ### Task 5: Base inteira, revisão dos ambíguos e decisão dos cortes
 
-- [ ] **Step 1:** `run_all.py --layer 5 --full` (medir tempo); consultas: total por classe; DFC_MI/DFP por classe (esperado: renumerado ≈ 3,7 mil, reformulacao ≈ 3,7 mil, ambiguo ≈ 2,3 mil, removida ≈ 3 mil, nova ≈ 5,6 mil — antes do token-sort); histograma de `similarity_score` dos ambíguos em faixas de 0,05.
-- [ ] **Step 2:** amostrar 50 `ambiguo` estratificados por faixa de score (0,45–0,55, 0,55–0,65, 0,65–0,75) e julgar à mão se são a mesma linha. Decidir os cortes: se a faixa 0,45–0,60 for majoritariamente errada e 0,60–0,75 majoritariamente certa, avaliar `sim_baixo = 0,60`; registrar a decisão e a amostra no plano-mãe. Se os cortes mudarem, alterar `SIM_BAIXO`/`SIM_ALTO`, rodar a suíte, rerodar `--full` e registrar os números finais.
-- [ ] **Step 3:** pergunta-alvo via SQL: "quantas linhas da DFC da empresa X foram renumeradas, reformuladas ou removidas nos últimos 5 anos" (WEG) — guardar a query para o CLAUDE.md.
-- [ ] **Step 4:** ponteiro + números + decisão no plano-mãe; commit `docs(plano): numeros medidos da Camada 5 e decisao dos limiares; ponteiro para o plano da Fase 4`.
+- [x] **Step 1:** `run_all.py --layer 5 --full` (medir tempo); consultas: total por classe; DFC_MI/DFP por classe (esperado: renumerado ≈ 3,7 mil, reformulacao ≈ 3,7 mil, ambiguo ≈ 2,3 mil, removida ≈ 3 mil, nova ≈ 5,6 mil — antes do token-sort); histograma de `similarity_score` dos ambíguos em faixas de 0,05.
+- [x] **Step 2:** amostrar 50 `ambiguo` estratificados por faixa de score (0,45–0,55, 0,55–0,65, 0,65–0,75) e julgar à mão se são a mesma linha. Decidir os cortes: se a faixa 0,45–0,60 for majoritariamente errada e 0,60–0,75 majoritariamente certa, avaliar `sim_baixo = 0,60`; registrar a decisão e a amostra no plano-mãe. Se os cortes mudarem, alterar `SIM_BAIXO`/`SIM_ALTO`, rodar a suíte, rerodar `--full` e registrar os números finais.
+- [x] **Step 3:** pergunta-alvo via SQL: "quantas linhas da DFC da empresa X foram renumeradas, reformuladas ou removidas nos últimos 5 anos" (WEG) — guardar a query para o CLAUDE.md.
+- [x] **Step 4:** ponteiro + números + decisão no plano-mãe; commit `docs(plano): numeros medidos da Camada 5 e decisao dos limiares; ponteiro para o plano da Fase 4`.
 
 ---
 
 ### Task 6: Documentação
 
-- [ ] **Step 1: `CLAUDE.md`** — nova subseção depois de `consistency_flags` (antes de `---`):
+- [x] **Step 1: `CLAUDE.md`** — nova subseção depois de `consistency_flags` (antes de `---`):
 
 ```markdown
 ### `cd_conta_ds_timeline` — trilha temporal de cada linha (pai + nome) entre filings (Camada 5)
@@ -769,9 +769,9 @@ Item 11 no "Comportamento esperado ao pesquisar": `**Série histórica de uma co
 
 Em `## Defasagem dos dados`: `consistência (Camada 2)` → `consistência (Camadas 1, 2, 3 e 5)`.
 
-- [ ] **Step 2: `README.md`** — árvore (`check_text_stability.py  # Camada 5 (+4): trilha temporal de nomes/códigos por pai`), `As Camadas 1, 2 e 3 rodam` → `As Camadas 1, 2, 3 e 5 rodam`, exemplo `--layer 1,2,3` → `--layer 1,2,3,5`, linha na tabela: `| 5 (+4) | `check_text_stability.py` | Trilha temporal de cada linha (pai + nome) entre filings consecutivos em `cd_conta_ds_timeline`: `renumerado`, `reformulacao`/`ambiguo` (similaridade textual), `nova`, `removida`. |`.
-- [ ] **Step 3: `scripts/mcp/cvm_mcp.py`** — lista de tabelas: `consistency_runs, consistency_flags, cd_conta_ds_timeline.`; e depois da descrição de layer=3: `layer=5 text_stability: ambiguo (fila de revisão da similaridade). cd_conta_ds_timeline: trilha de cada linha (pai + nome) entre filings — renumerado/reformulacao/ambiguo/nova/removida com cd_conta_anterior.`
-- [ ] **Step 4:** `ast.parse` do MCP, suíte, commit `docs: Camada 5 (cd_conta_ds_timeline) no CLAUDE.md, README e docstring do MCP`.
+- [x] **Step 2: `README.md`** — árvore (`check_text_stability.py  # Camada 5 (+4): trilha temporal de nomes/códigos por pai`), `As Camadas 1, 2 e 3 rodam` → `As Camadas 1, 2, 3 e 5 rodam`, exemplo `--layer 1,2,3` → `--layer 1,2,3,5`, linha na tabela: `| 5 (+4) | `check_text_stability.py` | Trilha temporal de cada linha (pai + nome) entre filings consecutivos em `cd_conta_ds_timeline`: `renumerado`, `reformulacao`/`ambiguo` (similaridade textual), `nova`, `removida`. |`.
+- [x] **Step 3: `scripts/mcp/cvm_mcp.py`** — lista de tabelas: `consistency_runs, consistency_flags, cd_conta_ds_timeline.`; e depois da descrição de layer=3: `layer=5 text_stability: ambiguo (fila de revisão da similaridade). cd_conta_ds_timeline: trilha de cada linha (pai + nome) entre filings — renumerado/reformulacao/ambiguo/nova/removida com cd_conta_anterior.`
+- [x] **Step 4:** `ast.parse` do MCP, suíte, commit `docs: Camada 5 (cd_conta_ds_timeline) no CLAUDE.md, README e docstring do MCP`.
 
 ---
 

@@ -40,19 +40,21 @@ echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
 ```
 
-Carga inicial (30–60 min, baixa ~15 GB de ZIPs da CVM):
+Carga inicial, um comando só:
 
 ```bash
-cd scripts/ingest && source ../../.venv/bin/activate
-python ingest_companies.py
-python ingest_ipe.py --desde 2015
-python ingest_vlmo.py --desde 2018
-python ingest_recompra.py
-python ingest_fre.py --desde 2010
-python ingest_dfp.py --historico --desde 2010
-python ingest_itr.py --desde 2011
-python extract_pdf.py            # texto dos PDFs (opcional, demorado; pode rodar em lotes com --limite)
+bash bootstrap.sh
 ```
+
+Baixa os ZIPs da CVM e popula os dados brutos (30–60 min), roda as cinco camadas de
+consistência (~8 min) e extrai o texto dos PDFs em laço (12–24 h). É retomável: pode
+interromper com Ctrl-C e rodar de novo. `--sem-pdf` pula a parte longa, `--so-pdf` retoma só
+ela, `--so-analise` regenera só o tratamento. Menos histórico, mais rápido:
+`IPE_DESDE=2020 DFP_DESDE=2018 ITR_DESDE=2018 bash bootstrap.sh`.
+
+O bloco de tratamento não é opcional: sem ele `demonstrativos_trimestrais`,
+`consistency_flags` e `cd_conta_ds_timeline` ficam vazias, e as queries trimestrais e de
+reapresentação do [CLAUDE.md](CLAUDE.md) não respondem nada.
 
 Verifique com `claude mcp list` (deve mostrar `cvm-research: ✓ Connected`) e pergunte ao Claude *"Quantas linhas tem a tabela ipe_docs?"*.
 
@@ -121,6 +123,7 @@ cvm-research/
 ├── watchlist.csv                   # 145 empresas com CNPJ, ticker e código CVM
 ├── schema.sql                      # schema SQLite completo (tabelas + views + FTS5)
 ├── setup.sh                        # cria cvm_research.db a partir de schema.sql
+├── bootstrap.sh                    # carga inicial completa: brutos + consistência + PDFs (retomável)
 ├── requirements.txt                # dependências Python (inclui mcp)
 ├── .env.example                    # template do .env (DATABASE_URL)
 ├── scripts/

@@ -34,19 +34,29 @@ echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 # MCP no Claude Code (caminhos absolutos, gravados no ~/.claude.json)
 claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
 
-# Popular o banco (30–60 min — baixa ~15 GB de ZIPs da CVM)
-cd scripts/ingest && source ../../.venv/bin/activate
-python ingest_companies.py
-python ingest_ipe.py --desde 2015
-python ingest_vlmo.py --desde 2018
-python ingest_recompra.py
-python ingest_fre.py --desde 2010
-python ingest_dfp.py --historico --desde 2010
-python ingest_itr.py --desde 2011
-
-# Texto dos PDFs (opcional; horas para o histórico inteiro — rode em lotes)
-python extract_pdf.py --limite 2000
+# Popular o banco: brutos + camadas de consistência + texto dos PDFs
+bash bootstrap.sh
 ```
+
+`bootstrap.sh` é retomável (Ctrl-C e rodar de novo continua de onde parou) e faz três blocos:
+
+| Bloco | O que roda | Tempo de referência |
+|---|---|---|
+| Dados brutos | os sete ingestores com o histórico completo | 30–60 min, ~15 GB de ZIPs |
+| Tratamento | `run_all.py --layer 1,2,3,5,6 --full` | ~8 min |
+| Texto dos PDFs | `extract_pdf.py` em laço até não sobrar pendente, depois reconstrói o índice FTS | 12–24 h, ~170 mil documentos |
+
+O bloco de tratamento é o que preenche `demonstrativos_trimestrais`, `consistency_flags` e
+`cd_conta_ds_timeline`. **Sem ele o banco responde os dados brutos e nada mais**: as queries
+trimestrais e de reapresentação do [CLAUDE.md](CLAUDE.md) voltam vazias.
+
+Para adiar a parte longa e já começar a pesquisar, `bash bootstrap.sh --sem-pdf` e depois
+`bash bootstrap.sh --so-pdf` quando quiser. Menos histórico, mais rápido:
+`IPE_DESDE=2020 DFP_DESDE=2018 ITR_DESDE=2018 bash bootstrap.sh`.
+
+Confira o resultado com `.venv/bin/python -m pytest tests/ -q`: a suíte inclui testes que leem
+o banco e recalculam o tratamento a partir do dado bruto (pulam sozinhos se o banco não existir
+ou se as camadas ainda não rodaram).
 
 ---
 

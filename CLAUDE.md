@@ -553,8 +553,14 @@ SELECT COUNT(*) AS total_docs FROM ipe_docs;
 
 ### Atualização dos dados
 
-Automática: `bash scripts/install_weekly_launchd.sh` (segunda 9h; `--status` mostra o último log).
-Manual, tudo de uma vez: `bash scripts/update_weekly.sh`. Passo a passo:
+**Carga inicial (banco vazio):** `bash bootstrap.sh` — brutos com histórico completo, as cinco
+camadas de consistência e o texto dos PDFs em laço. Retomável. É o único caminho que deixa
+`demonstrativos_trimestrais`, `consistency_flags` e `cd_conta_ds_timeline` preenchidas; os
+ingestores sozinhos só trazem o dado bruto.
+
+**Manutenção:** automática com `bash scripts/install_weekly_launchd.sh` (segunda 9h; `--status`
+mostra o último log), ou `bash scripts/update_weekly.sh` à mão. O job semanal atualiza só o ano
+corrente e o anterior; para refazer o histórico use o `bootstrap.sh`. Passo a passo:
 
 ```bash
 cd scripts/ingest
@@ -578,6 +584,10 @@ python ingest_vlmo.py  --desde 2018   # VLMO estruturado disponível desde 2018
 # depreciação por classe de ativo), como em:
 #   python ingest_notas_explicativas.py --cnpj <CNPJ> --ano <ANO> --fonte ITR
 python ingest_fre.py   --desde 2010   # FRE desde 2010
+
+# Tratamento — obrigatório depois de qualquer carga histórica. Sem isto,
+# demonstrativos_trimestrais, consistency_flags e cd_conta_ds_timeline ficam vazias.
+cd ../analysis && python run_all.py --layer 1,2,3,5,6 --full   # ~8 min nas 145 empresas
 ```
 
 O `.env` na raiz do projeto deve ter:

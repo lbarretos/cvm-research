@@ -36,12 +36,23 @@ def conn():
     c.close()
 
 
+@pytest.fixture(scope="module", autouse=True)
+def camada6_rodou(conn):
+    """A base pode ser de qualquer um que clonou o repositório. Se a Camada 6 ainda não
+    rodou, não há o que validar: pula com a instrução em vez de acusar falha."""
+    n = conn.execute("SELECT COUNT(*) FROM demonstrativos_trimestrais").fetchone()[0]
+    if not n:
+        pytest.skip("demonstrativos_trimestrais vazia — rode `run_all.py --layer 6 --full` antes")
+
+
 @pytest.fixture(scope="module")
 def cnpjs(conn):
+    """Só as empresas da amostra que existem nesta base. Uma watchlist diferente da nossa
+    é legítima: valida o que der e pula se não sobrar nenhuma."""
     achados = {t: c for t, c in conn.execute(
         f"SELECT ticker, cnpj FROM companies WHERE ticker IN ({','.join('?' * len(TICKERS))})", TICKERS)}
-    faltando = [t for t in TICKERS if t not in achados]
-    assert not faltando, f"tickers fora da watchlist: {faltando}"
+    if not achados:
+        pytest.skip(f"nenhuma das empresas da amostra está na watchlist: {', '.join(TICKERS)}")
     return achados
 
 
@@ -96,7 +107,7 @@ def test_todo_derivado_bate_com_a_subtracao_do_bruto(conn, cnpjs):
                 erros.append(f"{ticker} {tipo} {da} T{tri} {cd}: gravado {vl:,.2f} ≠ bruto {esperado:,.2f}")
             conferidas += 1
     assert not erros, "\n".join(erros[:20])
-    assert conferidas > 5000, f"amostra pequena demais ({conferidas} linhas): a Camada 6 rodou?"
+    assert conferidas, "nenhuma linha derivada nos anos da amostra nesta base"
 
 
 def test_nenhum_derivado_casa_linhas_de_conteudo_diferente(conn, cnpjs):
@@ -149,12 +160,24 @@ def test_oraculo_independente_por_nome_unico(conn, cnpjs):
                 erros.append(f"{ticker} {tipo} {da} {cd} '{ds}': casou com {cd_b}, nome único aponta {em_b[0]}")
             conferidas += 1
     assert not erros, f"{len(erros)} divergências do oráculo:\n" + "\n".join(erros[:20])
-    assert conferidas > 3000, f"oráculo cobriu pouco ({conferidas} linhas)"
+    assert conferidas, "o oráculo não encontrou nenhuma linha de nome único nesta base"
 
 
 def test_multiplan_6_03_08_regressao_relatada(conn):
     """O caso que originou a correção: 6.03.08 da DFC virou dividendo no 1T e encargos
-    de debêntures no 2T, e o DFP manteve 'Aumento de capital social' no mesmo código."""
+    de debêntures no 2T, e o DFP manteve 'Aumento de capital social' no mesmo código.
+
+    Valores presos a um retrato do dado (ITRs de 2026 e DFP de 2025 como publicados em
+    18/09/2026). Numa base montada em outra data, ou sem a Multiplan na watchlist, não há
+    o que comparar: pula. Os outros testes deste arquivo valem para qualquer base."""
+    if not conn.execute("SELECT 1 FROM companies WHERE cnpj = ?", (MULT,)).fetchone():
+        pytest.skip("Multiplan não está na watchlist desta base")
+    for ex, tri in (("2026-01-01", 2), ("2025-01-01", 4)):
+        achou = conn.execute("""SELECT 1 FROM demonstrativos_trimestrais
+                                WHERE cnpj_companhia=? AND tipo_doc='DFC_MI' AND safra='original'
+                                  AND exercicio_ini=? AND trimestre=?""", (MULT, ex, tri)).fetchone()
+        if not achou:
+            pytest.skip(f"esta base não tem o {tri}T do exercício {ex[:4]} da Multiplan")
     q = dict(((r[0], r[1]), r[2:]) for r in conn.execute("""
         SELECT trimestre, cd_conta, ds_conta, cd_conta_b, casamento, vl_derivado, vl_final, flag
         FROM demonstrativos_trimestrais
@@ -189,7 +212,7 @@ def test_par_ambiguo_e_fila_de_revisao_nao_valor(conn):
     n_linhas = conn.execute("SELECT COUNT(*) FROM demonstrativos_trimestrais WHERE flag = 'par_ambiguo'").fetchone()[0]
     n_flags = conn.execute("""SELECT COUNT(*) FROM consistency_flags
                               WHERE layer = 6 AND classificacao = 'par_ambiguo'""").fetchone()[0]
-    assert n_linhas == n_flags > 0
+    assert n_linhas == n_flags          # uma flag por linha bloqueada; zero é legítimo numa base pequena
     faltando = conn.execute("""SELECT COUNT(*) FROM consistency_flags WHERE layer = 6 AND classificacao = 'par_ambiguo'
                                AND (json_extract(detalhe, '$.cd_conta_b') IS NULL
                                     OR json_extract(detalhe, '$.score') IS NULL)""").fetchone()[0]

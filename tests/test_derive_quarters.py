@@ -34,7 +34,9 @@ def test_schema_trimestrais():
            "dt_fim_exerc, trimestre, cd_conta, origem, flag) VALUES ('r', ?, 'DRE', 'original', '2024-01-01', ?, ?, ?, '3.01', 'derivado', ?)")
     conn.execute(sql, (CNPJ, "2024-10-01", "2024-12-31", 4, "linha_sem_par"))
     with pytest.raises(sqlite3.IntegrityError):
-        conn.execute(sql, (CNPJ, "2024-10-01", "2024-12-31", 4, None))          # UNIQUE (cnpj, tipo, safra, fim, conta)
+        conn.execute(sql, (CNPJ, "2024-10-01", "2024-12-31", 4, None))          # UNIQUE (cnpj, tipo, safra, exercício, trimestre, conta)
+    sql2 = sql.replace("'2024-01-01'", "'2024-04-01'")
+    conn.execute(sql2, (CNPJ, "2024-10-01", "2024-12-31", 3, None))             # outro exercício, mesmo dt_fim: permitido
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(sql, (CNPJ, "2025-01-01", "2025-03-31", 5, None))          # trimestre 1..4
     with pytest.raises(sqlite3.IntegrityError):

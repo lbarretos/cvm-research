@@ -419,7 +419,9 @@ CREATE TABLE IF NOT EXISTS demonstrativos_trimestrais (
     fonte_a TEXT, data_a TEXT, ordem_a TEXT,   -- filing do minuendo (acumulado do trimestre)
     fonte_b TEXT, data_b TEXT, ordem_b TEXT,   -- filing do subtraendo (NULL no 1T)
     created_at      TEXT DEFAULT (datetime('now')),
-    UNIQUE (cnpj_companhia, tipo_doc, safra, dt_fim_exerc, cd_conta)
+    -- exercicio_ini + trimestre, não dt_fim: numa mudança de exercício social o 4T de um
+    -- exercício de 12 meses e o 1T do seguinte podem terminar no mesmo dia
+    UNIQUE (cnpj_companhia, tipo_doc, safra, exercicio_ini, trimestre, cd_conta)
 );
 CREATE INDEX IF NOT EXISTS idx_trim_conta ON demonstrativos_trimestrais (cnpj_companhia, tipo_doc, cd_conta, safra, dt_fim_exerc);
 

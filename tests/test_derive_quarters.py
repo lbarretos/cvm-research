@@ -60,11 +60,12 @@ def test_calendario():
 
 # ── lógica pura ──────────────────────────────────────────────────────────────
 
-def _doc(fonte, data_ref, ordem, ini, fim, contas, tipo_doc="DRE", tri=None):
-    """Linhas de um documento: acumulado (ini..fim) e, se tri, a linha trimestral isolada (tri_ini..fim)."""
+def _doc(fonte, data_ref, ordem, ini, fim, contas, tipo_doc="DRE", tri=None, st="S"):
+    """Linhas de um documento: acumulado (ini..fim) e, se tri, a linha trimestral isolada (tri_ini..fim).
+    st = st_conta_fixa das linhas ('N' = conta criada pela empresa, sujeita a renumeração)."""
     rows = [{"cnpj_companhia": CNPJ, "fonte": fonte, "tipo_doc": tipo_doc, "data_referencia": data_ref, "versao": 1,
              "ordem_exercicio": ordem, "periodo_ini": ini, "periodo_fim": fim, "cd_conta": cd, "ds_conta": ds,
-             "vl_conta": vl, "st_conta_fixa": "S"} for cd, (ds, vl) in contas.items()]
+             "vl_conta": vl, "st_conta_fixa": st} for cd, (ds, vl) in contas.items()]
     if tri:
         tri_ini, tri_contas = tri
         rows += [dict(r, periodo_ini=tri_ini, vl_conta=tri_contas[r["cd_conta"]]) for r in rows if r["cd_conta"] in tri_contas]
@@ -107,7 +108,7 @@ def test_dre_publicado_nos_tres_primeiros_e_4t_derivado():
     assert len(rows) == 8 and flags == []
     assert stats["DRE"] == {"exercicios": 1, "trimestres": 4, "linhas": 8, "docs_irregulares": 0,
                             "reapresentacao_intra_ano": 0, "componente_reapresentado": 0, "linha_sem_par": 0,
-                            "sem_anterior": 0, "sem_3t": 0, "sem_dfp": 0}
+                            "par_ambiguo": 0, "sem_anterior": 0, "sem_3t": 0, "sem_dfp": 0}
 
 
 def test_publicado_diferente_do_derivado_gera_flag_e_mantem_publicado():
@@ -234,6 +235,83 @@ def test_documento_irregular_e_dataframe_vazio():
     rows, _, stats = dq.derive_quarters(_df(*docs))
     assert {r["exercicio_ini"] for r in rows} == {"2024-01-01"} and stats["DRE"]["docs_irregulares"] == 2
     assert dq.derive_quarters(pd.DataFrame()) == ([], [], {})
+
+
+# ── casamento de linhas entre os dois acumulados ─────────────────────────────
+
+# Multiplan, DFC, 2026: a empresa reordena os códigos do bloco 6.03 entre o 1T e o 2T.
+MULT_1T = {"6.03": ("Caixa Líquido Atividades de Financiamento", -317.0e6),
+           "6.03.06": ("Pagamento de encargos e debêntures", -144.9e6),
+           "6.03.08": ("Dividendos e juros sobre capital próprio", -97.5e6)}
+MULT_2T = {"6.03": ("Caixa Líquido Atividades de Financiamento", -967.3e6),
+           "6.03.06": ("Pagamento de debêntures", -175.0e6),
+           "6.03.08": ("Pagamento de encargos sobre debêntures", -347.0e6),
+           "6.03.09": ("Dividendos e juros sobre o capital prórpio", -203.4e6)}
+
+
+def _mult(contas_1t=None, contas_2t=None):
+    return _df(_doc("ITR", "2026-03-31", "Último", "2026-01-01", "2026-03-31", contas_1t or MULT_1T, "DFC_MI", st="N"),
+               _doc("ITR", "2026-06-30", "Último", "2026-01-01", "2026-06-30", contas_2t or MULT_2T, "DFC_MI", st="N"))
+
+
+def test_renumeracao_nao_mistura_encargos_de_debentures_com_dividendos():
+    rows, flags, stats = dq.derive_quarters(_mult())
+    q2 = {r["cd_conta"]: r for r in rows if r["trimestre"] == 2}
+    # 6.03.08 no 2T é a linha que era 6.03.06 no 1T: −347,0 − (−144,9)
+    r = q2["6.03.08"]
+    assert (round(r["vl_derivado"] / 1e6, 1), r["cd_conta_b"], r["casamento"], r["flag"]) == (-202.1, "6.03.06", "reformulacao", None)
+    # 6.03.09 no 2T é a linha que era 6.03.08 no 1T: −203,4 − (−97,5)
+    r = q2["6.03.09"]
+    assert (round(r["vl_derivado"] / 1e6, 1), r["cd_conta_b"], r["casamento"], r["flag"]) == (-105.9, "6.03.08", "reformulacao", None)
+    # 6.03.06 no 2T ("Pagamento de debêntures") é linha nova: não deriva contra os encargos do 1T
+    r = q2["6.03.06"]
+    assert (r["vl_derivado"], r["vl_final"], r["cd_conta_b"], r["casamento"], r["flag"]) == (None, None, None, None, "linha_sem_par")
+    assert stats["DFC_MI"]["linha_sem_par"] == 1 and stats["DFC_MI"]["par_ambiguo"] == 0
+
+
+def test_par_ambiguo_nao_deriva_e_vira_fila_de_revisao():
+    rows, flags, _ = dq.derive_quarters(_mult({"6.03": ("Financiamento", 100e6), "6.03.09": ("Captação de debêntures", 482.8e6)},
+                                              {"6.03": ("Financiamento", 100e6), "6.03.12": ("Emissão de debêntures", 482.8e6)}))
+    r = {x["cd_conta"]: x for x in rows if x["trimestre"] == 2}["6.03.12"]
+    assert (r["vl_derivado"], r["vl_final"], r["origem"]) == (None, None, "derivado")
+    assert (r["cd_conta_b"], r["casamento"], r["flag"]) == ("6.03.09", "ambiguo", "par_ambiguo")
+    f, = [x for x in flags if x["classificacao"] == "par_ambiguo"]
+    assert (f["layer"], f["check_type"], f["severity"], f["tipo_doc"], f["cd_conta"]) == (6, "derive_quarters", "warn", "DFC_MI", "6.03.12")
+    assert (f["fonte_ref"], f["data_ref"], f["fonte_cmp"], f["data_cmp"]) == ("ITR", "2026-06-30", "ITR", "2026-03-31")
+    assert (f["valor_ref"], f["valor_cmp"]) == (482.8e6, 482.8e6)
+    assert (f["detalhe"]["cd_conta_b"], f["detalhe"]["ds_conta_b"]) == ("6.03.09", "Captação de debêntures")
+    assert 0.55 < f["detalhe"]["score"] < 0.75
+
+
+def test_mesmo_codigo_com_texto_retocado_continua_derivando():
+    r = {x["cd_conta"]: x for x in dq.derive_quarters(_mult(
+        {"6.03": ("Financiamento", 10e6), "6.03.01": ("Pagamento de emprestimos", 30e6)},
+        {"6.03": ("Financiamento", 25e6), "6.03.01": ("Pagamento de empréstimos", 50e6)}))[0] if x["trimestre"] == 2}
+    assert (r["6.03.01"]["vl_derivado"], r["6.03.01"]["cd_conta_b"], r["6.03.01"]["casamento"]) == (20e6, "6.03.01", "estavel")
+
+
+def test_4t_casa_o_layout_do_dfp_com_o_do_itr_do_3t():
+    itr3 = {"6.03": ("Financiamento", -430.0e6), "6.03.06": ("Dividendos e juros sobre o capital próprio pagos", -316.4e6),
+            "6.03.07": ("Gastos com operações de ações", -0.1e6), "6.03.08": ("Pagamento de encargos sobre debêntures", -352.5e6)}
+    dfp = {"6.03": ("Financiamento", -860.9e6), "6.03.07": ("Pagamento de encargos sobre debêntures", -560.1e6),
+           "6.03.08": ("Aumento de capital social", 0.0), "6.03.09": ("Gastos com operações de ações", -0.1e6),
+           "6.03.11": ("Dividendos pagos e juros sobre capital próprio", -492.0e6)}
+    rows, _, _ = dq.derive_quarters(_df(
+        _doc("ITR", "2025-03-31", "Último", "2025-01-01", "2025-03-31", {"6.03": ("Financiamento", -100e6)}, "DFC_MI", st="N"),
+        _doc("ITR", "2025-06-30", "Último", "2025-01-01", "2025-06-30", {"6.03": ("Financiamento", -200e6)}, "DFC_MI", st="N"),
+        _doc("ITR", "2025-09-30", "Último", "2025-01-01", "2025-09-30", itr3, "DFC_MI", st="N"),
+        _doc("DFP", "2025-12-31", "Último", "2025-01-01", "2025-12-31", dfp, "DFC_MI", st="N")))
+    q4 = {r["cd_conta"]: r for r in rows if r["trimestre"] == 4}
+    assert (round(q4["6.03.07"]["vl_derivado"] / 1e6, 1), q4["6.03.07"]["cd_conta_b"]) == (-207.6, "6.03.08")
+    assert (round(q4["6.03.11"]["vl_derivado"] / 1e6, 1), q4["6.03.11"]["cd_conta_b"]) == (-175.6, "6.03.06")
+    assert (q4["6.03.09"]["vl_derivado"], q4["6.03.09"]["cd_conta_b"]) == (0.0, "6.03.07")
+    # "Aumento de capital social" não existe no ITR do 3T: não pode virar o 4T dos encargos
+    assert (q4["6.03.08"]["vl_derivado"], q4["6.03.08"]["flag"]) == (None, "linha_sem_par")
+
+
+def test_primeiro_trimestre_nao_tem_casamento():
+    r = {x["cd_conta"]: x for x in dq.derive_quarters(_mult())[0] if x["trimestre"] == 1}["6.03.08"]
+    assert (r["cd_conta_b"], r["casamento"], r["vl_derivado"]) == (None, None, -97.5e6)
 
 
 # ── main(): ponta a ponta com banco em memória ───────────────────────────────

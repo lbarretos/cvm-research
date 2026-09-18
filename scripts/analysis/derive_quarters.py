@@ -9,15 +9,28 @@ Os dois operandos de um derivado vêm SEMPRE da mesma safra.
 Em cada documento, o acumulado é a linha com menor dt_ini_exerc; o trimestre é a
 duração do acumulado (3/6/9/12 meses → 1..4), o que também resolve exercício
 social fora do calendário. Documento com outra duração (ou DFP que não é o 4T)
-é irregular e não entra. Por exercício (exercicio_ini) e trimestre n:
+é irregular e não entra.
+
+As linhas dos dois acumulados são casadas por check_text_stability.match_filings
+(a escada da Camada 5: código fixo da CVM, nome normalizado, similaridade), nunca
+pelo cd_conta puro — a empresa renumera as contas que cria (st_conta_fixa = 'N')
+entre trimestres, e o DFP usa um layout diferente do ITR. cd_conta_b e casamento
+registram qual linha do filing B foi subtraída e como ela foi encontrada.
+Par 'ambiguo' (0,55 < score < 0,75) NÃO é casado automaticamente: vira fila de
+revisão (decisão do usuário em 2026-09-18).
+
+Por exercício (exercicio_ini) e trimestre n:
   - vl_publicado : DRE 1T–3T, linha trimestral isolada do ITR (dt_ini = início do trimestre)
-  - vl_derivado  : n = 1 → acum(1T); n > 1 → acum(Qn) − acum(Qn−1); n = 4 → DFP − acum(3T)
+  - vl_derivado  : n = 1 → acum(1T); n > 1 → acum(Qn) − acum(Qn−1) pela linha casada;
+                   n = 4 → DFP − acum(3T)
   - vl_final     : publicado quando existe (origem 'publicado'), senão derivado
 Flags (uma por linha; precedência nesta ordem):
   - 'reapresentacao_intra_ano' (warn): |publicado − derivado| > tolerância; na DFC,
     6.05 derivado do 4T ≠ variação do saldo final (6.05.02 DFP − 6.05.02 3T; reserva:
     BPA 1.01.01 na safra original) — também vira flag de linha em consistency_flags
-  - 'linha_sem_par' (info): conta ausente do acumulado anterior (não deriva)
+  - 'linha_sem_par' (info): a linha não tem correspondente no acumulado anterior
+  - 'par_ambiguo' (warn): o único candidato tem similaridade na faixa ambígua; não
+    deriva e vira flag de linha em consistency_flags com o candidato e o score
   - 'sem_anterior' / 'sem_3t' (info): não há acumulado anterior (2T/3T; 4T)
   - 'componente_reapresentado' (info): minuendo ou subtraendo aparece num resumo
     'reapresentacao' da Camada 2 (consistency_flags layer 2)
@@ -37,6 +50,7 @@ from datetime import date
 
 import pandas as pd
 
+from check_text_stability import SIM_ALTO, SIM_BAIXO, match_filings
 from consistency_utils import (add_common_args, clear_flags, finish_run, get_db, latest_rows, new_run,
                                parent_code, tolerancia, write_flags)
 
@@ -45,10 +59,10 @@ CHECK_TYPE = "derive_quarters"
 TIPOS = ["DRE", "DFC_MI", "DVA"]
 SAFRAS = {"original": "Último", "reapresentado": "Penúltimo"}
 SEVERITY = {"reapresentacao_intra_ano": "warn", "componente_reapresentado": "info", "linha_sem_par": "info",
-            "sem_anterior": "info", "sem_3t": "info", "sem_dfp": "info"}
+            "par_ambiguo": "warn", "sem_anterior": "info", "sem_3t": "info", "sem_dfp": "info"}
 SKIP_PREFIX = "3.99"
 COLS = ["run_id", "cnpj_companhia", "tipo_doc", "safra", "exercicio_ini", "dt_ini_exerc", "dt_fim_exerc", "trimestre",
-        "cd_conta", "ds_conta", "vl_publicado", "vl_derivado", "origem", "vl_final", "flag",
+        "cd_conta", "ds_conta", "cd_conta_b", "casamento", "vl_publicado", "vl_derivado", "origem", "vl_final", "flag",
         "fonte_a", "data_a", "ordem_a", "fonte_b", "data_b", "ordem_b"]
 
 
@@ -85,7 +99,7 @@ def _texto(v):
 
 def docs_acumulados(dd: pd.DataFrame) -> tuple[dict, int]:
     """dd = linhas de um (tipo_doc, ordem_exercicio). Retorna ({(exercicio_ini, n): doc}, irregulares).
-    doc = {"fonte", "data", "ordem", "ini", "fim", "acum": {cd: (ds, vl)}, "tri": {cd: vl}} — tri só
+    doc = {"fonte", "data", "ordem", "ini", "fim", "acum": {cd: (ds, vl, st)}, "tri": {cd: vl}} — tri só
     tem as linhas de período curto (dt_ini > exercicio_ini), i.e. o trimestre isolado da DRE."""
     docs: dict = {}
     irregulares = 0
@@ -104,7 +118,7 @@ def docs_acumulados(dd: pd.DataFrame) -> tuple[dict, int]:
             if r.cd_conta.startswith(SKIP_PREFIX):
                 continue
             if r.periodo_ini == ini:
-                acum.setdefault(r.cd_conta, (_texto(r.ds_conta), r.vl_conta))
+                acum.setdefault(r.cd_conta, (_texto(r.ds_conta), r.vl_conta, _texto(r.st_conta_fixa)))
             else:
                 tri.setdefault(r.cd_conta, r.vl_conta)
         docs[(ini, n)] = {"fonte": fonte, "data": data_ref, "ordem": ordem, "ini": ini, "fim": fim, "acum": acum, "tri": tri}
@@ -140,8 +154,30 @@ def _flag_linha(cnpj, tipo_doc, cd, ds, ini_q, fim_q, a, b, valor_ref, valor_cmp
     }
 
 
+def _flag_ambiguo(cnpj, tipo_doc, cd, ds, ini_q, fim_q, a, b, cd_b, score, detalhe) -> dict:
+    """Fila de revisão: o único candidato a par está na faixa ambígua de similaridade."""
+    return {
+        "layer": LAYER, "check_type": CHECK_TYPE, "classificacao": "par_ambiguo", "severity": "warn",
+        "cnpj_companhia": cnpj, "tipo_doc": tipo_doc, "cd_conta": cd, "cd_conta_pai": parent_code(cd), "ds_conta": ds,
+        "periodo_ini": ini_q, "periodo_fim": fim_q,
+        "fonte_ref": a["fonte"], "data_ref": a["data"], "ordem_ref": a["ordem"],
+        "fonte_cmp": b["fonte"], "data_cmp": b["data"], "ordem_cmp": b["ordem"],
+        "valor_ref": _valor(a["acum"][cd][1]), "valor_cmp": _valor(b["acum"][cd_b][1]),
+        "detalhe": {**detalhe, "cd_conta_b": cd_b, "ds_conta_b": b["acum"][cd_b][0], "score": score},
+    }
+
+
+def _casar(a: dict, b: dict | None, sim_alto: float, sim_baixo: float) -> dict:
+    """{cd no acumulado atual: (cd no anterior, classe, score)}; vazio quando não há anterior."""
+    if b is None:
+        return {}
+    return match_filings({cd: (ds, st) for cd, (ds, _vl, st) in b["acum"].items()},
+                         {cd: (ds, st) for cd, (ds, _vl, st) in a["acum"].items()},
+                         sim_alto, sim_baixo)
+
+
 def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict, reapresentados: set,
-                       tol_abs, tol_rel) -> tuple[list[dict], list[dict], dict]:
+                       tol_abs, tol_rel, sim_alto, sim_baixo) -> tuple[list[dict], list[dict], dict]:
     """qs = {n: doc} de um exercício. Retorna (linhas, flags, contagens por flag)."""
     rows: list[dict] = []
     flags: list[dict] = []
@@ -158,25 +194,34 @@ def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict
                 "dt_ini_exerc": ini_q, "dt_fim_exerc": fim_q, "trimestre": n, **docs_ab}
         detalhe = {"safra": safra, "trimestre": n, "exercicio_ini": exercicio_ini}
         linhas_q: list[dict] = []
-        for cd, (ds, va) in a["acum"].items():
+        casar = {} if falta else _casar(a, b, sim_alto, sim_baixo)
+        for cd, (ds, va, _st) in a["acum"].items():
+            cd_b = casamento = None
             if n == 1:
                 pub = _valor(va) if tipo_doc == "DRE" else None
                 der = _valor(va)
                 flag = None
             else:
                 pub = _valor(a["tri"][cd]) if tipo_doc == "DRE" and n < 4 and cd in a["tri"] else None
+                par = casar.get(cd)
                 if falta:
                     der, flag = None, falta
-                elif cd not in b["acum"]:
+                elif par is None:
                     der, flag = None, "linha_sem_par"
                 else:
-                    der, flag = _valor(va) - _valor(b["acum"][cd][1]), None
+                    cd_b, casamento, score = par
+                    if casamento == "ambiguo":
+                        der, flag = None, "par_ambiguo"
+                        flags.append(_flag_ambiguo(cnpj, tipo_doc, cd, ds, ini_q, fim_q, a, b, cd_b, score, detalhe))
+                    else:
+                        der, flag = _valor(va) - _valor(b["acum"][cd_b][1]), None
             if pub is not None and der is not None and abs(pub - der) > tolerancia(pub, tol_abs, tol_rel):
                 flag = "reapresentacao_intra_ano"
                 flags.append(_flag_linha(cnpj, tipo_doc, cd, ds, ini_q, fim_q, a, b, pub, der, detalhe))
             elif flag is None and componente:
                 flag = "componente_reapresentado"
-            linhas_q.append({**base, "cd_conta": cd, "ds_conta": ds, "vl_publicado": pub, "vl_derivado": der,
+            linhas_q.append({**base, "cd_conta": cd, "ds_conta": ds, "cd_conta_b": cd_b, "casamento": casamento,
+                             "vl_publicado": pub, "vl_derivado": der,
                              "origem": "publicado" if pub is not None else "derivado",
                              "vl_final": pub if pub is not None else der, "flag": flag})
         # DFC 4T: 6.05 derivado × variação do saldo final de caixa
@@ -217,7 +262,8 @@ def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict
 
 
 def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 0.01,
-                    reapresentados: set | None = None) -> tuple[list[dict], list[dict], dict]:
+                    reapresentados: set | None = None, sim_alto: float = SIM_ALTO,
+                    sim_baixo: float = SIM_BAIXO) -> tuple[list[dict], list[dict], dict]:
     """df = saída de latest_rows (pode incluir BPA, usado só na checagem de caixa).
     Retorna (linhas de demonstrativos_trimestrais, flags, stats[tipo_doc])."""
     rows: list[dict] = []
@@ -243,7 +289,8 @@ def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 
                     exercicios.setdefault(ini, {})[n] = doc
                 for exercicio_ini in sorted(exercicios):
                     qs = exercicios[exercicio_ini]
-                    r, f, cont = _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs, bpa, reapresentados, tol_abs, tol_rel)
+                    r, f, cont = _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs, bpa, reapresentados,
+                                                    tol_abs, tol_rel, sim_alto, sim_baixo)
                     st["exercicios"] += 1
                     st["trimestres"] += len(qs)
                     st["linhas"] += len(r)
@@ -309,6 +356,11 @@ def main(argv=None) -> str:
     import argparse
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     add_common_args(parser)
+    parser.add_argument("--sim-alto", dest="sim_alto", type=float, default=SIM_ALTO,
+                        help="score mínimo para casar como 'reformulacao' (padrão 0.75)")
+    parser.add_argument("--sim-baixo", dest="sim_baixo", type=float, default=SIM_BAIXO,
+                        help="score máximo para tratar como linha sem par (padrão 0.55); entre os dois é "
+                             "'par_ambiguo', que não deriva")
     args = parser.parse_args(argv)
     if not args.cnpj and not args.full:
         parser.error("informe --cnpj ou confirme a base inteira com --full")
@@ -319,7 +371,8 @@ def main(argv=None) -> str:
     else:
         cnpjs = [r[0] for r in conn.execute("SELECT cnpj FROM companies ORDER BY cnpj")]
     run_id = new_run(conn, LAYER, CHECK_TYPE, _escopo(args), vars(args))
-    print(f"run {run_id}: {len(cnpjs)} empresa(s), tol_abs={args.tol_abs} tol_rel={args.tol_rel}")
+    print(f"run {run_id}: {len(cnpjs)} empresa(s), tol_abs={args.tol_abs} tol_rel={args.tol_rel} "
+          f"sim_alto={args.sim_alto} sim_baixo={args.sim_baixo}")
 
     total_checked = total_flagged = 0
     stats_total: dict = {}
@@ -327,7 +380,8 @@ def main(argv=None) -> str:
         df = latest_rows(conn, cnpj=cnpj, desde=args.desde, ate=args.ate)
         if args.tipo_doc:
             df = df[df["tipo_doc"].isin([args.tipo_doc, "BPA"])]
-        rows, flags, stats = derive_quarters(df, args.tol_abs, args.tol_rel, reapresentados_camada2(conn, cnpj))
+        rows, flags, stats = derive_quarters(df, args.tol_abs, args.tol_rel, reapresentados_camada2(conn, cnpj),
+                                             args.sim_alto, args.sim_baixo)
         clear_trimestrais(conn, cnpj, args.tipo_doc)
         clear_flags(conn, LAYER, CHECK_TYPE, cnpj, args.tipo_doc)
         n = write_trimestrais(conn, run_id, rows)

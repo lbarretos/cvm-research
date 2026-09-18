@@ -67,7 +67,7 @@ run_step "dfp"       ingest_dfp.py
 run_step "itr"       ingest_itr.py
 # Consistência dos demonstrativos — depende de DFP/ITR recém-ingeridos;
 # idempotente. Camada 1 (soma hierárquica: regressão da ingestão), Camada 2
-# (reapresentações entre filings), Camada 3 (linhas sem par entre filings) e
+# (reapresentações entre filings), Camada 3 (linhas sem par entre filings),
 # Camada 5 (trilha temporal de nomes/códigos, cd_conta_ds_timeline) e
 # Camada 6 (desacúmulo → demonstrativos_trimestrais; usa os resumos da 2),
 # ~1–2 min cada na base inteira. Pulado se

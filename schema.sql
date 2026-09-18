@@ -393,6 +393,36 @@ CREATE TABLE IF NOT EXISTS cd_conta_ds_timeline (
 CREATE INDEX IF NOT EXISTS idx_timeline_chave ON cd_conta_ds_timeline (cnpj_companhia, tipo_doc, cd_conta_pai, ds_conta_norm);
 CREATE INDEX IF NOT EXISTS idx_timeline_class ON cd_conta_ds_timeline (classificacao);
 
+-- Camada 6 (Fase 5): valor de cada trimestre da DRE/DFC_MI/DVA por conta e por
+-- safra. 'original' = colunas Último; 'reapresentado' = colunas Penúltimo dos
+-- filings do exercício seguinte. Os dois operandos de um derivado vêm sempre da
+-- mesma safra. Derivado nunca sobrescreve publicado: vl_final = publicado
+-- (DRE 1T–3T) ou derivado (4T, DFC_MI, DVA), conforme `origem`.
+CREATE TABLE IF NOT EXISTS demonstrativos_trimestrais (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id          TEXT NOT NULL REFERENCES consistency_runs(run_id),
+    cnpj_companhia  TEXT NOT NULL,
+    tipo_doc        TEXT NOT NULL CHECK (tipo_doc IN ('DRE','DFC_MI','DVA')),
+    safra           TEXT NOT NULL CHECK (safra IN ('original','reapresentado')),
+    exercicio_ini   TEXT NOT NULL,        -- início do exercício social (dt_ini_exerc do acumulado)
+    dt_ini_exerc    TEXT NOT NULL,        -- início do trimestre
+    dt_fim_exerc    TEXT NOT NULL,        -- fim do trimestre
+    trimestre       INTEGER NOT NULL CHECK (trimestre BETWEEN 1 AND 4),  -- posição no exercício social
+    cd_conta        TEXT NOT NULL,
+    ds_conta        TEXT,
+    vl_publicado    REAL,                 -- linha trimestral do ITR (só DRE 1T–3T)
+    vl_derivado     REAL,                 -- acum(Qn) − acum(Qn−1); DFP − acum(3T) no 4T; NULL se não deriva
+    origem          TEXT NOT NULL CHECK (origem IN ('publicado','derivado')),
+    vl_final        REAL,
+    flag            TEXT CHECK (flag IN ('reapresentacao_intra_ano','componente_reapresentado',
+                                         'linha_sem_par','sem_anterior','sem_3t','sem_dfp')),
+    fonte_a TEXT, data_a TEXT, ordem_a TEXT,   -- filing do minuendo (acumulado do trimestre)
+    fonte_b TEXT, data_b TEXT, ordem_b TEXT,   -- filing do subtraendo (NULL no 1T)
+    created_at      TEXT DEFAULT (datetime('now')),
+    UNIQUE (cnpj_companhia, tipo_doc, safra, dt_fim_exerc, cd_conta)
+);
+CREATE INDEX IF NOT EXISTS idx_trim_conta ON demonstrativos_trimestrais (cnpj_companhia, tipo_doc, cd_conta, safra, dt_fim_exerc);
+
 -- ── Views ─────────────────────────────────────────────────────────────────────
 -- DISTINCT ON (PostgreSQL) replaced by MAX(versao) CTE — semantically equivalent.
 

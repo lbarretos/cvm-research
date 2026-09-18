@@ -79,6 +79,8 @@ def query(sql: str) -> list[dict]:
     Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco. Full-text: ipe_docs_fts, notas_explicativas_fts.
     consistency_flags: achados de consistência (layer=1 hierarchy_sum: nao_detalhado/pai_vazio/divergencia/
     divergencia_formula dentro de um documento; layer=2 cross_period: reapresentacao/reclassificacao entre filings;
+    layer=3 granularity: renumerado/zero_padding/reclassificado_em_outros/reclassificado_em_irmao/divergencia_nao_explicada
+    para linhas só num dos filings;
     cd_conta NULL = resumo do par; detalhe é JSON — use json_extract).
     Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
     """

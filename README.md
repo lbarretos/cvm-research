@@ -144,6 +144,7 @@ cvm-research/
 │       ├── consistency_utils.py    # latest_rows, tolerância, consistency_runs/flags
 │       ├── check_hierarchy_sums.py # Camada 1: soma hierárquica intra-documento (regressão da ingestão)
 │       ├── check_cross_period.py   # Camada 2: cruzamento entre filings (reapresentação)
+│       ├── check_granularity.py    # Camada 3: linhas sem par entre filings (renumeração, Outros, irmão)
 │       └── run_all.py              # orquestrador: --layer 2 --cnpj|--full
 ├── tests/                          # pytest (sem rede, tudo mockado)
 ├── docs/superpowers/plans/         # registros de design de features já implementadas
@@ -170,13 +171,13 @@ cvm-research/
 
 Scripts em `scripts/analysis/` cruzam os quadros de `demonstrativos_contabeis` e gravam achados em
 `consistency_runs` / `consistency_flags` (metadados; o valor publicado pela CVM nunca é alterado).
-As Camadas 1 e 2 rodam no job semanal logo após `ingest_dfp`/`ingest_itr` (base inteira, ~1,5 min).
+As Camadas 1, 2 e 3 rodam no job semanal logo após `ingest_dfp`/`ingest_itr` (base inteira, ~1,5 min).
 À mão, para uma empresa ou para forçar agora:
 
 ```bash
 cd scripts/analysis && source ../../.venv/bin/activate
 python run_all.py --layer 2 --cnpj 84.429.695/0001-11   # uma empresa (~1 s)
-python run_all.py --layer 1,2 --cnpj 84.429.695/0001-11 # as duas camadas
+python run_all.py --layer 1,2,3 --cnpj 84.429.695/0001-11 # todas as camadas
 python run_all.py --layer 2 --full                       # base inteira (145 empresas, ~1,5 min)
 ```
 
@@ -184,6 +185,7 @@ python run_all.py --layer 2 --full                       # base inteira (145 emp
 |---|---|---|
 | 1 | `check_hierarchy_sums.py` | Dentro de cada documento, pai = Σ filhos diretos e fórmulas de nível 2 (DRE/DFC): `nao_detalhado` (pai sem abertura), `pai_vazio`, `divergencia`, `divergencia_formula`. Exceções: `6.05` = saldo final − inicial, `3.99` ignorada. |
 | 2 | `check_cross_period.py` | O mesmo período em filings diferentes (DFP × ITRs seguintes × DFP seguinte): `reapresentacao` quando o total diverge, `reclassificacao` quando só sublinhas mudam. Baseline = filing mais antigo. |
+| 3 | `check_granularity.py` | Linhas que existem só num dos filings do par: `renumerado` (mesmo nome ou mesmo valor em outro código), `zero_padding`, `reclassificado_em_outros`, `reclassificado_em_irmao` (pai inalterado), `divergencia_nao_explicada`. |
 
 Plano e camadas seguintes: `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md`.
 

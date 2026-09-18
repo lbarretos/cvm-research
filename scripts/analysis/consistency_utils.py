@@ -13,8 +13,10 @@ Convenções:
 """
 import argparse
 import json
+import re
 import sqlite3
 import sys
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
 from utils import get_db  # noqa: E402  — reaproveita DATABASE_URL, WAL e foreign_keys
 
 __all__ = ["get_db", "tolerancia", "parent_code", "parse_hierarchy", "total_codes", "latest_rows",
+           "normalize_text", "is_outros", "OUTROS_RE",
            "cnpjs_financeiros", "new_run", "finish_run", "write_flags", "clear_flags", "add_common_args",
            "TIPOS_DOC", "FLAG_COLS", "EXCECOES_SOMA", "FORMULAS_NIVEL2", "SETOR_FINANCEIRO"]
 
@@ -90,6 +93,25 @@ def parse_hierarchy(codes) -> dict[str, list[str]]:
         if pai is not None and pai in conjunto:
             filhos.setdefault(pai, []).append(cd)
     return filhos
+
+
+# ── Texto (Camadas 3, 4 e 5) ─────────────────────────────────────────────────
+# "Outros"/"Outras"/"Outro"/"Demais" como palavra inteira sobre texto normalizado.
+# `\boutr` do plano original casava "outorgadas" (148 linhas no BPP 2024).
+OUTROS_RE = re.compile(r"\b(outr[oa]s?|demais)\b")
+
+
+def normalize_text(s) -> str:
+    """Minúsculas, sem acentos, só [a-z0-9 ], espaços colapsados; None/NaN → ''."""
+    if s is None or (isinstance(s, float) and np.isnan(s)):
+        return ""
+    s = unicodedata.normalize("NFKD", str(s)).encode("ascii", "ignore").decode()
+    s = re.sub(r"[^a-z0-9 ]+", " ", s.lower())
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def is_outros(ds_conta) -> bool:
+    return bool(OUTROS_RE.search(normalize_text(ds_conta)))
 
 
 def total_codes(tipo_doc: str, doc: pd.DataFrame) -> list[str]:

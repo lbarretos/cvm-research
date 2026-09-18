@@ -102,48 +102,61 @@ def _doc_rows(grupo: pd.DataFrame, doc) -> pd.DataFrame:
     return grupo[mask]
 
 
+def iter_pairs(df: pd.DataFrame):
+    """Gera (par, ref, cmp) para cada período e cada filing posterior ao baseline.
+
+    par = {cnpj_companhia, tipo_doc, periodo_ini, periodo_fim,
+           fonte_ref, data_ref, ordem_ref, fonte_cmp, data_cmp, ordem_cmp};
+    ref/cmp = linhas do baseline (menor data_referencia) e do filing comparado
+    nesse período. Usado pelas Camadas 2 e 3.
+    Linhas com periodo_fim NULL são ignoradas (groupby descarta NaN na chave).
+    """
+    if df.empty:
+        return
+    for (cnpj, tipo_doc, p_ini, p_fim), grupo in df.groupby(GROUP_COLS, sort=True):
+        docs = list(grupo[DOC_COLS].drop_duplicates().sort_values(DOC_COLS).itertuples(index=False))
+        if len(docs) < 2:
+            continue
+        ref_doc = docs[0]
+        ref = _doc_rows(grupo, ref_doc)
+        for cmp_doc in docs[1:]:
+            par = {
+                "cnpj_companhia": cnpj, "tipo_doc": tipo_doc,
+                "periodo_ini": p_ini, "periodo_fim": p_fim,
+                "fonte_ref": ref_doc.fonte, "data_ref": ref_doc.data_referencia, "ordem_ref": ref_doc.ordem_exercicio,
+                "fonte_cmp": cmp_doc.fonte, "data_cmp": cmp_doc.data_referencia, "ordem_cmp": cmp_doc.ordem_exercicio,
+            }
+            yield par, ref, _doc_rows(grupo, cmp_doc)
+
+
 def check_cross_period(df: pd.DataFrame, tol_abs: float = 1000.0,
                        tol_rel: float = 0.01) -> tuple[list[dict], dict]:
     """df = saída de latest_rows (qualquer escopo). Retorna (flags, stats).
 
     stats[tipo_doc] = {"pares": n, "pares_divergentes": m, "reapresentacao": k},
     contando pares (documento_ref, documento_cmp, período).
-    Linhas com periodo_fim NULL são ignoradas (groupby descarta NaN na chave).
     """
     flags: list[dict] = []
     stats: dict = {}
-    if df.empty:
-        return flags, stats
-    for (cnpj, tipo_doc, p_ini, p_fim), grupo in df.groupby(GROUP_COLS, sort=True):
-        docs = list(grupo[DOC_COLS].drop_duplicates().sort_values(DOC_COLS).itertuples(index=False))
-        if len(docs) < 2:
-            continue
+    for par, ref, cmp in iter_pairs(df):
+        tipo_doc = par["tipo_doc"]
         st = stats.setdefault(tipo_doc, {"pares": 0, "pares_divergentes": 0, "reapresentacao": 0})
-        ref_doc = docs[0]
-        ref = _doc_rows(grupo, ref_doc)
-        for cmp_doc in docs[1:]:
-            st["pares"] += 1
-            linhas, resumo = compare_pair(ref, _doc_rows(grupo, cmp_doc), tipo_doc, tol_abs, tol_rel)
-            if resumo["linhas_divergentes"] == 0:
-                continue
-            st["pares_divergentes"] += 1
-            if resumo["classificacao"] == "reapresentacao":
-                st["reapresentacao"] += 1
-            contexto = {
-                "layer": LAYER, "check_type": CHECK_TYPE,
-                "cnpj_companhia": cnpj, "tipo_doc": tipo_doc,
-                "periodo_ini": p_ini, "periodo_fim": p_fim,
-                "fonte_ref": ref_doc.fonte, "data_ref": ref_doc.data_referencia, "ordem_ref": ref_doc.ordem_exercicio,
-                "fonte_cmp": cmp_doc.fonte, "data_cmp": cmp_doc.data_referencia, "ordem_cmp": cmp_doc.ordem_exercicio,
-            }
-            flags.extend({**contexto, **linha} for linha in linhas)
-            flags.append({
-                **contexto,
-                "cd_conta": None,
-                "classificacao": resumo["classificacao"],
-                "severity": SEVERITY[resumo["classificacao"]],
-                "detalhe": {k: resumo[k] for k in RESUMO_KEYS},
-            })
+        st["pares"] += 1
+        linhas, resumo = compare_pair(ref, cmp, tipo_doc, tol_abs, tol_rel)
+        if resumo["linhas_divergentes"] == 0:
+            continue
+        st["pares_divergentes"] += 1
+        if resumo["classificacao"] == "reapresentacao":
+            st["reapresentacao"] += 1
+        contexto = {"layer": LAYER, "check_type": CHECK_TYPE, **par}
+        flags.extend({**contexto, **linha} for linha in linhas)
+        flags.append({
+            **contexto,
+            "cd_conta": None,
+            "classificacao": resumo["classificacao"],
+            "severity": SEVERITY[resumo["classificacao"]],
+            "detalhe": {k: resumo[k] for k in RESUMO_KEYS},
+        })
     return flags, stats
 
 

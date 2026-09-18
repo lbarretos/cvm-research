@@ -182,6 +182,18 @@ def test_empresas_e_tipos_nao_se_cruzam():
     assert stats == {"BPA": {"pares": 1, "pares_divergentes": 0, "reapresentacao": 0}}
 
 
+def test_iter_pairs_baseline_e_contexto():
+    dfp24 = _doc("DFP", "2024-12-31", "Penúltimo", "NA", "2023-12-31", BPA)
+    pares = list(ccp.iter_pairs(_df(_itr1t24(), dfp24, _dfp23())))
+    assert [(p["fonte_cmp"], p["data_cmp"]) for p, _, _ in pares] == [("ITR", "2024-03-31"), ("DFP", "2024-12-31")]
+    par, ref, cmp = pares[0]
+    assert par == {"cnpj_companhia": CNPJ, "tipo_doc": "BPA", "periodo_ini": "NA", "periodo_fim": "2023-12-31",
+                   "fonte_ref": "DFP", "data_ref": "2023-12-31", "ordem_ref": "Último",
+                   "fonte_cmp": "ITR", "data_cmp": "2024-03-31", "ordem_cmp": "Penúltimo"}
+    assert set(ref["cd_conta"]) == set(BPA) and set(cmp["fonte"]) == {"ITR"}
+    assert list(ccp.iter_pairs(pd.DataFrame())) == []
+
+
 # ── main(): ponta a ponta com banco em memória ───────────────────────────────
 
 import sqlite3

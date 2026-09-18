@@ -25,9 +25,9 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
 from utils import get_db  # noqa: E402  — reaproveita DATABASE_URL, WAL e foreign_keys
 
-__all__ = ["get_db", "tolerancia", "parent_code", "total_codes", "latest_rows",
-           "new_run", "finish_run", "write_flags", "clear_flags", "add_common_args",
-           "TIPOS_DOC", "FLAG_COLS"]
+__all__ = ["get_db", "tolerancia", "parent_code", "parse_hierarchy", "total_codes", "latest_rows",
+           "cnpjs_financeiros", "new_run", "finish_run", "write_flags", "clear_flags", "add_common_args",
+           "TIPOS_DOC", "FLAG_COLS", "EXCECOES_SOMA", "FORMULAS_NIVEL2", "SETOR_FINANCEIRO"]
 
 TIPOS_DOC = ["BPA", "BPP", "DRE", "DFC_MI", "DVA"]
 
@@ -45,6 +45,26 @@ TOTAL_CODES = {
 }
 DVA_TOTAL_DS = "valor adicionado total a distribuir"
 
+# ── Camada 1 (soma hierárquica) ──────────────────────────────────────────────
+# Exceções estruturais à regra "pai = Σ filhos diretos" (plano-mãe, Fase 2):
+#   'saldo': 6.05 = 6.05.02 (saldo final) − 6.05.01 (saldo inicial); bate em 99,8% dos DFPs.
+#   'skip' : 3.99 (lucro por ação) e descendentes — filhos ON/PN não somam.
+EXCECOES_SOMA = {
+    ("DFC_MI", "6.05"): "saldo",
+    ("DRE", "3.99"):    "skip",
+}
+
+# Fórmulas fixas de nível 2 (substituem a calibração empírica do plano original;
+# acerto de 99,8–100% nos DFPs 2019–2024 não financeiros). Só para empresas fora
+# de companies.setor = 'Financeiro' (plano COSIF diverge do nível 2 em diante).
+# Termo ausente do documento conta como 0; alvo ausente → fórmula não é checada.
+FORMULAS_NIVEL2 = {
+    "DRE":    [("3.03", ["3.01", "3.02"]), ("3.05", ["3.03", "3.04"]), ("3.07", ["3.05", "3.06"]),
+               ("3.09", ["3.07", "3.08"]), ("3.11", ["3.09", "3.10"])],
+    "DFC_MI": [("6.05", ["6.01", "6.02", "6.03", "6.04"])],
+}
+SETOR_FINANCEIRO = "Financeiro"
+
 
 # ── Regras numéricas ─────────────────────────────────────────────────────────
 
@@ -56,6 +76,20 @@ def tolerancia(valor_ref, tol_abs: float = 1000.0, tol_rel: float = 0.01):
 def parent_code(cd_conta: str):
     """'3.04.05.06' → '3.04.05'; '1' → None."""
     return cd_conta.rsplit(".", 1)[0] if "." in cd_conta else None
+
+
+def parse_hierarchy(codes) -> dict[str, list[str]]:
+    """{pai: [filhos diretos]} só para pais PRESENTES em `codes` (a DRE não tem
+    conta '3', então 3.01 não tem pai; 3.01.01 tem). Preserva a ordem de entrada
+    e ignora duplicatas."""
+    presentes = list(dict.fromkeys(codes))
+    conjunto = set(presentes)
+    filhos: dict[str, list[str]] = {}
+    for cd in presentes:
+        pai = parent_code(cd)
+        if pai is not None and pai in conjunto:
+            filhos.setdefault(pai, []).append(cd)
+    return filhos
 
 
 def total_codes(tipo_doc: str, doc: pd.DataFrame) -> list[str]:
@@ -111,6 +145,11 @@ def latest_rows(conn: sqlite3.Connection, cnpj=None, tipo_doc=None, fonte=None,
         filtros.append("AND data_referencia <= ?"); params.append(f"{ate}-12-31")
     sql = _LATEST_SQL.format(filtros=" ".join(filtros))
     return pd.read_sql_query(sql, conn, params=params)
+
+
+def cnpjs_financeiros(conn: sqlite3.Connection) -> set[str]:
+    """CNPJs com companies.setor = 'Financeiro' (plano COSIF): sem fórmulas de nível 2."""
+    return {r[0] for r in conn.execute("SELECT cnpj FROM companies WHERE setor = ?", (SETOR_FINANCEIRO,))}
 
 
 # ── Escrita (runs / flags) ───────────────────────────────────────────────────

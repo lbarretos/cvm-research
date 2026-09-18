@@ -84,6 +84,37 @@ def test_total_codes_dva_resolve_pelo_nome():
     assert cu.total_codes("DVA", sem_nome) == ["7.07"]
 
 
+# ── parse_hierarchy / exceções / fórmulas (Fase 2) ───────────────────────────
+
+def test_parse_hierarchy_filhos_diretos_por_pai_presente():
+    arvore = cu.parse_hierarchy(["1", "1.01", "1.01.01", "1.01.02", "1.02"])
+    assert arvore == {"1": ["1.01", "1.02"], "1.01": ["1.01.01", "1.01.02"]}
+
+
+def test_parse_hierarchy_ignora_pai_ausente_e_duplicatas():
+    # DRE não tem conta "3": 3.01 não tem pai no documento, mas 3.01.01 tem
+    assert cu.parse_hierarchy(["3.01", "3.01.01", "3.01.01", "3.02"]) == {"3.01": ["3.01.01"]}
+    assert cu.parse_hierarchy([]) == {}
+    assert cu.parse_hierarchy(pd.Series(["2", "2.01"])) == {"2": ["2.01"]}
+
+
+def test_excecoes_e_formulas_fixas():
+    assert cu.EXCECOES_SOMA == {("DFC_MI", "6.05"): "saldo", ("DRE", "3.99"): "skip"}
+    assert [alvo for alvo, _ in cu.FORMULAS_NIVEL2["DRE"]] == ["3.03", "3.05", "3.07", "3.09", "3.11"]
+    assert cu.FORMULAS_NIVEL2["DFC_MI"] == [("6.05", ["6.01", "6.02", "6.03", "6.04"])]
+    assert "BPA" not in cu.FORMULAS_NIVEL2
+
+
+def test_cnpjs_financeiros():
+    conn = _db()
+    conn.executemany("INSERT INTO companies (cnpj, ticker, nome_cvm, setor) VALUES (?,?,?,?)", [
+        (CNPJ, "WEGE3", "WEG", "Industrial"),
+        ("60.746.948/0001-12", "BBDC4", "BRADESCO", "Financeiro"),
+        ("00.000.000/0001-91", "BBAS3", "BB", "Financeiro"),
+    ])
+    assert cu.cnpjs_financeiros(conn) == {"60.746.948/0001-12", "00.000.000/0001-91"}
+
+
 # ── latest_rows ──────────────────────────────────────────────────────────────
 
 def test_latest_rows_versao_maxima_por_documento_e_periodo_na():

@@ -80,10 +80,10 @@ def query(sql: str) -> list[dict]:
     consistency_flags: achados de consistência (layer=1 hierarchy_sum: nao_detalhado/pai_vazio/divergencia/
     divergencia_formula dentro de um documento; layer=2 cross_period: reapresentacao/reclassificacao entre filings;
     layer=3 granularity: renumerado/zero_padding/reclassificado_em_outros/reclassificado_em_irmao/divergencia_nao_explicada
-    para linhas só num dos filings; layer=5 text_stability: ambiguo, fila de revisão da similaridade).
-    cd_conta_ds_timeline: trilha de cada linha (pai + nome) entre filings consecutivos — renumerado/reformulacao/ambiguo/
-    nova/removida com cd_conta_anterior (estavel não é gravada;
+    para linhas só num dos filings; layer=5 text_stability: ambiguo, fila de revisão da similaridade;
     cd_conta NULL = resumo do par; detalhe é JSON — use json_extract).
+    cd_conta_ds_timeline: trilha de cada linha (pai + nome) entre filings consecutivos — renumerado/reformulacao/ambiguo/
+    nova/removida com cd_conta_anterior (estavel não é gravada).
     Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
     """
     s = sql.strip().rstrip(";")

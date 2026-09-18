@@ -115,7 +115,7 @@ reapresentação (nova `versao`) descarta o `texto_extraido` da versão anterior
 `fonte_ref, data_ref, ordem_ref (filing baseline), fonte_cmp, data_cmp, ordem_cmp (filing comparado),`
 `valor_ref, valor_cmp, diff_abs (cmp − ref), diff_rel, detalhe (JSON)`
 
-Gerada por `scripts/analysis/`. As Camadas 1 e 2 rodam no job semanal (`update_weekly.sh`) logo após
+Gerada por `scripts/analysis/`. As Camadas 1, 2 e 3 rodam no job semanal (`update_weekly.sh`) logo após
 `ingest_dfp`/`ingest_itr`, na base inteira; também podem ser rodadas à mão por empresa.
 Nunca altera `demonstrativos_contabeis`: o valor publicado pela CVM fica intacto e aqui ficam os metadados.
 A tabela guarda **a última execução de cada escopo** `(layer, check_type, cnpj[, tipo_doc])`; o histórico
@@ -142,11 +142,22 @@ filing mais antigo (o original, como reportado na época) e cada filing posterio
   Total a Distribuir") diverge acima da tolerância `max(R$ 1.000, 1% × |ref|)`; todas as linhas
   divergentes do par herdam a classe.
 - `reclassificacao` (`info`): totais batem, mas alguma sublinha diverge (mudou de conta).
-- Linha que existe só num dos filings **não** gera flag (Camada 3, futura); só entra nas contagens do
+- Linha que existe só num dos filings **não** gera flag aqui (é a Camada 3); só entra nas contagens do
   resumo do par (`detalhe = {"linhas_comuns", "linhas_divergentes", "linhas_exclusivas_ref",
   "linhas_exclusivas_cmp", "total_disponivel"}`).
 
-Para rodar: `cd scripts/analysis && python run_all.py --layer 2 --cnpj <CNPJ>` (ou `--full` para a base).
+**Camada 3 (`layer = 3`, `check_type = 'granularity'`)** — nos mesmos pares da Camada 2, explica as linhas que existem
+só num dos filings (`valor_ref` **ou** `valor_cmp` preenchido; `detalhe.exclusivo_em`), pai a pai, nesta ordem:
+- `renumerado` (`info`): mesmo nome normalizado e mesmo `st_conta_fixa` em código diferente (`detalhe.casamento = 'nome'`,
+  `cd_ref`/`cd_cmp`; uma flag por par casado, `cd_conta = cd_ref`), ou exclusivas dos dois lados com a mesma soma (`'valor'`).
+- `zero_padding` (`info`): |valor| < R$ 1.000 — conta padrão publicada vazia.
+- `reclassificado_em_outros` (`warn`): a soma das exclusivas fecha com o delta das linhas "Outros"/"Demais" do pai.
+- `reclassificado_em_irmao` (`warn`): o pai não mudou; o valor foi absorvido por um irmão nomeado (`detalhe.irmaos_alterados`).
+- `divergencia_nao_explicada` (`error`): o valor saiu do pai (`detalhe.pai_ref`/`pai_cmp`) — mudou de pai ou é parte de
+  uma reapresentação (conferir a Camada 2 do mesmo par).
+Exclusivas cujo pai também é exclusivo não geram flag (só `detalhe.filhos_de_pai_exclusivo` no resumo do par).
+
+Para rodar: `cd scripts/analysis && python run_all.py --layer 2,3 --cnpj <CNPJ>` (ou `--full` para a base).
 
 ---
 
@@ -334,6 +345,22 @@ ORDER BY data_ref DESC, tipo_doc, cd_conta;
 Ausência de flags para um documento significa que todas as somas fecharam. `nao_detalhado` em BPA/BPP é comum
 (a empresa publica só o total da conta) e não indica problema no valor do pai.
 
+### Linhas que existem só num dos filings (Camada 3)
+```sql
+-- Por que a conta X sumiu (ou apareceu) entre o DFP e o ITR seguinte?
+SELECT tipo_doc, periodo_fim, fonte_cmp || ' ' || data_cmp AS comparado,
+       cd_conta, ds_conta, classificacao, severity,
+       valor_ref, valor_cmp,
+       json_extract(detalhe, '$.exclusivo_em') AS exclusivo_em,
+       json_extract(detalhe, '$.casamento')    AS casamento,
+       json_extract(detalhe, '$.cd_cmp')       AS cd_cmp
+FROM consistency_flags
+WHERE cnpj_companhia = '<CNPJ>' AND layer = 3 AND cd_conta IS NOT NULL
+  AND classificacao <> 'zero_padding'
+ORDER BY periodo_fim DESC, severity DESC, cd_conta;
+```
+`zero_padding` é ruído estrutural (conta padrão vazia) e pode ser filtrado; `renumerado` diz qual código usar no outro filing.
+
 ### Busca full-text no conteúdo de documentos (SQLite FTS5)
 
 ```sql
@@ -369,6 +396,9 @@ LIMIT 20;
    dos filhos, que é zero. Um `divergencia`/`divergencia_formula` no documento é sinal de que o quadro
    está inconsistente na própria fonte; informe ao usuário e mostre pai e soma lado a lado.
 9. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
+10. **Quando uma conta "some" entre dois filings** (ex: existia no DFP, não está no ITR seguinte): consulte a Camada 3
+    para o par. `renumerado` dá o novo código; `reclassificado_em_outros`/`reclassificado_em_irmao` dizem onde o valor
+    foi parar; `divergencia_nao_explicada` exige olhar a Camada 2 do mesmo par (reapresentação) antes de concluir.
 
 ## Defasagem dos dados
 

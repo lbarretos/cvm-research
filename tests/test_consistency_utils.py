@@ -115,6 +115,21 @@ def test_cnpjs_financeiros():
     assert cu.cnpjs_financeiros(conn) == {"60.746.948/0001-12", "00.000.000/0001-91"}
 
 
+# ── normalize_text / is_outros (Fase 3) ──────────────────────────────────────
+
+def test_normalize_text_acentos_caixa_pontuacao_e_nulos():
+    assert cu.normalize_text("  Provisões p/ Contingências (Líquido)  ") == "provisoes p contingencias liquido"
+    assert cu.normalize_text("CONTAS A RECEBER") == cu.normalize_text("Contas a receber")
+    assert cu.normalize_text(None) == "" and cu.normalize_text(float("nan")) == ""
+
+
+def test_is_outros_regex():
+    assert cu.is_outros("Outros") and cu.is_outros("Outras Receitas Operacionais") and cu.is_outros("Demais contas")
+    assert cu.is_outros("OUTRO ativo") and cu.is_outros("Outra Provisão")
+    assert not cu.is_outros("Opções Outorgadas") and not cu.is_outros("Outorga de Concessão")
+    assert not cu.is_outros(None)
+
+
 # ── latest_rows ──────────────────────────────────────────────────────────────
 
 def test_latest_rows_versao_maxima_por_documento_e_periodo_na():

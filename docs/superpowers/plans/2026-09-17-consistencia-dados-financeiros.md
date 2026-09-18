@@ -817,6 +817,8 @@ DFP 2023 e 2024, todas as empresas: `nao_detalhado` ≈ 424 em BPA e 423 em BPP;
 
 ## Fase 3 — Camada 3 (granularidade entre filings)
 
+> **Plano de tarefas (executado):** `docs/superpowers/plans/2026-09-18-fase3-camada3-granularity.md`. Duas mudanças em relação ao desenho abaixo, medidas no banco: (a) classe nova `reclassificado_em_irmao` (warn) para exclusivas sob pai comum inalterado (10,8 mil linhas — o valor foi absorvido por um irmão nomeado, não por "Outros"); (b) `renumerado` também por valor (`detalhe.casamento = 'valor'`) quando as exclusivas dos dois lados somam o mesmo sem "Outros" envolvido.
+
 Reaproveita os grupos da Camada 2 e recebe as linhas exclusivas (presentes só em `ref` ou só em `cmp`) sob o mesmo `cd_conta_pai`. Ordem de resolução, por pai:
 
 1. **Casamento por nome** entre exclusivos dos dois lados: `normalize_text(ds_conta)` igual → `renumerado` (info), com `detalhe = {"cd_ref": ..., "cd_cmp": ...}`. Depois da Fase 0, também exigir `st_conta_fixa` igual dos dois lados; uma linha `S` ausente do outro lado é uma conta padrão omitida (normalmente zero), não renumeração.
@@ -829,6 +831,8 @@ Reaproveita os grupos da Camada 2 e recebe as linhas exclusivas (presentes só e
 ### Verificação da Fase 3
 
 267 docs (15% dos pares BPA DFP × ITR) têm códigos sem par; a maior parte deve sair como `renumerado` ou `zero_padding`. `divergencia_nao_explicada` acima de 20% desses docs indica que o casamento por nome não está normalizando acentos/caixa.
+
+**Medido em 2026-09-18, base pós-Fase 2, run `granularity-20260918T112239Z-e1e9e7`** (64 s, 36.531 pares, 78.031 flags = 66.635 de linha + 11.396 resumos). Pares com exclusivas: 15.396 de 36.531 (BPA 3.120, BPP 3.359, DFC_MI 5.058, DRE 2.513, DVA 1.346); BPA DFP(Y) × ITR 1T(Y+1): **620 de 1.746 (35%)**, não os 267 estimados antes da Fase 0 (a reingestão trouxe as linhas que a chave antiga perdia). Linhas: `zero_padding` **33.258** (50%), `divergencia_nao_explicada` 14.153 (21%; 1.537 no setor Financeiro, só 5 na raiz), `reclassificado_em_irmao` 12.631 (19%), `reclassificado_em_outros` 1.882, `renumerado` 711 (573 por nome, 138 por valor); 2.207 filhos de pai exclusivo sem flag. Dos 620 pares BPA DFP × ITR 1T, 227 (37%) têm `divergencia_nao_explicada` como classe dominante — acima dos 20% do critério acima, mas o casamento por nome está correto (acentos/caixa normalizados; 0 casamentos perdidos por `st_conta_fixa`): o que sobra são reformulações inteiras do plano de contas (bancos) e **renumerações em cascata** (ex: WEG DFC 6.01.02 entre ITR 3T22 e 3T23: os valores de `6.01.02.02…05` deslocam um código; a Camada 2 marca as linhas comuns como `reclassificacao` e a Camada 3 só vê a sobra como exclusiva), que só a Camada 5 (chave por pai + nome, Fase 4) resolve. A Camada 3 passou a rodar no `update_weekly.sh` depois da Camada 2.
 
 ### Testes
 

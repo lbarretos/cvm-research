@@ -765,6 +765,8 @@ Se o resultado ficar perto de 0% ou acima de 60%, o agrupamento por período est
 
 ## Fase 2 — Camada 1 (soma hierárquica intra-documento)
 
+> **Plano de tarefas (executado):** `docs/superpowers/plans/2026-09-18-fase2-camada1-hierarchy-sums.md`.
+
 ### Regras
 
 `parse_hierarchy(codes)`: pai de `X.YY` é `X` (todo segmento tem 2 dígitos após o primeiro; confirmado: 100% das 4,45 M linhas têm `length(cd_conta) % 3 == 1`).
@@ -804,6 +806,8 @@ Acerto medido nos DFPs 2019–2024 não financeiros: 99,8–100% em todas. Filho
 ### Verificação da Fase 2
 
 DFP 2023 e 2024, todas as empresas: `nao_detalhado` ≈ 424 em BPA e 423 em BPP; `divergencia` real: BPA 0, BPP 0, DRE ≈ 8, DVA ≈ 3. Qualquer contagem de `divergencia` em BPA/BPP acima de ~10 indica bug no `parse_hierarchy` ou na resolução de versão.
+
+**Medido em 2026-09-18, base pós-Fase 1, run `hierarchy_sum-20260918T103927Z-2abd99`** (tolerância `max(R$ 1.000, 1% × |pai|)`, 26 s, 1.256.194 pais/fórmulas checados em 77.888 grupos documento×ordem×período, 62.682 flags). DFP 2023+2024 `Último`: `nao_detalhado` **424 em BPA e 423 em BPP** (exatamente o esperado), 53 na DRE, 19 na DVA; `divergencia` **BPA 0, BPP 0, DRE 8, DVA 3** (exatamente o esperado); `divergencia_formula` 4 na DRE. Base inteira (todos os filings, ambas as ordens): `nao_detalhado` 62.268 (BPA 24.865, BPP 29.363, DRE 4.311, DVA 3.718, DFC 11); `pai_vazio` 61 (35 na DVA, quase todos de uma empresa em ITR 1T23); `divergencia` 275 (BPA 14, BPP 39, DRE 166, DFC 25, DVA 31) — as de BPA/BPP estão todas em filings ≤ 2022 e têm cara de erro na fonte (ex: FLRY3 ITR 3T22: o desvio de `2.02` é exatamente o desvio de `2`); `divergencia_formula` 78 (DRE 63 em 8 empresas, concentradas em CVCB3 e RECV3 nas fórmulas `3.11` e `3.09`; DFC 15 em 7 empresas). Sem nenhuma flag `pai_vazio`/`divergencia` em BPA/BPP de 2023 em diante: a ingestão pós-Fase 0 está consistente. A Camada 1 passou a rodar no `update_weekly.sh` antes da Camada 2.
 
 ### Testes
 

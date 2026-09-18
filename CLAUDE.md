@@ -115,12 +115,25 @@ reapresentação (nova `versao`) descarta o `texto_extraido` da versão anterior
 `fonte_ref, data_ref, ordem_ref (filing baseline), fonte_cmp, data_cmp, ordem_cmp (filing comparado),`
 `valor_ref, valor_cmp, diff_abs (cmp − ref), diff_rel, detalhe (JSON)`
 
-Gerada por `scripts/analysis/`. Roda no job semanal (`update_weekly.sh`) logo após `ingest_dfp`/`ingest_itr`,
-na base inteira; também pode ser rodada à mão por empresa.
+Gerada por `scripts/analysis/`. As Camadas 1 e 2 rodam no job semanal (`update_weekly.sh`) logo após
+`ingest_dfp`/`ingest_itr`, na base inteira; também podem ser rodadas à mão por empresa.
 Nunca altera `demonstrativos_contabeis`: o valor publicado pela CVM fica intacto e aqui ficam os metadados.
 A tabela guarda **a última execução de cada escopo** `(layer, check_type, cnpj[, tipo_doc])`; o histórico
 de execuções está em `consistency_runs` (`run_id, layer, check_type, escopo, started_at, finished_at,
 total_checked, total_flagged, script_args`).
+
+**Camada 1 (`layer = 1`, `check_type = 'hierarchy_sum'`)** — dentro de cada (documento, `ordem_exercicio`,
+período), cada conta-pai presente é comparada à soma dos filhos diretos (tolerância `max(R$ 1.000, 1% × |pai|)`).
+É o teste de regressão da ingestão: a flag guarda o documento em `fonte_ref/data_ref/ordem_ref` (`*_cmp` NULL),
+`valor_ref` = pai, `valor_cmp` = soma dos filhos, `diff_abs = valor_cmp − valor_ref`.
+- `nao_detalhado` (`info`): pai preenchido, todos os filhos 0/NULL — a empresa não abriu a conta; o pai é confiável.
+- `pai_vazio` (`warn`): pai 0/NULL com filho preenchido — sintoma de ingestão parcial.
+- `divergencia` (`error`): pai e filhos preenchidos e a soma não fecha.
+- `divergencia_formula` (`error`): fórmula fixa de nível 2 não fecha (DRE `3.03 = 3.01 + 3.02` … `3.11 = 3.09 + 3.10`;
+  DFC `6.05 = 6.01 + … + 6.04`); não é checada no setor `Financeiro` (COSIF). `detalhe = {"regra": "formula", "formula", "termos"}`.
+- Exceções: DFC `6.05 = 6.05.02 − 6.05.01` (`detalhe.regra = 'saldo'`); DRE `3.99` (lucro por ação) ignorada.
+
+Para rodar: `cd scripts/analysis && python run_all.py --layer 1 --cnpj <CNPJ>` (`--layer 1,2` roda as duas).
 
 **Camada 2 (`layer = 2`, `check_type = 'cross_period'`)** — o mesmo período aparece em até 5 filings
 (BPA 31/12/Y: DFP(Y) Último, ITR 1T/2T/3T(Y+1) Penúltimo, DFP(Y+1) Penúltimo). O baseline é sempre o
@@ -307,6 +320,20 @@ Se a empresa não tiver linhas em `consistency_flags`, a Camada 2 ainda não rod
 comando `run_all.py --layer 2 --cnpj <CNPJ>`. Ausência de flags para um período com filings pareados
 significa que os valores bateram dentro da tolerância.
 
+### Somas que não fecham dentro de um documento (Camada 1)
+```sql
+-- Só os erros (soma ou fórmula não fecha); nao_detalhado é informativo e pai_vazio é aviso
+SELECT tipo_doc, fonte_ref || ' ' || data_ref || ' (' || ordem_ref || ')' AS documento,
+       periodo_ini, periodo_fim, cd_conta, ds_conta, classificacao,
+       valor_ref AS pai, valor_cmp AS soma_filhos, diff_abs,
+       json_extract(detalhe, '$.regra') AS regra
+FROM consistency_flags
+WHERE cnpj_companhia = '<CNPJ>' AND layer = 1 AND severity = 'error'
+ORDER BY data_ref DESC, tipo_doc, cd_conta;
+```
+Ausência de flags para um documento significa que todas as somas fecharam. `nao_detalhado` em BPA/BPP é comum
+(a empresa publica só o total da conta) e não indica problema no valor do pai.
+
 ### Busca full-text no conteúdo de documentos (SQLite FTS5)
 
 ```sql
@@ -337,7 +364,11 @@ LIMIT 20;
 7. **Para "esse número foi reapresentado?"**: consulte `consistency_flags` (Camada 2) filtrando por
    `cnpj_companhia`, `tipo_doc` e `periodo_fim`. Apresente sempre o valor original (`valor_ref`) e o
    reapresentado (`valor_cmp`) lado a lado — o padrão do banco é o original, nunca substituir.
-8. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
+8. **Antes de somar sublinhas de um demonstrativo** (ex: abrir o ativo circulante por conta): confira em
+   `consistency_flags` (Camada 1) se o pai tem `nao_detalhado` — nesse caso use o valor do pai, não a soma
+   dos filhos, que é zero. Um `divergencia`/`divergencia_formula` no documento é sinal de que o quadro
+   está inconsistente na própria fonte; informe ao usuário e mostre pai e soma lado a lado.
+9. **Documente documentos sem texto**: liste-os ao final com data + assunto + link, informando que precisam de extração manual se forem críticos.
 
 ## Defasagem dos dados
 

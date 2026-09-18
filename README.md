@@ -142,6 +142,7 @@ cvm-research/
 │       └── extract_pdf.py          # extração de texto dos PDFs do IPE
 │   └── analysis/                   # consistência dos demonstrativos (no job semanal, após DFP/ITR)
 │       ├── consistency_utils.py    # latest_rows, tolerância, consistency_runs/flags
+│       ├── check_hierarchy_sums.py # Camada 1: soma hierárquica intra-documento (regressão da ingestão)
 │       ├── check_cross_period.py   # Camada 2: cruzamento entre filings (reapresentação)
 │       └── run_all.py              # orquestrador: --layer 2 --cnpj|--full
 ├── tests/                          # pytest (sem rede, tudo mockado)
@@ -169,17 +170,19 @@ cvm-research/
 
 Scripts em `scripts/analysis/` cruzam os quadros de `demonstrativos_contabeis` e gravam achados em
 `consistency_runs` / `consistency_flags` (metadados; o valor publicado pela CVM nunca é alterado).
-A Camada 2 roda no job semanal logo após `ingest_dfp`/`ingest_itr` (base inteira, ~1,5 min).
+As Camadas 1 e 2 rodam no job semanal logo após `ingest_dfp`/`ingest_itr` (base inteira, ~1,5 min).
 À mão, para uma empresa ou para forçar agora:
 
 ```bash
 cd scripts/analysis && source ../../.venv/bin/activate
 python run_all.py --layer 2 --cnpj 84.429.695/0001-11   # uma empresa (~1 s)
+python run_all.py --layer 1,2 --cnpj 84.429.695/0001-11 # as duas camadas
 python run_all.py --layer 2 --full                       # base inteira (145 empresas, ~1,5 min)
 ```
 
 | Camada | Script | O que detecta |
 |---|---|---|
+| 1 | `check_hierarchy_sums.py` | Dentro de cada documento, pai = Σ filhos diretos e fórmulas de nível 2 (DRE/DFC): `nao_detalhado` (pai sem abertura), `pai_vazio`, `divergencia`, `divergencia_formula`. Exceções: `6.05` = saldo final − inicial, `3.99` ignorada. |
 | 2 | `check_cross_period.py` | O mesmo período em filings diferentes (DFP × ITRs seguintes × DFP seguinte): `reapresentacao` quando o total diverge, `reclassificacao` quando só sublinhas mudam. Baseline = filing mais antigo. |
 
 Plano e camadas seguintes: `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md`.

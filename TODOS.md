@@ -18,5 +18,9 @@ Backlog do projeto. O que já foi feito está no `git log` e na seção "Histór
 
 ## Código
 
+- [ ] **Fila `par_ambiguo` da Camada 6** — 14.993 pares que o casamento não teve confiança para usar (similaridade entre 0,55 e 0,75), por decisão de não casar automaticamente. Falta um comando para o analista confirmar ou rejeitar cada par e uma tabela que guarde a decisão, para o re-run semanal não perguntar de novo. Listar com `SELECT ... FROM consistency_flags WHERE layer = 6 AND classificacao = 'par_ambiguo'`.
+- [ ] **`text_similarity` é assimétrica** — `difflib` dá score diferente conforme a ordem dos argumentos, e em pares reais isso cruza o limiar de 0,75 (0,7532 contra 0,7273). Hoje todas as chamadas usam `(anterior, atual)`, então é consistente, mas frágil. Tornar simétrica (`max` ou média das duas ordens) exigiria re-rodar a Camada 5 inteira e revisar os limiares.
+- [ ] **Camada 5 e o plano de contas dos bancos** — `cd_conta_ds_timeline` ainda marca `estavel` quando uma conta `S` muda de nome no mesmo código, e por isso descreve a re-letragem do plano COSIF de 2017 como se nada tivesse acontecido (ver Itaú, DRE 3.01.02). A Camada 6 já não confia nisso (`codigo_fixo_confiavel=False`); avaliar se a Camada 5 deveria seguir.
+
 - [ ] **Testes de integração leves** — hoje tudo é mockado; um teste que roda `setup.sh` num banco temporário e valida as views (`vw_dre`, `vw_balanco`) contra fixtures pequenas pegaria regressões de schema.
 - [ ] **`extract_pdf.py` no fluxo semanal** — `EXTRACT_LIMIT` default 1000 pode não acompanhar semanas com muitos docs; medir e ajustar.

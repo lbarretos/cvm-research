@@ -197,6 +197,40 @@ Plano e camadas seguintes: `docs/superpowers/plans/2026-09-17-consistencia-dados
 
 ## Histórico
 
+**18/09/2026 — casamento de linhas no desacúmulo (Camada 6).** A Camada 6 subtraía acumulados casando as linhas por
+`cd_conta`, que não é estável entre filings: a empresa renumera as contas que cria (`st_conta_fixa = 'N'`) entre
+trimestres e o DFP usa um layout diferente do ITR. Resultado: 21% das linhas derivadas da DFC no 2T e no 3T e 39% no 4T
+subtraíam uma linha de outra, quase sempre sem flag — cerca de 24,6 mil valores errados só na DFC de 2T e 3T, em todas
+as 145 empresas. O caso relatado foi a Multiplan, cuja `6.03.08` da DFC é "Dividendos" no 1T e "Pagamento de encargos
+sobre debêntures" no 2T: o 2T26 saía −249,5 mi em vez de −202,1 mi.
+
+Passou a usar `match_filings`, a escada de casamento da Camada 5, e a gravar o par em `cd_conta_b`/`casamento`. Pares de
+similaridade ambígua (0,55 a 0,75) não são casados automaticamente: viram `par_ambiguo`, fila de revisão em
+`consistency_flags`. Os testes contra o dado bruto acharam um segundo caso da mesma família: na revisão do plano dos
+bancos, entre o ITR do 3T/2017 e o DFP/2017, o Itaú teve `3.01.02` mudando de "Receita de Dividendos" para o resultado
+de câmbio — por isso o casamento da Camada 6 não confia no código fixo da CVM sem olhar o nome (a Camada 5 mantém a
+regra antiga). Plano, medições e decisões em
+`docs/superpowers/plans/2026-09-18-fase6-casamento-de-linhas-no-desacumulo.md`.
+
+Medido na base inteira depois da correção (safra `original`, 106 s de execução, 1.797.994 linhas):
+
+| tipo_doc | trimestre | linhas | com valor | mesmo código | renumerado | reformulação | ambíguo | sem par |
+|---|---|---|---|---|---|---|---|---|
+| DFC_MI | 2 | 93.391 | 89,8% | 68.425 | 8.487 | 6.989 | 1.908 | 7.199 |
+| DFC_MI | 3 | 87.891 | 91,1% | 65.548 | 8.278 | 6.276 | 1.577 | 5.853 |
+| DFC_MI | 4 | 100.763 | 78,0% | 51.442 | 14.725 | 12.422 | 3.222 | 11.193 |
+| DRE | 2 | 55.611 | 100,0% | 52.892 | 369 | 610 | 142 | 1.382 |
+| DRE | 3 | 51.946 | 100,0% | 49.636 | 357 | 519 | 120 | 1.140 |
+| DRE | 4 | 56.562 | 87,1% | 47.681 | 637 | 930 | 230 | 2.097 |
+| DVA | 2 | 77.891 | 98,4% | 75.875 | 379 | 395 | 101 | 811 |
+| DVA | 3 | 72.399 | 98,5% | 70.802 | 230 | 310 | 48 | 763 |
+| DVA | 4 | 80.072 | 88,8% | 69.927 | 522 | 641 | 157 | 1.748 |
+
+As colunas `renumerado` e `reformulação` são a massa que antes era subtraída errado. A cobertura da DFC no 4T caiu de
+84% para 78%: linhas que não existem no acumulado anterior agora são NULL em vez de um número inventado. Na DRE, 1.512
+flags de `reapresentacao_intra_ano` desapareceram (13.024 → 11.512) — eram artefato do casamento errado, não divergência
+da fonte. A fila `par_ambiguo` tem 14.993 flags, 57% delas no mesmo código; o limiar é ajustável por `--sim-alto`.
+
 O projeto começou em Supabase/PostgreSQL e migrou para SQLite local em junho de 2026 (um arquivo, zero serviços). O MCP passou de `mcp-server-sqlite` (npx) para um servidor Python próprio em setembro de 2026. Os workflows de GitHub Actions foram removidos: toda a ingestão roda localmente.
 
 ## Testes

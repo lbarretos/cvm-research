@@ -175,18 +175,27 @@ Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mud
 
 ### `demonstrativos_trimestrais` — valor de cada trimestre da DRE/DFC_MI/DVA, por conta e por safra (Camada 6)
 `run_id, cnpj_companhia, tipo_doc ('DRE'/'DFC_MI'/'DVA'), safra ('original'/'reapresentado'), exercicio_ini, dt_ini_exerc, dt_fim_exerc,`
-`trimestre (1–4, posição no exercício social), cd_conta, ds_conta, vl_publicado, vl_derivado, origem ('publicado'/'derivado'), vl_final, flag,`
+`trimestre (1–4, posição no exercício social), cd_conta, ds_conta, cd_conta_b, casamento, vl_publicado, vl_derivado,`
+`origem ('publicado'/'derivado'), vl_final, flag,`
 `fonte_a, data_a, ordem_a (filing do acumulado do trimestre), fonte_b, data_b, ordem_b (filing do acumulado anterior; NULL no 1T)`
 
 **Use `vl_final`** (e `origem` para saber de onde veio). `safra = 'original'` usa só colunas `Último` (o que o mercado viu na época);
 `'reapresentado'` usa só colunas `Penúltimo` dos filings do exercício seguinte. **Nunca subtrai safras diferentes.**
 - DRE 1T–3T: `vl_publicado` é a linha trimestral isolada do ITR (`origem = 'publicado'`); `vl_derivado = acum(Qn) − acum(Qn−1)` serve de conferência.
 - DRE 4T, DFC_MI e DVA (todos os trimestres): só derivado (`4T = DFP − acum(3T)`).
+- **`cd_conta_b` e `casamento`**: qual linha do filing anterior foi subtraída e como ela foi encontrada. O mesmo `cd_conta`
+  costuma ser **outra linha** no filing anterior — a empresa renumera as contas que cria (`st_conta_fixa = 'N'`) entre
+  trimestres e o DFP usa um layout diferente do ITR. O casamento usa a escada da Camada 5: `estavel` (mesmo código e mesmo
+  nome), `renumerado` (mesmo nome normalizado, código diferente), `reformulacao` (similaridade ≥ 0,75). Para auditar um
+  número, compare `cd_conta` no filing A com `cd_conta_b` no filing B, no dado bruto.
 - `flag`: `reapresentacao_intra_ano` (publicado ≠ derivado, ou 6.05 do 4T da DFC ≠ variação do saldo final de caixa; também em `consistency_flags` `layer = 6`),
-  `linha_sem_par` (conta não existe no acumulado anterior — `vl_derivado` NULL), `sem_anterior`/`sem_3t` (buraco na série — NULL),
+  `par_ambiguo` (o único candidato a par tem similaridade entre 0,55 e 0,75 — o valor **não** é calculado de propósito, e a
+  flag de linha em `consistency_flags` traz `cd_conta_b`, `ds_conta_b` e `score` para revisão),
+  `linha_sem_par` (a linha não tem correspondente no acumulado anterior — `vl_derivado` NULL), `sem_anterior`/`sem_3t` (buraco na série — NULL),
   `componente_reapresentado` (um dos dois filings tem `reapresentacao` na Camada 2). `sem_dfp` só em `consistency_flags` (não há linha de 4T).
 - `3.99` (lucro por ação) não está na tabela: não é aditivo. Exercício social fora do calendário: `trimestre` é a posição no exercício, não o trimestre-calendário.
-Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada).
+Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada). `--sim-alto`/`--sim-baixo` movem os
+limiares do casamento (padrão 0,75 e 0,55).
 
 ---
 
@@ -427,6 +436,24 @@ SELECT dt_fim_exerc, trimestre, vl_final, flag
 FROM demonstrativos_trimestrais
 WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DFC_MI' AND cd_conta = '6.01' AND safra = 'original'
 ORDER BY dt_fim_exerc DESC LIMIT 8;
+
+-- Auditar uma linha criada pela empresa: qual conta do filing anterior foi subtraída
+SELECT dt_fim_exerc, trimestre, cd_conta, ds_conta, cd_conta_b, casamento,
+       ROUND(vl_final/1e6, 1) AS vl_mi, flag,
+       fonte_a || ' ' || data_a AS filing_a, fonte_b || ' ' || data_b AS filing_b
+FROM demonstrativos_trimestrais
+WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DFC_MI' AND safra = 'original'
+  AND cd_conta LIKE '6.03.%'
+ORDER BY dt_fim_exerc DESC, cd_conta LIMIT 30;
+
+-- Fila de revisão: pares que o casamento não teve confiança para usar
+SELECT tipo_doc, data_ref, cd_conta, ds_conta,
+       json_extract(detalhe,'$.cd_conta_b') AS cd_b,
+       json_extract(detalhe,'$.ds_conta_b') AS candidato,
+       ROUND(json_extract(detalhe,'$.score'), 3) AS score
+FROM consistency_flags
+WHERE cnpj_companhia = '<CNPJ>' AND layer = 6 AND classificacao = 'par_ambiguo'
+ORDER BY score DESC;
 ```
 Para comparar com o que a empresa reapresentou depois, repita com `safra = 'reapresentado'` e mostre as duas colunas lado a lado.
 
@@ -474,7 +501,10 @@ LIMIT 20;
 12. **Para valores trimestrais (4T da DRE, qualquer trimestre da DFC/DVA)**: use `demonstrativos_trimestrais` com
     `safra = 'original'` por padrão, nunca subtraia acumulados à mão misturando `Último` e `Penúltimo`. Mostre `origem` e a
     `flag`: `reapresentacao_intra_ano` significa que publicado e derivado divergem (apresente os dois); `linha_sem_par`/`sem_3t`
-    significa que o trimestre não pôde ser derivado para aquela conta.
+    significa que o trimestre não pôde ser derivado para aquela conta; `par_ambiguo` significa que a linha mudou de nome o
+    bastante para o casamento ficar duvidoso e o valor foi deliberadamente não calculado (o candidato está no `detalhe` da
+    flag `layer = 6`). Em contas criadas pela empresa (`st_conta_fixa = 'N'`), cite `cd_conta_b` e `casamento` ao apresentar
+    o número: eles dizem qual linha do filing anterior entrou na subtração.
 
 ## Defasagem dos dados
 

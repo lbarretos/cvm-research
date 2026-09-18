@@ -23,6 +23,10 @@ similarity_score quando há par) e em consistency_flags só os 'ambiguo'.
 Linhas anteriores do mesmo (cnpj[, tipo_doc]) são apagadas nas duas tabelas
 antes de gravar.
 
+`match_filings` expõe a mesma escada para a Camada 6 (derive_quarters), que
+precisa casar pares de filings que esta camada não compara: colunas
+'Penúltimo' e DFP × ITR do 3T.
+
 Roda no job semanal (scripts/update_weekly.sh) depois da Camada 3. À mão
 (na pasta scripts/analysis, .venv ativo):
   python check_text_stability.py --cnpj 84.429.695/0001-11
@@ -129,10 +133,12 @@ def _nivel(pai) -> tuple:
     return (-1, "") if pai is None else (pai.count("."), pai)
 
 
-def compare_filings(A: dict, B: dict, sim_alto: float = SIM_ALTO, sim_baixo: float = SIM_BAIXO) -> tuple[list[dict], int]:
-    """A/B = {cd: (ds, st)} de dois filings consecutivos. Retorna (rows sem contexto, n_estaveis).
-    Processa os pais da raiz para as folhas; o mapa A→B dos pais já casados escolhe
-    os filhos de A que correspondem a cada pai de B."""
+def compare_filings(A: dict, B: dict, sim_alto: float = SIM_ALTO,
+                    sim_baixo: float = SIM_BAIXO) -> tuple[list[dict], int, dict]:
+    """A/B = {cd: (ds, st)} de dois filings consecutivos. Retorna (rows sem contexto,
+    n_estaveis, mapa código em A → código em B de todas as linhas casadas, inclusive
+    as estáveis). Processa os pais da raiz para as folhas; o mapa A→B dos pais já
+    casados escolhe os filhos de A que correspondem a cada pai de B."""
     filhos_a: dict = {}
     filhos_b: dict = {}
     for cd, v in A.items():
@@ -161,7 +167,26 @@ def compare_filings(A: dict, B: dict, sim_alto: float = SIM_ALTO, sim_baixo: flo
     for pa, fa in filhos_a.items():
         if pa not in consumidos:
             rows += [_row(cd, ds, st, "removida", (cd, ds)) for cd, (ds, st) in fa.items()]
-    return rows, estaveis
+    return rows, estaveis, mapa
+
+
+CASADAS = ("renumerado", "reformulacao", "ambiguo")
+
+
+def match_filings(anterior: dict, atual: dict, sim_alto: float = SIM_ALTO,
+                  sim_baixo: float = SIM_BAIXO) -> dict:
+    """Casa as linhas de dois filings quaisquer com a escada desta camada. Ao contrário
+    de check_text_stability, não exige que sejam consecutivos nem da mesma fonte: a
+    Camada 6 usa isto para DFP × ITR do 3T e para as colunas 'Penúltimo'.
+
+    anterior/atual = {cd_conta: (ds_conta, st_conta_fixa)}.
+    Retorna {cd no `atual`: (cd no `anterior`, classificacao, similarity_score)} só para
+    as linhas casadas; classificacao ∈ CASADAS + 'estavel' (score None). Linha de `atual`
+    sem correspondente em `anterior` fica de fora do dicionário."""
+    rows, _estaveis, mapa = compare_filings(anterior, atual, sim_alto, sim_baixo)
+    classes = {r["cd_conta"]: (r["cd_conta_anterior"], r["classificacao"], r["similarity_score"])
+               for r in rows if r["classificacao"] in CASADAS}
+    return {cd_at: classes.get(cd_at) or (cd_ant, "estavel", None) for cd_ant, cd_at in mapa.items()}
 
 
 def check_text_stability(df: pd.DataFrame, sim_alto: float = SIM_ALTO,
@@ -187,7 +212,7 @@ def check_text_stability(df: pd.DataFrame, sim_alto: float = SIM_ALTO,
                 st["primeira_ocorrencia"] += len(novas)
             else:
                 data_ant, linhas_ant = anterior
-                novas, estaveis = compare_filings(linhas_ant, atual, sim_alto, sim_baixo)
+                novas, estaveis, _ = compare_filings(linhas_ant, atual, sim_alto, sim_baixo)
                 st["estavel"] += estaveis
                 for r in novas:
                     st[r["classificacao"]] += 1

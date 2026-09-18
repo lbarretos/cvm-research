@@ -222,3 +222,44 @@ def test_main_full_e_exigencia_de_cnpj(monkeypatch):
     import pytest
     with pytest.raises(SystemExit):
         cts.main([])
+
+
+# ── match_filings: casamento reaproveitado pela Camada 6 ─────────────────────
+
+def test_match_filings_devolve_par_classe_e_score():
+    anterior = {"6.03": ("Financiamento", "S"),
+                "6.03.01": ("Pagamento de empréstimos", "N"),
+                "6.03.06": ("Pagamento de encargos e debêntures", "N"),
+                "6.03.08": ("Dividendos e juros sobre capital próprio", "N")}
+    atual = {"6.03": ("Financiamento", "S"),
+             "6.03.01": ("Pagamento de empréstimos", "N"),
+             "6.03.08": ("Pagamento de encargos sobre debêntures", "N"),
+             "6.03.09": ("Dividendos e juros sobre capital próprio", "N"),
+             "6.03.11": ("Exercício de ações restritas", "N")}
+    par = cts.match_filings(anterior, atual)
+    assert par["6.03"] == ("6.03", "estavel", None)
+    assert par["6.03.01"] == ("6.03.01", "estavel", None)
+    assert par["6.03.09"] == ("6.03.08", "renumerado", 1.0)          # nome idêntico, código novo
+    cd_b, classe, score = par["6.03.08"]
+    assert (cd_b, classe) == ("6.03.06", "reformulacao") and score >= 0.75
+    assert "6.03.11" not in par                                      # linha nova: sem par
+
+
+def test_match_filings_marca_ambiguo_sem_casar_silenciosamente():
+    anterior = {"6.03": ("Financiamento", "S"), "6.03.09": ("Captação de debêntures", "N")}
+    atual = {"6.03": ("Financiamento", "S"), "6.03.12": ("Emissão de debêntures", "N")}
+    cd_b, classe, score = cts.match_filings(anterior, atual)["6.03.12"]
+    assert (cd_b, classe) == ("6.03.09", "ambiguo") and 0.55 < score < 0.75
+
+
+def test_match_filings_vazio_dos_dois_lados():
+    assert cts.match_filings({}, {}) == {}
+    assert cts.match_filings({}, {"3.01": ("Receita", "S")}) == {}
+
+
+def test_compare_filings_devolve_o_mapa_anterior_para_atual():
+    anterior = {"6.01": ("Operacional", "S"), "6.01.01": ("Depreciação", "N")}
+    atual = {"6.01": ("Operacional", "S"), "6.01.07": ("Depreciação", "N")}
+    rows, estaveis, mapa = cts.compare_filings(anterior, atual)
+    assert mapa == {"6.01": "6.01", "6.01.01": "6.01.07"} and estaveis == 1
+    assert [r["classificacao"] for r in rows] == ["renumerado"]

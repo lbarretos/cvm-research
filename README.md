@@ -40,21 +40,63 @@ echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
 ```
 
-Carga inicial, um comando só:
+### Carga inicial
+
+Pelo Claude Code, em português mesmo:
+
+> *"Monte a base com o universo IBOV, documentos de 2020 para cá."*
+
+O [CLAUDE.md](CLAUDE.md) ensina o Claude a traduzir isso no comando certo, mostrar o plano
+antes e acompanhar a execução. Direto no terminal é o mesmo:
 
 ```bash
-bash bootstrap.sh
+bash bootstrap.sh --universo ibov --substituir --desde 2020
 ```
 
-Baixa os ZIPs da CVM e popula os dados brutos (30–60 min), roda as cinco camadas de
-consistência (~8 min) e extrai o texto dos PDFs em laço (12–24 h). É retomável: pode
-interromper com Ctrl-C e rodar de novo. `--sem-pdf` pula a parte longa, `--so-pdf` retoma só
-ela, `--so-analise` regenera só o tratamento. Menos histórico, mais rápido:
-`IPE_DESDE=2020 DFP_DESDE=2018 ITR_DESDE=2018 bash bootstrap.sh`.
+Três blocos, nesta ordem. É retomável: interrompa com Ctrl-C e rode de novo.
 
-O bloco de tratamento não é opcional: sem ele `demonstrativos_trimestrais`,
-`consistency_flags` e `cd_conta_ds_timeline` ficam vazias, e as queries trimestrais e de
-reapresentação do [CLAUDE.md](CLAUDE.md) não respondem nada.
+| Bloco | O que faz | Referência (IBOV) |
+|---|---|---|
+| Dados brutos | os sete ingestores da CVM | 20–40 min |
+| **Tratamento** | `run_all.py --layer 1,2,3,5,6 --full` | ~4 min |
+| Texto dos PDFs | `extract_pdf.py` em laço, depois reconstrói o índice FTS | 6–12 h |
+
+O tratamento não é opcional: sem ele `demonstrativos_trimestrais`, `consistency_flags` e
+`cd_conta_ds_timeline` ficam vazias, e as consultas trimestrais e de reapresentação do
+[CLAUDE.md](CLAUDE.md) não respondem nada. Use `--sem-pdf` para adiar a parte longa e
+`--so-pdf` para retomá-la depois.
+
+### Escolhendo cobertura e período
+
+**Cobertura** (`--universo`). O IBOV é o ponto de partida recomendado, com cerca de 78
+empresas. Também aceita `ibrx`, `todas` (as ~443 ativas da B3) ou **um arquivo com a sua lista
+de tickers**, que costuma ser a melhor opção quando você já sabe o que quer acompanhar:
+
+```bash
+bash bootstrap.sh --universo minhas-empresas.csv --desde 2018
+```
+
+O arquivo pode ser um CSV com coluna `ticker`, e as outras colunas são ignoradas, ou um ticker
+por linha. `#` começa comentário e ticker fora do catálogo da B3 é avisado e pulado.
+
+```
+ticker,empresa
+PETR4,Petrobras
+VALE3,Vale
+WEGE3,WEG
+```
+
+O universo é aditivo: soma ao `watchlist.csv` e nunca remove. Para começar limpo, acrescente
+`--substituir`, que faz backup do arquivo antes. Este repositório vem com 147 tickers, o IBOV
+mais a cobertura própria do autor.
+
+**Período** (`--desde ANO`). Vale para todas as fontes de uma vez. Cada uma tem um primeiro ano
+possível (IPE 2015, VLMO 2018, ITR 2011, DFP e FRE 2010) e pedir antes disso é ajustado para
+cima com aviso. Sem `--desde`, cada fonte vai até o início da série. Para controle por fonte,
+use `IPE_DESDE`, `VLMO_DESDE`, `FRE_DESDE`, `DFP_DESDE` e `ITR_DESDE`.
+
+`bash bootstrap.sh --dry-run` mostra cobertura, período e blocos sem baixar nada, e
+`--help` lista tudo.
 
 Verifique com `claude mcp list` (deve mostrar `cvm-research: ✓ Connected`) e pergunte ao Claude *"Quantas linhas tem a tabela ipe_docs?"*.
 

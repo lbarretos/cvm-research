@@ -1,8 +1,77 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: SQLite local (`cvm_research.db`, ~12 GB) · 145 empresas · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda).
-Atualização: `bash scripts/update_weekly.sh` (manual) ou job launchd toda segunda 9h (`scripts/install_weekly_launchd.sh`).
+Banco: SQLite local (`cvm_research.db`) · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda).
+Cobertura e período são escolhidos na carga (ver a seção seguinte); nesta instalação, confira com
+`SELECT COUNT(*) FROM companies` e `SELECT MIN(data_referencia) FROM ipe_docs`.
+Montar do zero: `bash bootstrap.sh --universo ibov`. Manter: `bash scripts/update_weekly.sh` (manual)
+ou job launchd toda segunda 9h (`scripts/install_weekly_launchd.sh`).
+
+## Montar a base do zero (quando o banco está vazio ou é um clone novo)
+
+Quando o usuário pedir para **montar, construir, replicar ou recriar a base**, ou quando uma
+consulta falhar porque as tabelas estão vazias, o caminho é o `bootstrap.sh` na raiz do projeto.
+Não monte a sequência de ingestores à mão: o script já cuida da ordem, das camadas de
+tratamento e do laço de extração de PDF, e é retomável.
+
+Antes de rodar, resolva duas escolhas com o usuário. São as únicas que mudam o resultado.
+
+**1. Universo de cobertura.** O padrão recomendado para quem está começando é o IBOV, com cerca
+de 78 empresas. As opções são `ibov`, `ibrx`, `todas` (as ~443 ativas da B3) ou um arquivo com a
+lista de tickers que o usuário quiser. Se ele **anexar ou colar uma tabela** com as empresas
+desejadas, salve-a como CSV na raiz do projeto e passe o caminho em `--universo`. O arquivo pode
+ser um CSV com coluna `ticker` (as outras colunas são ignoradas) ou um ticker por linha; `#`
+começa comentário. Ticker fora do catálogo da B3 é avisado e pulado, sem interromper.
+
+```
+ticker,empresa
+PETR4,Petrobras
+VALE3,Vale
+WEGE3,WEG
+```
+
+O universo é **aditivo**: soma ao `watchlist.csv` e nunca remove. Para começar limpo, só com o
+universo escolhido, acrescente `--substituir`, que faz backup do `watchlist.csv` antes.
+
+**2. Período.** `--desde ANO` vale para todas as fontes. Cada uma tem um primeiro ano possível
+(IPE 2015, VLMO 2018, ITR 2011, DFP e FRE 2010); pedir antes disso é ajustado para cima com
+aviso, não falha. Sem `--desde`, cada fonte vai até o início. Menos anos significa menos tempo e
+menos disco, então pergunte se o usuário não disser.
+
+```bash
+bash bootstrap.sh --universo ibov --substituir            # IBOV, série completa
+bash bootstrap.sh --universo ibov --desde 2020            # IBOV, de 2020 para cá
+bash bootstrap.sh --universo minhas-empresas.csv --desde 2018
+bash bootstrap.sh --universo todas --sem-pdf              # cobertura máxima, sem texto de PDF
+```
+
+**Sempre rode `--dry-run` primeiro** e mostre o plano ao usuário antes de executar de verdade. A
+carga completa leva horas e baixa dezenas de GB; vale confirmar cobertura e período antes.
+
+Três blocos rodam em sequência, e o do meio é o que costuma ser esquecido:
+
+| Bloco | O que faz | Referência (IBOV) |
+|---|---|---|
+| Dados brutos | os sete ingestores da CVM | 20–40 min |
+| **Tratamento** | `run_all.py --layer 1,2,3,5,6 --full` | ~4 min |
+| Texto dos PDFs | `extract_pdf.py` em laço, depois reconstrói o FTS | 6–12 h |
+
+Sem o bloco de tratamento, `demonstrativos_trimestrais`, `consistency_flags` e
+`cd_conta_ds_timeline` ficam vazias e as consultas trimestrais e de reapresentação deste arquivo
+respondem nada, sem erro que explique o porquê. `--sem-pdf` adia a parte longa e `--so-pdf`
+retoma depois; a base já é pesquisável nos dados estruturados sem ela, só não tem busca
+full-text nem leitura de fatos relevantes.
+
+Ao terminar, confirme com `.venv/bin/python -m pytest tests/ -q`. A suíte inclui testes que
+releem o banco e recalculam o tratamento a partir do dado bruto. Depois, a manutenção é
+`bash scripts/update_weekly.sh` (ou o job semanal do launchd), que cobre só o ano corrente e o
+anterior — para refazer o histórico, `bootstrap.sh` de novo.
+
+⚠️ A CVM não arquiva versões anteriores dos documentos: cada base guarda a versão que estava no
+ZIP no dia do download. Duas bases montadas em datas diferentes divergem nos períodos que foram
+reapresentados no intervalo. Ao comparar números com outra instalação, cite a data da carga.
+
+---
 
 ## Acesso ao banco (MCP `cvm-research`)
 
@@ -622,13 +691,20 @@ python add_companies.py --ibov --skip-assumed  # Pula tickers inferidos (sufixo 
 
 # 4. Sincronizar watchlist.csv → tabela companies
 python ingest_companies.py
-
-# 5. Re-rodar ingestores com histórico completo para as novas empresas
-# (os ZIPs já foram baixados — re-download é inevitável mas sem código novo)
-python ingest_ipe.py --desde 2015
-python ingest_dfp.py --historico --desde 2010
-# ... etc
 ```
+
+O caminho mais curto para os passos 3 e 4 é o `bootstrap.sh`, que também aceita a lista de
+tickers direto e já roda o tratamento depois (ver "Montar a base do zero" no topo):
+
+```bash
+bash bootstrap.sh --universo ibov                    # soma o IBOV ao watchlist
+bash bootstrap.sh --universo minhas-empresas.csv     # soma a lista do usuário
+```
+
+**Recarregar os dados para a cobertura nova:** `bash bootstrap.sh --sem-pdf` e depois
+`bash bootstrap.sh --so-pdf`. Os ingestores reprocessam os ZIPs inteiros, então a recarga
+atualiza as empresas antigas junto e nada é perdido. Só não esqueça do tratamento: sem ele as
+tabelas derivadas ficam desatualizadas em relação à cobertura nova.
 
 **Tickers assumidos:** empresas fora do IBOV recebem ticker com sufixo "3" (ON).
 Checar coluna `observacao` no watchlist.csv para linhas com `auto:assumed` e corrigir

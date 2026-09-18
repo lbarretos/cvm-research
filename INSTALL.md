@@ -34,29 +34,81 @@ echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 # MCP no Claude Code (caminhos absolutos, gravados no ~/.claude.json)
 claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
 
+# Ver o plano antes de gastar horas
+bash bootstrap.sh --universo ibov --substituir --desde 2020 --dry-run
+
 # Popular o banco: brutos + camadas de consistência + texto dos PDFs
-bash bootstrap.sh
+bash bootstrap.sh --universo ibov --substituir --desde 2020
 ```
 
-`bootstrap.sh` é retomável (Ctrl-C e rodar de novo continua de onde parou) e faz três blocos:
+Pelo Claude Code, a mesma coisa em português: *"Monte a base com o universo IBOV, documentos de
+2020 para cá."* O [CLAUDE.md](CLAUDE.md) ensina o Claude a montar o comando, mostrar o plano
+antes e acompanhar a execução.
 
-| Bloco | O que roda | Tempo de referência |
-|---|---|---|
-| Dados brutos | os sete ingestores com o histórico completo | 30–60 min, ~15 GB de ZIPs |
-| Tratamento | `run_all.py --layer 1,2,3,5,6 --full` | ~8 min |
-| Texto dos PDFs | `extract_pdf.py` em laço até não sobrar pendente, depois reconstrói o índice FTS | 12–24 h, ~170 mil documentos |
+### Os três blocos
+
+`bootstrap.sh` é retomável: Ctrl-C e rodar de novo continua de onde parou.
+
+| Bloco | O que roda | IBOV (~78) | Watchlist do repo (147) |
+|---|---|---|---|
+| Dados brutos | os sete ingestores | 20–40 min | 30–60 min, ~15 GB de ZIPs |
+| **Tratamento** | `run_all.py --layer 1,2,3,5,6 --full` | ~4 min | ~8 min |
+| Texto dos PDFs | `extract_pdf.py` em laço, depois reconstrói o índice FTS | 6–12 h | 12–24 h, ~170 mil docs |
 
 O bloco de tratamento é o que preenche `demonstrativos_trimestrais`, `consistency_flags` e
-`cd_conta_ds_timeline`. **Sem ele o banco responde os dados brutos e nada mais**: as queries
-trimestrais e de reapresentação do [CLAUDE.md](CLAUDE.md) voltam vazias.
+`cd_conta_ds_timeline`. **Sem ele o banco responde os dados brutos e nada mais**: as consultas
+trimestrais e de reapresentação do [CLAUDE.md](CLAUDE.md) voltam vazias, sem erro que explique
+o porquê. Para adiar a parte longa, `--sem-pdf`; para retomá-la depois, `--so-pdf`.
 
-Para adiar a parte longa e já começar a pesquisar, `bash bootstrap.sh --sem-pdf` e depois
-`bash bootstrap.sh --so-pdf` quando quiser. Menos histórico, mais rápido:
-`IPE_DESDE=2020 DFP_DESDE=2018 ITR_DESDE=2018 bash bootstrap.sh`.
+### Cobertura
 
-Confira o resultado com `.venv/bin/python -m pytest tests/ -q`: a suíte inclui testes que leem
-o banco e recalculam o tratamento a partir do dado bruto (pulam sozinhos se o banco não existir
-ou se as camadas ainda não rodaram).
+`--universo` aceita `ibov` (recomendado para começar, ~78 empresas), `ibrx`, `todas` (as ~443
+ativas da B3) ou o caminho de um arquivo com a sua lista de tickers. A lista é a melhor opção
+quando você já sabe o que quer acompanhar: menos download, menos disco e menos ruído.
+
+```
+ticker,empresa
+PETR4,Petrobras
+VALE3,Vale
+WEGE3,WEG
+```
+
+CSV com coluna `ticker` (as outras colunas são ignoradas) ou um ticker por linha. `#` começa
+comentário; ticker fora do catálogo da B3 é avisado e pulado sem interromper a carga.
+
+O universo é **aditivo**: soma ao `watchlist.csv` e nunca remove. `--substituir` zera o
+`watchlist.csv` antes, guardando uma cópia com data no nome. O repositório vem com 147 tickers,
+que são o IBOV mais a cobertura própria do autor; use `--substituir` se quiser só o seu recorte.
+
+Depois da carga, dá para crescer a qualquer momento: `bash bootstrap.sh --universo NOVO.csv`
+adiciona as empresas e recarrega. Ou, manualmente, `add_companies.py` seguido de
+`ingest_companies.py` e dos ingestores (ver a seção "Adicionar empresas" do [CLAUDE.md](CLAUDE.md)).
+
+### Período
+
+`--desde ANO` vale para todas as fontes. Cada uma tem um primeiro ano possível, e pedir antes
+disso é ajustado para cima com aviso em vez de falhar:
+
+| Fonte | Primeiro ano | Por quê |
+|---|---|---|
+| IPE | 2015 | os ZIPs de 2009–2014 vêm sem `Protocolo_Entrega` e são descartados |
+| VLMO | 2018 | antes disso não há feed estruturado de insider trading |
+| ITR | 2011 | início da série de ITR no portal de dados abertos |
+| DFP, FRE | 2010 | início das séries |
+
+Sem `--desde`, cada fonte vai até o início. Para controle por fonte, use as variáveis
+`IPE_DESDE`, `VLMO_DESDE`, `FRE_DESDE`, `DFP_DESDE` e `ITR_DESDE`.
+
+### Conferindo
+
+`.venv/bin/python -m pytest tests/ -q`. A suíte inclui testes que leem o banco e recalculam o
+tratamento a partir do dado bruto: conferem que cada valor trimestral é mesmo a subtração de
+duas linhas equivalentes nos dois filings. Eles pulam sozinhos se o banco não existir, se as
+camadas ainda não rodaram ou se a sua cobertura não tem as empresas da amostra.
+
+> ⚠️ A CVM não arquiva versões anteriores dos documentos: cada base guarda a versão que estava
+> no ZIP no dia do download. Duas instalações montadas em datas diferentes divergem nos períodos
+> reapresentados no intervalo. Ao comparar números com outra máquina, cite a data da carga.
 
 ---
 
@@ -149,14 +201,18 @@ python add_companies.py --ibov             # confirmar com "s"
 python add_companies.py --ticker VALE3     # uma empresa
 
 python ingest_companies.py                 # watchlist → tabela companies
-
-# Re-ingerir histórico para as novas empresas
-python ingest_ipe.py --desde 2015
-python ingest_dfp.py --historico --desde 2010
-python ingest_itr.py --desde 2011
-python ingest_vlmo.py --desde 2018
-python ingest_fre.py --desde 2010
 ```
+
+Depois de mexer no `watchlist.csv`, recarregue com o `bootstrap.sh` em vez de repetir os
+ingestores à mão: ele cobre os sete, roda o tratamento e é retomável.
+
+```bash
+bash bootstrap.sh --sem-pdf     # brutos + tratamento para a cobertura nova
+bash bootstrap.sh --so-pdf      # o texto dos PDFs depois, quando quiser
+```
+
+Os ingestores são idempotentes e reprocessam os ZIPs inteiros, então re-rodar para
+as empresas novas também atualiza as antigas. Nada é perdido.
 
 **Tickers assumidos:** empresas fora do IBOV recebem ticker `XXXX3` (ON inferido) e a coluna `observacao` do watchlist fica com `auto:assumed`. Confira e corrija antes de rodar os ingestores.
 

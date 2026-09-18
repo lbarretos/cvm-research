@@ -41,7 +41,7 @@
 
 ### Task 1: Schema + funções de calendário
 
-- [ ] **Step 1: Testes que falham** — criar `tests/test_derive_quarters.py`:
+- [x] **Step 1: Testes que falham** — criar `tests/test_derive_quarters.py`:
 
 ```python
 """
@@ -96,8 +96,8 @@ def test_calendario():
     assert dq.inicio_trimestre("2023-04-01", 4) == "2024-01-01"
 ```
 
-- [ ] **Step 2: Rodar e ver falhar** (`ModuleNotFoundError: derive_quarters`).
-- [ ] **Step 3: Implementar** — `schema.sql`, depois de `CREATE INDEX IF NOT EXISTS idx_timeline_class ...;`:
+- [x] **Step 2: Rodar e ver falhar** (`ModuleNotFoundError: derive_quarters`).
+- [x] **Step 3: Implementar** — `schema.sql`, depois de `CREATE INDEX IF NOT EXISTS idx_timeline_class ...;`:
 
 ```sql
 
@@ -158,14 +158,14 @@ def inicio_trimestre(exercicio_ini: str, n: int) -> str:
     return f"{y:04d}-{m:02d}-01"
 ```
 
-- [ ] **Step 4: Rodar e ver passar; aplicar o schema no banco real** (`sqlite3 cvm_research.db < schema.sql`).
-- [ ] **Step 5: Commit** `feat(analysis): demonstrativos_trimestrais no schema; calendário de trimestres (Fase 5)`.
+- [x] **Step 4: Rodar e ver passar; aplicar o schema no banco real** (`sqlite3 cvm_research.db < schema.sql`).
+- [x] **Step 5: Commit** `feat(analysis): demonstrativos_trimestrais no schema; calendário de trimestres (Fase 5)`.
 
 ---
 
 ### Task 2: `derive_quarters.py` — lógica pura + CLI
 
-- [ ] **Step 1: Testes que falham** — acrescentar a `tests/test_derive_quarters.py`:
+- [x] **Step 1: Testes que falham** — acrescentar a `tests/test_derive_quarters.py`:
 
 ```python
 # ── lógica pura ──────────────────────────────────────────────────────────────
@@ -404,8 +404,8 @@ def test_main_full_e_exigencia_de_cnpj(monkeypatch):
         dq.main([])
 ```
 
-- [ ] **Step 2: Rodar e ver falhar** (`AttributeError: derive_quarters` etc.).
-- [ ] **Step 3: Completar `scripts/analysis/derive_quarters.py`**
+- [x] **Step 2: Rodar e ver falhar** (`AttributeError: derive_quarters` etc.).
+- [x] **Step 3: Completar `scripts/analysis/derive_quarters.py`**
 
 ```python
 """
@@ -767,7 +767,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Rodar e ver passar** (16 testes). **Step 5: Commit** `feat(analysis): Camada 6 — derive_quarters (desacúmulo por safra, flags intra-ano, checagem de caixa)`.
+- [x] **Step 4: Rodar e ver passar** (16 testes). **Step 5: Commit** `feat(analysis): Camada 6 — derive_quarters (desacúmulo por safra, flags intra-ano, checagem de caixa)`.
 
 ---
 

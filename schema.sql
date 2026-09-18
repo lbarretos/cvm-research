@@ -410,12 +410,16 @@ CREATE TABLE IF NOT EXISTS demonstrativos_trimestrais (
     trimestre       INTEGER NOT NULL CHECK (trimestre BETWEEN 1 AND 4),  -- posição no exercício social
     cd_conta        TEXT NOT NULL,
     ds_conta        TEXT,
+    -- Casamento da linha entre os dois filings (Camada 5, match_filings). Sem eles a
+    -- subtração não é auditável: o mesmo cd_conta pode ser outra linha no filing B.
+    cd_conta_b      TEXT,                 -- código desta mesma linha no filing B (subtraendo)
+    casamento       TEXT CHECK (casamento IN ('estavel','renumerado','reformulacao','ambiguo')),
     vl_publicado    REAL,                 -- linha trimestral do ITR (só DRE 1T–3T)
     vl_derivado     REAL,                 -- acum(Qn) − acum(Qn−1); DFP − acum(3T) no 4T; NULL se não deriva
     origem          TEXT NOT NULL CHECK (origem IN ('publicado','derivado')),
     vl_final        REAL,
     flag            TEXT CHECK (flag IN ('reapresentacao_intra_ano','componente_reapresentado',
-                                         'linha_sem_par','sem_anterior','sem_3t','sem_dfp')),
+                                         'linha_sem_par','par_ambiguo','sem_anterior','sem_3t','sem_dfp')),
     fonte_a TEXT, data_a TEXT, ordem_a TEXT,   -- filing do minuendo (acumulado do trimestre)
     fonte_b TEXT, data_b TEXT, ordem_b TEXT,   -- filing do subtraendo (NULL no 1T)
     created_at      TEXT DEFAULT (datetime('now')),

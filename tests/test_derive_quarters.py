@@ -27,7 +27,7 @@ def test_schema_trimestrais():
     conn = _db()
     cols = [r[1] for r in conn.execute("PRAGMA table_info(demonstrativos_trimestrais)")]
     assert {"run_id", "cnpj_companhia", "tipo_doc", "safra", "exercicio_ini", "dt_ini_exerc", "dt_fim_exerc", "trimestre",
-            "cd_conta", "ds_conta", "vl_publicado", "vl_derivado", "origem", "vl_final", "flag",
+            "cd_conta", "ds_conta", "cd_conta_b", "casamento", "vl_publicado", "vl_derivado", "origem", "vl_final", "flag",
             "fonte_a", "data_a", "ordem_a", "fonte_b", "data_b", "ordem_b"} <= set(cols)
     conn.execute("INSERT INTO consistency_runs (run_id, layer, check_type) VALUES ('r', 6, 'derive_quarters')")
     sql = ("INSERT INTO demonstrativos_trimestrais (run_id, cnpj_companhia, tipo_doc, safra, exercicio_ini, dt_ini_exerc, "
@@ -41,6 +41,12 @@ def test_schema_trimestrais():
         conn.execute(sql, (CNPJ, "2025-01-01", "2025-03-31", 5, None))          # trimestre 1..4
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(sql, (CNPJ, "2025-01-01", "2025-03-31", 1, "inventada"))   # CHECK flag
+    conn.execute(sql.replace("'3.01'", "'3.02'"), (CNPJ, "2024-10-01", "2024-12-31", 4, "par_ambiguo"))
+    sql_cas = ("INSERT INTO demonstrativos_trimestrais (run_id, cnpj_companhia, tipo_doc, safra, exercicio_ini, dt_ini_exerc, "
+               "dt_fim_exerc, trimestre, cd_conta, origem, casamento) VALUES ('r', ?, 'DRE', 'original', '2024-01-01', ?, ?, ?, ?, 'derivado', ?)")
+    conn.execute(sql_cas, (CNPJ, "2024-10-01", "2024-12-31", 4, "3.03", "reformulacao"))
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(sql_cas, (CNPJ, "2024-10-01", "2024-12-31", 4, "3.04", "inventado"))   # CHECK casamento
 
 
 def test_calendario():

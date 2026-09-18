@@ -51,7 +51,7 @@ Ordem de resolução por pai (comum aos dois docs, ou raiz), depois de separar o
 
 ### Task 0: Branch de trabalho
 
-- [ ] **Step 1: Criar o branch a partir de `main` limpo**
+- [x] **Step 1: Criar o branch a partir de `main` limpo**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git status --short && git checkout -b fase-3-camada-3
@@ -67,7 +67,7 @@ Expected: `git status --short` vazio; `Switched to a new branch 'fase-3-camada-3
 - Modify: `scripts/analysis/consistency_utils.py`, `scripts/analysis/check_cross_period.py`
 - Test: `tests/test_consistency_utils.py`, `tests/test_consistency_cross_period.py`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Em `tests/test_consistency_utils.py`, logo antes de `# ── latest_rows`:
 
@@ -102,7 +102,7 @@ def test_iter_pairs_baseline_e_contexto():
     assert list(ccp.iter_pairs(pd.DataFrame())) == []
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_utils.py tests/test_consistency_cross_period.py -q -k "normalize or is_outros or iter_pairs" 2>&1 | tail -4
@@ -110,7 +110,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 3 failed (`AttributeError` em `normalize_text`, `is_outros`, `iter_pairs`).
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `consistency_utils.py` — imports (`import re`, `import unicodedata` junto aos demais da stdlib), `__all__` com `"normalize_text", "is_outros", "OUTROS_RE"`, e logo depois de `parse_hierarchy`:
 
@@ -195,7 +195,7 @@ def check_cross_period(df: pd.DataFrame, tol_abs: float = 1000.0,
     return flags, stats
 ```
 
-- [ ] **Step 4: Rodar e ver passar (a suíte inteira — a refatoração não pode mudar a Camada 2)**
+- [x] **Step 4: Rodar e ver passar (a suíte inteira — a refatoração não pode mudar a Camada 2)**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -2
@@ -203,7 +203,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 118 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/consistency_utils.py scripts/analysis/check_cross_period.py tests/test_consistency_utils.py tests/test_consistency_cross_period.py && git commit -q -m "refactor(analysis): iter_pairs na Camada 2; normalize_text e is_outros nos utils (Fase 3)" && git log --oneline -1
@@ -217,7 +217,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis
 - Create: `scripts/analysis/check_granularity.py`
 - Test: `tests/test_consistency_granularity.py`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 ```python
 """
@@ -452,7 +452,7 @@ def test_main_full_e_exigencia_de_cnpj(monkeypatch):
         ccg.main([])
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_granularity.py -q 2>&1 | tail -3
@@ -460,7 +460,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: erro de coleta `ModuleNotFoundError: No module named 'check_granularity'`.
 
-- [ ] **Step 3: Criar `scripts/analysis/check_granularity.py`**
+- [x] **Step 3: Criar `scripts/analysis/check_granularity.py`**
 
 ```python
 """
@@ -737,7 +737,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pytest tests/test_consistency_granularity.py -q 2>&1 | tail -3
@@ -745,7 +745,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -m pyte
 
 Expected: 15 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/check_granularity.py tests/test_consistency_granularity.py && git commit -q -m "feat(analysis): Camada 3 — check_granularity (renumerado, zero_padding, Outros, irmão, não explicada)" && git log --oneline -1
@@ -755,7 +755,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis
 
 ### Task 3: `run_all.py` + `update_weekly.sh`
 
-- [ ] **Step 1: Registrar a camada 3 em `run_all.py`**
+- [x] **Step 1: Registrar a camada 3 em `run_all.py`**
 
 ```python
 import check_cross_period
@@ -771,11 +771,11 @@ LAYERS = {
 
 Docstring: `(3 = granularidade, 5 = trilha temporal, 6 = desacúmulo)` → `(5 = trilha temporal, 6 = desacúmulo)`; `chama `run_all.py --layer 1 --full` e `--layer 2 --full`` → `chama `run_all.py --layer N --full` para N = 1, 2, 3`.
 
-- [ ] **Step 2: Passo `consistency_l3` no `update_weekly.sh`**
+- [x] **Step 2: Passo `consistency_l3` no `update_weekly.sh`**
 
 Depois de `run_step "consistency_l2" ...`, acrescentar `run_step "consistency_l3" ../analysis/run_all.py --layer 3 --full`; no comentário do bloco, `Camada 1 (...) e Camada 2 (reapresentações entre filings)` → `Camada 1 (...), Camada 2 (reapresentações entre filings) e Camada 3 (linhas sem par entre filings)`; no cabeçalho, `(Camadas 1 e 2)` → `(Camadas 1 a 3)`.
 
-- [ ] **Step 3: Conferir**
+- [x] **Step 3: Conferir**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.venv/bin/python run_all.py --help | grep dispon && bash -n ../update_weekly.sh && echo shell-ok && cd ../.. && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -1
@@ -783,7 +783,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && ../../.
 
 Expected: `disponíveis: 1,2,3`; `shell-ok`; 133 passed.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis/run_all.py scripts/update_weekly.sh && git commit -q -m "feat(analysis): run_all --layer 3; Camada 3 no update_weekly.sh" && git log --oneline -1
@@ -793,7 +793,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add scripts/analysis
 
 ### Task 4: Fumaça no banco real — WEGE3
 
-- [ ] **Step 1: Rodar, inspecionar e conferir idempotência + Camadas 1/2 intactas**
+- [x] **Step 1: Rodar, inspecionar e conferir idempotência + Camadas 1/2 intactas**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -c "
@@ -813,7 +813,7 @@ Expected: contagens de `layer=1` e `layer=2` iguais antes e depois; `layer=3` co
 
 ### Task 5: Execução completa e verificação
 
-- [ ] **Step 1: Rodar a base inteira e medir**
+- [x] **Step 1: Rodar a base inteira e medir**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research/scripts/analysis && time ../../.venv/bin/python run_all.py --layer 3 --full 2>&1 | tail -9 && cd ../.. && .venv/bin/python - <<'EOF'
@@ -831,7 +831,7 @@ EOF
 
 Expected (protótipo de 2026-09-18): `zero_padding` ≈ 33 mil, `reclassificado_em_irmao` ≈ 10 mil, `divergencia_nao_explicada` ≈ 11 mil, `renumerado` ≈ 700 (≈ 570 por nome), `reclassificado_em_outros` entre 500 e 4 mil; 620 pares BPA DFP × ITR 1T com exclusivos. Se `divergencia_nao_explicada` passar de 60% das linhas, o casamento por nome ou o balanço com "Outros" está quebrado.
 
-- [ ] **Step 2: Registrar no plano-mãe** (ponteiro no topo da Fase 3 + linha "Medido em 2026-09-18" na "Verificação da Fase 3") e commit:
+- [x] **Step 2: Registrar no plano-mãe** (ponteiro no topo da Fase 3 + linha "Medido em 2026-09-18" na "Verificação da Fase 3") e commit:
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md && git commit -q -m "docs(plano): numeros medidos da Camada 3 na base; ponteiro para o plano da Fase 3" && git log --oneline -1
@@ -841,7 +841,7 @@ cd /Users/lucasbarreto/Documents/Coding/cvm-research && git add docs/superpowers
 
 ### Task 6: Documentação
 
-- [ ] **Step 1: `CLAUDE.md`** — na subseção `consistency_flags`: `As Camadas 1 e 2 rodam` → `As Camadas 1, 2 e 3 rodam`; no bullet da Camada 2 `Linha que existe só num dos filings **não** gera flag (Camada 3, futura); só entra nas contagens` → `Linha que existe só num dos filings **não** gera flag aqui (é a Camada 3); só entra nas contagens`; e depois do bloco da Camada 2 (antes de `Para rodar: ... --layer 2`) inserir:
+- [x] **Step 1: `CLAUDE.md`** — na subseção `consistency_flags`: `As Camadas 1 e 2 rodam` → `As Camadas 1, 2 e 3 rodam`; no bullet da Camada 2 `Linha que existe só num dos filings **não** gera flag (Camada 3, futura); só entra nas contagens` → `Linha que existe só num dos filings **não** gera flag aqui (é a Camada 3); só entra nas contagens`; e depois do bloco da Camada 2 (antes de `Para rodar: ... --layer 2`) inserir:
 
 ```markdown
 **Camada 3 (`layer = 3`, `check_type = 'granularity'`)** — nos mesmos pares da Camada 2, explica as linhas que existem
@@ -886,15 +886,15 @@ Item 10 no "Comportamento esperado ao pesquisar" (após o 9):
     foi parar; `divergencia_nao_explicada` exige olhar a Camada 2 do mesmo par (reapresentação) antes de concluir.
 ```
 
-- [ ] **Step 2: `README.md`** — árvore (`check_granularity.py # Camada 3: linhas sem par entre filings (renumeração, Outros, irmão)` depois de `check_cross_period.py`), `As Camadas 1 e 2 rodam` → `As Camadas 1, 2 e 3 rodam`, exemplo `--layer 1,2` → `--layer 1,2,3`, e linha na tabela depois da Camada 2:
+- [x] **Step 2: `README.md`** — árvore (`check_granularity.py # Camada 3: linhas sem par entre filings (renumeração, Outros, irmão)` depois de `check_cross_period.py`), `As Camadas 1 e 2 rodam` → `As Camadas 1, 2 e 3 rodam`, exemplo `--layer 1,2` → `--layer 1,2,3`, e linha na tabela depois da Camada 2:
 
 ```markdown
 | 3 | `check_granularity.py` | Linhas que existem só num dos filings do par: `renumerado` (mesmo nome ou mesmo valor em outro código), `zero_padding`, `reclassificado_em_outros`, `reclassificado_em_irmao` (pai inalterado), `divergencia_nao_explicada`. |
 ```
 
-- [ ] **Step 3: `scripts/mcp/cvm_mcp.py`** — na docstring, depois de `layer=2 cross_period: reapresentacao/reclassificacao entre filings;` acrescentar `layer=3 granularity: renumerado/zero_padding/reclassificado_em_outros/reclassificado_em_irmao/divergencia_nao_explicada para linhas só num dos filings;`.
+- [x] **Step 3: `scripts/mcp/cvm_mcp.py`** — na docstring, depois de `layer=2 cross_period: reapresentacao/reclassificacao entre filings;` acrescentar `layer=3 granularity: renumerado/zero_padding/reclassificado_em_outros/reclassificado_em_irmao/divergencia_nao_explicada para linhas só num dos filings;`.
 
-- [ ] **Step 4: Conferir e commitar**
+- [x] **Step 4: Conferir e commitar**
 
 ```bash
 cd /Users/lucasbarreto/Documents/Coding/cvm-research && .venv/bin/python -c "import ast; ast.parse(open('scripts/mcp/cvm_mcp.py').read()); print('mcp ok')" && .venv/bin/python -m pytest tests/ -q 2>&1 | tail -1 && git add CLAUDE.md README.md scripts/mcp/cvm_mcp.py && git commit -q -m "docs: Camada 3 (granularity) no CLAUDE.md, README e docstring do MCP" && git log --oneline -1

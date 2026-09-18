@@ -12,7 +12,10 @@ cada pai:
   1. mesmo normalize_text(ds_conta): mesmo código → 'estavel'; outro código → 'renumerado'
   2. sobras 'N' dos dois lados: pareamento guloso por maior text_similarity;
      score ≥ sim_alto → 'reformulacao'; sim_baixo < score < sim_alto → 'ambiguo'
-     (fila de revisão: também vira flag layer 5 em consistency_flags)
+     (fila de revisão: também vira flag layer 5 em consistency_flags).
+     Sentido contábil oposto (consistency_utils.polaridade_conflita) força 'ambiguo'
+     por mais alto que seja o score: "Captação" × "Pagamento de debêntures" dá 0,756
+     e "Aumento" × "Redução de capital social" dá 0,800, mas são linhas contrárias
   3. sobras de B → 'nova'; sobras de A → 'removida' ('S' nunca entra na similaridade)
 Pai de A sem par em B → filhos 'removida'; pai de B sem par → filhos 'nova'.
 Primeiro filing de cada sequência → 'primeira_ocorrencia' para todas as linhas.
@@ -23,6 +26,10 @@ similarity_score quando há par) e em consistency_flags só os 'ambiguo'.
 Linhas anteriores do mesmo (cnpj[, tipo_doc]) são apagadas nas duas tabelas
 antes de gravar.
 
+`match_filings` expõe a mesma escada para a Camada 6 (derive_quarters), que
+precisa casar pares de filings que esta camada não compara: colunas
+'Penúltimo' e DFP × ITR do 3T.
+
 Roda no job semanal (scripts/update_weekly.sh) depois da Camada 3. À mão
 (na pasta scripts/analysis, .venv ativo):
   python check_text_stability.py --cnpj 84.429.695/0001-11
@@ -32,7 +39,7 @@ Roda no job semanal (scripts/update_weekly.sh) depois da Camada 3. À mão
 import pandas as pd
 
 from consistency_utils import (add_common_args, clear_flags, finish_run, get_db, latest_rows, new_run,
-                               normalize_text, parent_code, text_similarity, write_flags)
+                               normalize_text, parent_code, polaridade_conflita, text_similarity, write_flags)
 
 LAYER = 5
 CHECK_TYPE = "text_stability"
@@ -63,17 +70,20 @@ def _row(cd: str, ds, st, classe: str, anterior=None, score=None) -> dict:
             "classificacao": classe}
 
 
-def _comparar_pai(fa: dict, fb: dict, sim_alto: float, sim_baixo: float) -> tuple[list[dict], dict, int]:
+def _comparar_pai(fa: dict, fb: dict, sim_alto: float, sim_baixo: float,
+                  codigo_fixo_confiavel: bool = True) -> tuple[list[dict], dict, int]:
     """fa/fb = {cd: (ds, st)}: filhos diretos de um pai em A e em B.
-    Retorna (rows, mapa código A → código B das linhas casadas, n_estaveis)."""
+    Retorna (rows, mapa código A → código B das linhas casadas, n_estaveis).
+    codigo_fixo_confiavel=False trata as contas 'S' como as 'N' (ver compare_filings)."""
     rows: list[dict] = []
     mapa: dict = {}
     estaveis = 0
     # 0. 'S' com o mesmo código: estável por definição da CVM
-    for cd, (ds, st) in fa.items():
-        if st == "S" and cd in fb and fb[cd][1] == "S":
-            mapa[cd] = cd
-            estaveis += 1
+    if codigo_fixo_confiavel:
+        for cd, (ds, st) in fa.items():
+            if st == "S" and cd in fb and fb[cd][1] == "S":
+                mapa[cd] = cd
+                estaveis += 1
     # 1. nome normalizado
     na: dict = {}
     nb: dict = {}
@@ -98,9 +108,9 @@ def _comparar_pai(fa: dict, fb: dict, sim_alto: float, sim_baixo: float) -> tupl
             rows.append(_row(y, fb[y][0], fb[y][1], "renumerado", (x, fa[x][0]), 1.0))
         sobra_a += ra[len(rb):]
         sobra_b += rb[len(ra):]
-    # 2. similaridade só entre linhas 'N'
-    cand_a = [cd for cd in sobra_a if fa[cd][1] != "S"]
-    cand_b = [cd for cd in sobra_b if fb[cd][1] != "S"]
+    # 2. similaridade (só entre linhas 'N' quando o código fixo é confiável)
+    cand_a = [cd for cd in sobra_a if not codigo_fixo_confiavel or fa[cd][1] != "S"]
+    cand_b = [cd for cd in sobra_b if not codigo_fixo_confiavel or fb[cd][1] != "S"]
     pares = sorted(((text_similarity(fa[x][0], fb[y][0]), x, y) for x in cand_a for y in cand_b),
                    key=lambda t: (-t[0], t[1], t[2]))
     usados_a: set = set()
@@ -113,8 +123,11 @@ def _comparar_pai(fa: dict, fb: dict, sim_alto: float, sim_baixo: float) -> tupl
         usados_a.add(x)
         usados_b.add(y)
         mapa[x] = y
-        rows.append(_row(y, fb[y][0], fb[y][1], "reformulacao" if score >= sim_alto else "ambiguo",
-                         (x, fa[x][0]), round(score, 4)))
+        # Sentido oposto nunca é reformulação, por mais alto que o score seja: só o verbo
+        # muda em "Captação/Pagamento de debêntures" (0,756) e "Aumento/Redução de capital
+        # social" (0,800). Vai para a fila de revisão em vez de virar valor.
+        classe = "reformulacao" if score >= sim_alto and not polaridade_conflita(fa[x][0], fb[y][0]) else "ambiguo"
+        rows.append(_row(y, fb[y][0], fb[y][1], classe, (x, fa[x][0]), round(score, 4)))
     # 3. sobras
     for cd in sobra_b:
         if cd not in usados_b:
@@ -129,10 +142,20 @@ def _nivel(pai) -> tuple:
     return (-1, "") if pai is None else (pai.count("."), pai)
 
 
-def compare_filings(A: dict, B: dict, sim_alto: float = SIM_ALTO, sim_baixo: float = SIM_BAIXO) -> tuple[list[dict], int]:
-    """A/B = {cd: (ds, st)} de dois filings consecutivos. Retorna (rows sem contexto, n_estaveis).
-    Processa os pais da raiz para as folhas; o mapa A→B dos pais já casados escolhe
-    os filhos de A que correspondem a cada pai de B."""
+def compare_filings(A: dict, B: dict, sim_alto: float = SIM_ALTO, sim_baixo: float = SIM_BAIXO,
+                    codigo_fixo_confiavel: bool = True) -> tuple[list[dict], int, dict]:
+    """A/B = {cd: (ds, st)} de dois filings consecutivos. Retorna (rows sem contexto,
+    n_estaveis, mapa código em A → código em B de todas as linhas casadas, inclusive
+    as estáveis). Processa os pais da raiz para as folhas; o mapa A→B dos pais já
+    casados escolhe os filhos de A que correspondem a cada pai de B.
+
+    codigo_fixo_confiavel=True (o padrão, e o que esta camada usa) trata conta 'S' com
+    o mesmo código como estável mesmo que o nome mude, porque o código é fixado pela CVM.
+    Isso vale dentro de uma versão do plano de contas, mas não entre versões: na revisão
+    do plano dos bancos, entre o ITR do 3T/2017 e o DFP/2017, o Itaú teve 3.01.02 mudando
+    de 'Receita de Dividendos' para o resultado de câmbio, que estava em 3.01.03. Quem usa
+    o casamento para fazer conta (Camada 6) passa False e submete as 'S' à mesma escada
+    das 'N'."""
     filhos_a: dict = {}
     filhos_b: dict = {}
     for cd, v in A.items():
@@ -154,14 +177,37 @@ def compare_filings(A: dict, B: dict, sim_alto: float = SIM_ALTO, sim_baixo: flo
         fa = filhos_a.get(pa, {}) if pa is not None and pa not in consumidos else {}
         if fa:
             consumidos.add(pa)
-        r, m, n = _comparar_pai(fa, filhos_b[pb], sim_alto, sim_baixo)
+        r, m, n = _comparar_pai(fa, filhos_b[pb], sim_alto, sim_baixo, codigo_fixo_confiavel)
         rows += r
         mapa.update(m)
         estaveis += n
     for pa, fa in filhos_a.items():
         if pa not in consumidos:
             rows += [_row(cd, ds, st, "removida", (cd, ds)) for cd, (ds, st) in fa.items()]
-    return rows, estaveis
+    return rows, estaveis, mapa
+
+
+CASADAS = ("renumerado", "reformulacao", "ambiguo")
+
+
+def match_filings(anterior: dict, atual: dict, sim_alto: float = SIM_ALTO, sim_baixo: float = SIM_BAIXO,
+                  codigo_fixo_confiavel: bool = False) -> dict:
+    """Casa as linhas de dois filings quaisquer com a escada desta camada. Ao contrário
+    de check_text_stability, não exige que sejam consecutivos nem da mesma fonte: a
+    Camada 6 usa isto para DFP × ITR do 3T e para as colunas 'Penúltimo'.
+
+    anterior/atual = {cd_conta: (ds_conta, st_conta_fixa)}.
+    Retorna {cd no `atual`: (cd no `anterior`, classificacao, similarity_score)} só para
+    as linhas casadas; classificacao ∈ CASADAS + 'estavel' (score None). Linha de `atual`
+    sem correspondente em `anterior` fica de fora do dicionário.
+
+    O padrão aqui é codigo_fixo_confiavel=False, ao contrário de compare_filings: quem
+    casa para fazer conta não pode aceitar o código da CVM sem olhar o nome (ver lá o
+    caso do Itaú em 2017). Um nome só retocado continua casando pela similaridade."""
+    rows, _estaveis, mapa = compare_filings(anterior, atual, sim_alto, sim_baixo, codigo_fixo_confiavel)
+    classes = {r["cd_conta"]: (r["cd_conta_anterior"], r["classificacao"], r["similarity_score"])
+               for r in rows if r["classificacao"] in CASADAS}
+    return {cd_at: classes.get(cd_at) or (cd_ant, "estavel", None) for cd_ant, cd_at in mapa.items()}
 
 
 def check_text_stability(df: pd.DataFrame, sim_alto: float = SIM_ALTO,
@@ -187,7 +233,7 @@ def check_text_stability(df: pd.DataFrame, sim_alto: float = SIM_ALTO,
                 st["primeira_ocorrencia"] += len(novas)
             else:
                 data_ant, linhas_ant = anterior
-                novas, estaveis = compare_filings(linhas_ant, atual, sim_alto, sim_baixo)
+                novas, estaveis, _ = compare_filings(linhas_ant, atual, sim_alto, sim_baixo)
                 st["estavel"] += estaveis
                 for r in novas:
                     st[r["classificacao"]] += 1

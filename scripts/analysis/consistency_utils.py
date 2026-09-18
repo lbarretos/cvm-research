@@ -29,9 +29,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
 from utils import get_db  # noqa: E402  — reaproveita DATABASE_URL, WAL e foreign_keys
 
 __all__ = ["get_db", "tolerancia", "parent_code", "parse_hierarchy", "total_codes", "latest_rows",
-           "normalize_text", "is_outros", "text_similarity", "OUTROS_RE",
+           "normalize_text", "is_outros", "text_similarity", "polaridade", "polaridade_conflita", "OUTROS_RE",
            "cnpjs_financeiros", "new_run", "finish_run", "write_flags", "clear_flags", "add_common_args",
-           "TIPOS_DOC", "FLAG_COLS", "EXCECOES_SOMA", "FORMULAS_NIVEL2", "SETOR_FINANCEIRO"]
+           "TIPOS_DOC", "FLAG_COLS", "EXCECOES_SOMA", "FORMULAS_NIVEL2", "SETOR_FINANCEIRO",
+           "POLARIDADE_ENTRADA", "POLARIDADE_SAIDA"]
 
 TIPOS_DOC = ["BPA", "BPP", "DRE", "DFC_MI", "DVA"]
 
@@ -126,6 +127,41 @@ def text_similarity(a, b) -> float:
     direto = difflib.SequenceMatcher(None, na, nb).ratio()
     ordenado = difflib.SequenceMatcher(None, " ".join(sorted(na.split())), " ".join(sorted(nb.split()))).ratio()
     return max(direto, ordenado)
+
+
+# Polaridade contábil: termos que dizem o sentido do fluxo. A similaridade textual não
+# distingue "Captação de debêntures" de "Pagamento de debêntures" (score 0,756) nem
+# "Aumento de capital social" de "Redução de capital social" (0,800) — só o verbo muda, e
+# o resto da frase é idêntico. Medido em 2026-09-18: 586 pares casados na base inteira
+# invertiam o sentido, 212 deles gerando valor errado (o maior, JSLG3 2T/2017, −2.950,7 mi
+# de "Pagamentos de empréstimos" derivado contra "Aumento em empréstimos").
+POLARIDADE_ENTRADA = frozenset("""
+    captacao captacoes recebimento recebimentos recebidos recebidas entrada entradas ingresso ingressos
+    venda vendas alienacao alienacoes aumento aumentos emissao emissoes obtencao integralizacao
+    recuperacao aporte aportes
+""".split())
+POLARIDADE_SAIDA = frozenset("""
+    pagamento pagamentos pagos pagas amortizacao amortizacoes saida saidas compra compras recompra
+    recompras aquisicao aquisicoes reducao reducoes baixa baixas desembolso desembolsos dispendio
+    liquidacao distribuicao distribuicoes
+""".split())
+
+
+def polaridade(ds_conta):
+    """'E' (entrada), 'S' (saída) ou None quando o nome não diz o sentido — nenhum termo
+    conhecido, ou termos dos dois lados ('Aquisição e venda de imobilizado')."""
+    tokens = set(normalize_text(ds_conta).split())
+    entra, sai = bool(tokens & POLARIDADE_ENTRADA), bool(tokens & POLARIDADE_SAIDA)
+    if entra == sai:
+        return None
+    return "E" if entra else "S"
+
+
+def polaridade_conflita(a, b) -> bool:
+    """True quando um nome é claramente entrada e o outro claramente saída. Indefinido
+    de qualquer lado devolve False: na dúvida sobre o sentido, não se opõe ao casamento."""
+    pa, pb = polaridade(a), polaridade(b)
+    return pa is not None and pb is not None and pa != pb
 
 
 def total_codes(tipo_doc: str, doc: pd.DataFrame) -> list[str]:

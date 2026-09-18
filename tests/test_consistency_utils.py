@@ -253,3 +253,27 @@ def test_add_common_args_defaults_e_parse():
         (CNPJ, "DFC_MI", 2020, 2024, 500.0, 0.02)
     with pytest.raises(SystemExit):
         p.parse_args(["--tipo-doc", "XYZ"])
+
+
+# ── polaridade contábil (entrada × saída) ────────────────────────────────────
+
+def test_polaridade_classifica_entrada_saida_e_indefinido():
+    assert cu.polaridade("Captação de debêntures") == "E"
+    assert cu.polaridade("Emissão de ações") == "E"
+    assert cu.polaridade("Pagamento de debêntures") == "S"
+    assert cu.polaridade("Amortização de empréstimos") == "S"
+    assert cu.polaridade("Recompra de ações") == "S"
+    assert cu.polaridade("Lucro líquido do exercício") is None       # nenhum termo
+    assert cu.polaridade("Aquisição e venda de imobilizado") is None  # os dois
+    assert cu.polaridade(None) is None
+
+
+def test_polaridade_conflita():
+    # O caso real: a Multiplan não tinha 'Pagamento de debêntures' no ITR do 3T/2021,
+    # e a similaridade de 0,756 casaria com 'Captação de debêntures'.
+    assert cu.polaridade_conflita("Captação de debêntures", "Pagamento de debêntures")
+    assert cu.polaridade_conflita("Aumento de capital social", "Redução de capital social")
+    assert not cu.polaridade_conflita("Captação de debêntures", "Captação de debentures")
+    assert not cu.polaridade_conflita("Pagamento de encargos e debêntures", "Pagamento de encargos sobre debêntures")
+    assert not cu.polaridade_conflita("Lucro líquido", "Resultado líquido")           # sem polaridade
+    assert not cu.polaridade_conflita("Aquisição e venda de bens", "Venda de bens")   # um lado indefinido

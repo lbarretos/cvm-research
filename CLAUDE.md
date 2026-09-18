@@ -1,8 +1,77 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: SQLite local (`cvm_research.db`, ~12 GB) · 145 empresas · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda).
-Atualização: `bash scripts/update_weekly.sh` (manual) ou job launchd toda segunda 9h (`scripts/install_weekly_launchd.sh`).
+Banco: SQLite local (`cvm_research.db`) · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda).
+Cobertura e período são escolhidos na carga (ver a seção seguinte); nesta instalação, confira com
+`SELECT COUNT(*) FROM companies` e `SELECT MIN(data_referencia) FROM ipe_docs`.
+Montar do zero: `bash bootstrap.sh --universo ibov`. Manter: `bash scripts/update_weekly.sh` (manual)
+ou job launchd toda segunda 9h (`scripts/install_weekly_launchd.sh`).
+
+## Montar a base do zero (quando o banco está vazio ou é um clone novo)
+
+Quando o usuário pedir para **montar, construir, replicar ou recriar a base**, ou quando uma
+consulta falhar porque as tabelas estão vazias, o caminho é o `bootstrap.sh` na raiz do projeto.
+Não monte a sequência de ingestores à mão: o script já cuida da ordem, das camadas de
+tratamento e do laço de extração de PDF, e é retomável.
+
+Antes de rodar, resolva duas escolhas com o usuário. São as únicas que mudam o resultado.
+
+**1. Universo de cobertura.** O padrão recomendado para quem está começando é o IBOV, com cerca
+de 78 empresas. As opções são `ibov`, `ibrx`, `todas` (as ~443 ativas da B3) ou um arquivo com a
+lista de tickers que o usuário quiser. Se ele **anexar ou colar uma tabela** com as empresas
+desejadas, salve-a como CSV na raiz do projeto e passe o caminho em `--universo`. O arquivo pode
+ser um CSV com coluna `ticker` (as outras colunas são ignoradas) ou um ticker por linha; `#`
+começa comentário. Ticker fora do catálogo da B3 é avisado e pulado, sem interromper.
+
+```
+ticker,empresa
+PETR4,Petrobras
+VALE3,Vale
+WEGE3,WEG
+```
+
+O universo é **aditivo**: soma ao `watchlist.csv` e nunca remove. Para começar limpo, só com o
+universo escolhido, acrescente `--substituir`, que faz backup do `watchlist.csv` antes.
+
+**2. Período.** `--desde ANO` vale para todas as fontes. Cada uma tem um primeiro ano possível
+(IPE 2015, VLMO 2018, ITR 2011, DFP e FRE 2010); pedir antes disso é ajustado para cima com
+aviso, não falha. Sem `--desde`, cada fonte vai até o início. Menos anos significa menos tempo e
+menos disco, então pergunte se o usuário não disser.
+
+```bash
+bash bootstrap.sh --universo ibov --substituir            # IBOV, série completa
+bash bootstrap.sh --universo ibov --desde 2020            # IBOV, de 2020 para cá
+bash bootstrap.sh --universo minhas-empresas.csv --desde 2018
+bash bootstrap.sh --universo todas --sem-pdf              # cobertura máxima, sem texto de PDF
+```
+
+**Sempre rode `--dry-run` primeiro** e mostre o plano ao usuário antes de executar de verdade. A
+carga completa leva horas e baixa dezenas de GB; vale confirmar cobertura e período antes.
+
+Três blocos rodam em sequência, e o do meio é o que costuma ser esquecido:
+
+| Bloco | O que faz | Referência (IBOV) |
+|---|---|---|
+| Dados brutos | os sete ingestores da CVM | 20–40 min |
+| **Tratamento** | `run_all.py --layer 1,2,3,5,6 --full` | ~4 min |
+| Texto dos PDFs | `extract_pdf.py` em laço, depois reconstrói o FTS | 6–12 h |
+
+Sem o bloco de tratamento, `demonstrativos_trimestrais`, `consistency_flags` e
+`cd_conta_ds_timeline` ficam vazias e as consultas trimestrais e de reapresentação deste arquivo
+respondem nada, sem erro que explique o porquê. `--sem-pdf` adia a parte longa e `--so-pdf`
+retoma depois; a base já é pesquisável nos dados estruturados sem ela, só não tem busca
+full-text nem leitura de fatos relevantes.
+
+Ao terminar, confirme com `.venv/bin/python -m pytest tests/ -q`. A suíte inclui testes que
+releem o banco e recalculam o tratamento a partir do dado bruto. Depois, a manutenção é
+`bash scripts/update_weekly.sh` (ou o job semanal do launchd), que cobre só o ano corrente e o
+anterior — para refazer o histórico, `bootstrap.sh` de novo.
+
+⚠️ A CVM não arquiva versões anteriores dos documentos: cada base guarda a versão que estava no
+ZIP no dia do download. Duas bases montadas em datas diferentes divergem nos períodos que foram
+reapresentados no intervalo. Ao comparar números com outra instalação, cite a data da carga.
+
+---
 
 ## Acesso ao banco (MCP `cvm-research`)
 
@@ -169,24 +238,38 @@ Filings consecutivos da mesma fonte (`ordem_exercicio = 'Último'`), comparados 
 - `renumerado` (`similarity_score = 1`): mesmo nome normalizado em código diferente — `cd_conta_anterior` diz de onde veio.
 - `reformulacao` (score ≥ 0,75) e `ambiguo` (0,55 < score < 0,75; também vira flag `layer = 5` em `consistency_flags`,
   fila de revisão): nome parecido (difflib com token-sort sobre texto normalizado), só em linhas `st_conta_fixa = 'N'`.
+  Par com **sentido contábil oposto** é sempre `ambiguo`, por mais alto que seja o score: só o verbo muda em
+  "Captação"/"Pagamento de debêntures" (0,756) e "Aumento"/"Redução de capital social" (0,800), e são linhas contrárias.
 - `nova` / `removida`: sem par. `removida` fica no filing em que sumiu, com `cd_conta`/`ds_conta` da linha antiga
   (o código pode ter sido reutilizado por outra linha no mesmo filing — renumeração em cascata).
-Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mude. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
+Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mude — o que **não** vale entre versões do plano
+de contas (a CVM re-letrou o plano dos bancos em 2017). Por isso a Camada 6 casa com `codigo_fixo_confiavel=False` e não
+reaproveita esta trilha. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
 
 ### `demonstrativos_trimestrais` — valor de cada trimestre da DRE/DFC_MI/DVA, por conta e por safra (Camada 6)
 `run_id, cnpj_companhia, tipo_doc ('DRE'/'DFC_MI'/'DVA'), safra ('original'/'reapresentado'), exercicio_ini, dt_ini_exerc, dt_fim_exerc,`
-`trimestre (1–4, posição no exercício social), cd_conta, ds_conta, vl_publicado, vl_derivado, origem ('publicado'/'derivado'), vl_final, flag,`
+`trimestre (1–4, posição no exercício social), cd_conta, ds_conta, cd_conta_b, casamento, vl_publicado, vl_derivado,`
+`origem ('publicado'/'derivado'), vl_final, flag,`
 `fonte_a, data_a, ordem_a (filing do acumulado do trimestre), fonte_b, data_b, ordem_b (filing do acumulado anterior; NULL no 1T)`
 
 **Use `vl_final`** (e `origem` para saber de onde veio). `safra = 'original'` usa só colunas `Último` (o que o mercado viu na época);
 `'reapresentado'` usa só colunas `Penúltimo` dos filings do exercício seguinte. **Nunca subtrai safras diferentes.**
 - DRE 1T–3T: `vl_publicado` é a linha trimestral isolada do ITR (`origem = 'publicado'`); `vl_derivado = acum(Qn) − acum(Qn−1)` serve de conferência.
 - DRE 4T, DFC_MI e DVA (todos os trimestres): só derivado (`4T = DFP − acum(3T)`).
+- **`cd_conta_b` e `casamento`**: qual linha do filing anterior foi subtraída e como ela foi encontrada. O mesmo `cd_conta`
+  costuma ser **outra linha** no filing anterior — a empresa renumera as contas que cria (`st_conta_fixa = 'N'`) entre
+  trimestres e o DFP usa um layout diferente do ITR. O casamento usa a escada da Camada 5: `estavel` (mesmo código e mesmo
+  nome), `renumerado` (mesmo nome normalizado, código diferente), `reformulacao` (similaridade ≥ 0,75 **e** sem inversão
+  de sentido contábil — "Captação" e "Pagamento de debêntures" têm score 0,756 e nunca casam). Para auditar um número,
+  compare `cd_conta` no filing A com `cd_conta_b` no filing B, no dado bruto.
 - `flag`: `reapresentacao_intra_ano` (publicado ≠ derivado, ou 6.05 do 4T da DFC ≠ variação do saldo final de caixa; também em `consistency_flags` `layer = 6`),
-  `linha_sem_par` (conta não existe no acumulado anterior — `vl_derivado` NULL), `sem_anterior`/`sem_3t` (buraco na série — NULL),
+  `par_ambiguo` (o único candidato a par tem similaridade entre 0,55 e 0,75 — o valor **não** é calculado de propósito, e a
+  flag de linha em `consistency_flags` traz `cd_conta_b`, `ds_conta_b` e `score` para revisão),
+  `linha_sem_par` (a linha não tem correspondente no acumulado anterior — `vl_derivado` NULL), `sem_anterior`/`sem_3t` (buraco na série — NULL),
   `componente_reapresentado` (um dos dois filings tem `reapresentacao` na Camada 2). `sem_dfp` só em `consistency_flags` (não há linha de 4T).
 - `3.99` (lucro por ação) não está na tabela: não é aditivo. Exercício social fora do calendário: `trimestre` é a posição no exercício, não o trimestre-calendário.
-Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada).
+Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada). `--sim-alto`/`--sim-baixo` movem os
+limiares do casamento (padrão 0,75 e 0,55).
 
 ---
 
@@ -427,6 +510,24 @@ SELECT dt_fim_exerc, trimestre, vl_final, flag
 FROM demonstrativos_trimestrais
 WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DFC_MI' AND cd_conta = '6.01' AND safra = 'original'
 ORDER BY dt_fim_exerc DESC LIMIT 8;
+
+-- Auditar uma linha criada pela empresa: qual conta do filing anterior foi subtraída
+SELECT dt_fim_exerc, trimestre, cd_conta, ds_conta, cd_conta_b, casamento,
+       ROUND(vl_final/1e6, 1) AS vl_mi, flag,
+       fonte_a || ' ' || data_a AS filing_a, fonte_b || ' ' || data_b AS filing_b
+FROM demonstrativos_trimestrais
+WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DFC_MI' AND safra = 'original'
+  AND cd_conta LIKE '6.03.%'
+ORDER BY dt_fim_exerc DESC, cd_conta LIMIT 30;
+
+-- Fila de revisão: pares que o casamento não teve confiança para usar
+SELECT tipo_doc, data_ref, cd_conta, ds_conta,
+       json_extract(detalhe,'$.cd_conta_b') AS cd_b,
+       json_extract(detalhe,'$.ds_conta_b') AS candidato,
+       ROUND(json_extract(detalhe,'$.score'), 3) AS score
+FROM consistency_flags
+WHERE cnpj_companhia = '<CNPJ>' AND layer = 6 AND classificacao = 'par_ambiguo'
+ORDER BY score DESC;
 ```
 Para comparar com o que a empresa reapresentou depois, repita com `safra = 'reapresentado'` e mostre as duas colunas lado a lado.
 
@@ -474,7 +575,10 @@ LIMIT 20;
 12. **Para valores trimestrais (4T da DRE, qualquer trimestre da DFC/DVA)**: use `demonstrativos_trimestrais` com
     `safra = 'original'` por padrão, nunca subtraia acumulados à mão misturando `Último` e `Penúltimo`. Mostre `origem` e a
     `flag`: `reapresentacao_intra_ano` significa que publicado e derivado divergem (apresente os dois); `linha_sem_par`/`sem_3t`
-    significa que o trimestre não pôde ser derivado para aquela conta.
+    significa que o trimestre não pôde ser derivado para aquela conta; `par_ambiguo` significa que a linha mudou de nome o
+    bastante para o casamento ficar duvidoso e o valor foi deliberadamente não calculado (o candidato está no `detalhe` da
+    flag `layer = 6`). Em contas criadas pela empresa (`st_conta_fixa = 'N'`), cite `cd_conta_b` e `casamento` ao apresentar
+    o número: eles dizem qual linha do filing anterior entrou na subtração.
 
 ## Defasagem dos dados
 
@@ -518,8 +622,14 @@ SELECT COUNT(*) AS total_docs FROM ipe_docs;
 
 ### Atualização dos dados
 
-Automática: `bash scripts/install_weekly_launchd.sh` (segunda 9h; `--status` mostra o último log).
-Manual, tudo de uma vez: `bash scripts/update_weekly.sh`. Passo a passo:
+**Carga inicial (banco vazio):** `bash bootstrap.sh` — brutos com histórico completo, as cinco
+camadas de consistência e o texto dos PDFs em laço. Retomável. É o único caminho que deixa
+`demonstrativos_trimestrais`, `consistency_flags` e `cd_conta_ds_timeline` preenchidas; os
+ingestores sozinhos só trazem o dado bruto.
+
+**Manutenção:** automática com `bash scripts/install_weekly_launchd.sh` (segunda 9h; `--status`
+mostra o último log), ou `bash scripts/update_weekly.sh` à mão. O job semanal atualiza só o ano
+corrente e o anterior; para refazer o histórico use o `bootstrap.sh`. Passo a passo:
 
 ```bash
 cd scripts/ingest
@@ -543,6 +653,10 @@ python ingest_vlmo.py  --desde 2018   # VLMO estruturado disponível desde 2018
 # depreciação por classe de ativo), como em:
 #   python ingest_notas_explicativas.py --cnpj <CNPJ> --ano <ANO> --fonte ITR
 python ingest_fre.py   --desde 2010   # FRE desde 2010
+
+# Tratamento — obrigatório depois de qualquer carga histórica. Sem isto,
+# demonstrativos_trimestrais, consistency_flags e cd_conta_ds_timeline ficam vazias.
+cd ../analysis && python run_all.py --layer 1,2,3,5,6 --full   # ~8 min nas 145 empresas
 ```
 
 O `.env` na raiz do projeto deve ter:
@@ -577,13 +691,20 @@ python add_companies.py --ibov --skip-assumed  # Pula tickers inferidos (sufixo 
 
 # 4. Sincronizar watchlist.csv → tabela companies
 python ingest_companies.py
-
-# 5. Re-rodar ingestores com histórico completo para as novas empresas
-# (os ZIPs já foram baixados — re-download é inevitável mas sem código novo)
-python ingest_ipe.py --desde 2015
-python ingest_dfp.py --historico --desde 2010
-# ... etc
 ```
+
+O caminho mais curto para os passos 3 e 4 é o `bootstrap.sh`, que também aceita a lista de
+tickers direto e já roda o tratamento depois (ver "Montar a base do zero" no topo):
+
+```bash
+bash bootstrap.sh --universo ibov                    # soma o IBOV ao watchlist
+bash bootstrap.sh --universo minhas-empresas.csv     # soma a lista do usuário
+```
+
+**Recarregar os dados para a cobertura nova:** `bash bootstrap.sh --sem-pdf` e depois
+`bash bootstrap.sh --so-pdf`. Os ingestores reprocessam os ZIPs inteiros, então a recarga
+atualiza as empresas antigas junto e nada é perdido. Só não esqueça do tratamento: sem ele as
+tabelas derivadas ficam desatualizadas em relação à cobertura nova.
 
 **Tickers assumidos:** empresas fora do IBOV recebem ticker com sufixo "3" (ON).
 Checar coluna `observacao` no watchlist.csv para linhas com `auto:assumed` e corrigir

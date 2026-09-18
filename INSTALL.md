@@ -34,19 +34,81 @@ echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
 # MCP no Claude Code (caminhos absolutos, gravados no ~/.claude.json)
 claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
 
-# Popular o banco (30–60 min — baixa ~15 GB de ZIPs da CVM)
-cd scripts/ingest && source ../../.venv/bin/activate
-python ingest_companies.py
-python ingest_ipe.py --desde 2015
-python ingest_vlmo.py --desde 2018
-python ingest_recompra.py
-python ingest_fre.py --desde 2010
-python ingest_dfp.py --historico --desde 2010
-python ingest_itr.py --desde 2011
+# Ver o plano antes de gastar horas
+bash bootstrap.sh --universo ibov --substituir --desde 2020 --dry-run
 
-# Texto dos PDFs (opcional; horas para o histórico inteiro — rode em lotes)
-python extract_pdf.py --limite 2000
+# Popular o banco: brutos + camadas de consistência + texto dos PDFs
+bash bootstrap.sh --universo ibov --substituir --desde 2020
 ```
+
+Pelo Claude Code, a mesma coisa em português: *"Monte a base com o universo IBOV, documentos de
+2020 para cá."* O [CLAUDE.md](CLAUDE.md) ensina o Claude a montar o comando, mostrar o plano
+antes e acompanhar a execução.
+
+### Os três blocos
+
+`bootstrap.sh` é retomável: Ctrl-C e rodar de novo continua de onde parou.
+
+| Bloco | O que roda | IBOV (~78) | Watchlist do repo (147) |
+|---|---|---|---|
+| Dados brutos | os sete ingestores | 20–40 min | 30–60 min, ~15 GB de ZIPs |
+| **Tratamento** | `run_all.py --layer 1,2,3,5,6 --full` | ~4 min | ~8 min |
+| Texto dos PDFs | `extract_pdf.py` em laço, depois reconstrói o índice FTS | 6–12 h | 12–24 h, ~170 mil docs |
+
+O bloco de tratamento é o que preenche `demonstrativos_trimestrais`, `consistency_flags` e
+`cd_conta_ds_timeline`. **Sem ele o banco responde os dados brutos e nada mais**: as consultas
+trimestrais e de reapresentação do [CLAUDE.md](CLAUDE.md) voltam vazias, sem erro que explique
+o porquê. Para adiar a parte longa, `--sem-pdf`; para retomá-la depois, `--so-pdf`.
+
+### Cobertura
+
+`--universo` aceita `ibov` (recomendado para começar, ~78 empresas), `ibrx`, `todas` (as ~443
+ativas da B3) ou o caminho de um arquivo com a sua lista de tickers. A lista é a melhor opção
+quando você já sabe o que quer acompanhar: menos download, menos disco e menos ruído.
+
+```
+ticker,empresa
+PETR4,Petrobras
+VALE3,Vale
+WEGE3,WEG
+```
+
+CSV com coluna `ticker` (as outras colunas são ignoradas) ou um ticker por linha. `#` começa
+comentário; ticker fora do catálogo da B3 é avisado e pulado sem interromper a carga.
+
+O universo é **aditivo**: soma ao `watchlist.csv` e nunca remove. `--substituir` zera o
+`watchlist.csv` antes, guardando uma cópia com data no nome. O repositório vem com 147 tickers,
+que são o IBOV mais a cobertura própria do autor; use `--substituir` se quiser só o seu recorte.
+
+Depois da carga, dá para crescer a qualquer momento: `bash bootstrap.sh --universo NOVO.csv`
+adiciona as empresas e recarrega. Ou, manualmente, `add_companies.py` seguido de
+`ingest_companies.py` e dos ingestores (ver a seção "Adicionar empresas" do [CLAUDE.md](CLAUDE.md)).
+
+### Período
+
+`--desde ANO` vale para todas as fontes. Cada uma tem um primeiro ano possível, e pedir antes
+disso é ajustado para cima com aviso em vez de falhar:
+
+| Fonte | Primeiro ano | Por quê |
+|---|---|---|
+| IPE | 2015 | os ZIPs de 2009–2014 vêm sem `Protocolo_Entrega` e são descartados |
+| VLMO | 2018 | antes disso não há feed estruturado de insider trading |
+| ITR | 2011 | início da série de ITR no portal de dados abertos |
+| DFP, FRE | 2010 | início das séries |
+
+Sem `--desde`, cada fonte vai até o início. Para controle por fonte, use as variáveis
+`IPE_DESDE`, `VLMO_DESDE`, `FRE_DESDE`, `DFP_DESDE` e `ITR_DESDE`.
+
+### Conferindo
+
+`.venv/bin/python -m pytest tests/ -q`. A suíte inclui testes que leem o banco e recalculam o
+tratamento a partir do dado bruto: conferem que cada valor trimestral é mesmo a subtração de
+duas linhas equivalentes nos dois filings. Eles pulam sozinhos se o banco não existir, se as
+camadas ainda não rodaram ou se a sua cobertura não tem as empresas da amostra.
+
+> ⚠️ A CVM não arquiva versões anteriores dos documentos: cada base guarda a versão que estava
+> no ZIP no dia do download. Duas instalações montadas em datas diferentes divergem nos períodos
+> reapresentados no intervalo. Ao comparar números com outra máquina, cite a data da carga.
 
 ---
 
@@ -139,16 +201,87 @@ python add_companies.py --ibov             # confirmar com "s"
 python add_companies.py --ticker VALE3     # uma empresa
 
 python ingest_companies.py                 # watchlist → tabela companies
-
-# Re-ingerir histórico para as novas empresas
-python ingest_ipe.py --desde 2015
-python ingest_dfp.py --historico --desde 2010
-python ingest_itr.py --desde 2011
-python ingest_vlmo.py --desde 2018
-python ingest_fre.py --desde 2010
 ```
 
+Depois de mexer no `watchlist.csv`, recarregue com o `bootstrap.sh` em vez de repetir os
+ingestores à mão: ele cobre os sete, roda o tratamento e é retomável.
+
+```bash
+bash bootstrap.sh --sem-pdf     # brutos + tratamento para a cobertura nova
+bash bootstrap.sh --so-pdf      # o texto dos PDFs depois, quando quiser
+```
+
+Os ingestores são idempotentes e reprocessam os ZIPs inteiros, então re-rodar para
+as empresas novas também atualiza as antigas. Nada é perdido.
+
 **Tickers assumidos:** empresas fora do IBOV recebem ticker `XXXX3` (ON inferido) e a coluna `observacao` do watchlist fica com `auto:assumed`. Confira e corrija antes de rodar os ingestores.
+
+---
+
+## Estrutura do projeto
+
+```
+cvm-research/
+├── README.md                       # visão geral, quick start, casos de uso
+├── INSTALL.md                      # este arquivo
+├── CLAUDE.md                       # schema, queries e instruções para o Claude
+├── TODOS.md                        # backlog
+├── watchlist.csv                   # empresas cobertas: ticker, CNPJ, código CVM
+├── schema.sql                      # schema SQLite completo (tabelas + views + FTS5)
+├── setup.sh                        # cria cvm_research.db a partir de schema.sql
+├── bootstrap.sh                    # carga inicial: brutos + consistência + PDFs (retomável)
+├── requirements.txt                # dependências Python, com versões fixadas
+├── .env.example                    # template do .env (DATABASE_URL)
+├── scripts/
+│   ├── update_weekly.sh            # ingestores + consistência + extract_pdf (lock + log)
+│   ├── install_weekly_launchd.sh   # agenda o update_weekly.sh (segunda 9h)
+│   ├── mcp/cvm_mcp.py              # servidor MCP (stdio, somente leitura)
+│   ├── migrations/                 # migrações de schema, uma por arquivo datado
+│   ├── ingest/
+│   │   ├── utils.py                # conexão SQLite + helpers de download/conversão
+│   │   ├── catalog.py              # baixa catálogo B3+CVM → company_catalog.csv
+│   │   ├── add_companies.py        # adiciona empresas do catálogo à watchlist
+│   │   ├── ingest_companies.py     # sincroniza watchlist.csv → tabela companies
+│   │   ├── ingest_ipe.py           # documentos CVM (metadados) — --desde ANO
+│   │   ├── ingest_vlmo.py          # insider trading
+│   │   ├── ingest_recompra.py      # programas de recompra
+│   │   ├── ingest_fre.py           # capital, acionistas, remuneração
+│   │   ├── ingest_dfp.py           # demonstrativos anuais — --historico, --desde ANO
+│   │   ├── ingest_itr.py           # demonstrativos trimestrais — --desde ANO
+│   │   ├── ingest_notas_explicativas.py  # texto completo do ITR/DFP (sob demanda)
+│   │   └── extract_pdf.py          # extração de texto dos PDFs do IPE
+│   └── analysis/                   # o "tratamento" — roda depois de DFP/ITR
+│       ├── consistency_utils.py    # latest_rows, tolerância, similaridade, polaridade
+│       ├── check_hierarchy_sums.py # Camada 1: soma dentro do documento
+│       ├── check_cross_period.py   # Camada 2: reapresentação entre filings
+│       ├── check_granularity.py    # Camada 3: linhas sem par entre filings
+│       ├── check_text_stability.py # Camada 5 (+4): trilha de nomes e códigos
+│       ├── derive_quarters.py      # Camada 6: desacúmulo → demonstrativos_trimestrais
+│       └── run_all.py              # orquestrador: --layer 1,2,3,5,6 --cnpj|--full
+├── tests/                          # pytest; os *_real.py leem o banco e pulam sem ele
+├── docs/superpowers/plans/         # desenho de cada camada, com as medições
+└── logs/                           # logs do update semanal (não versionado)
+```
+
+### As camadas de consistência
+
+Cruzam os quadros de `demonstrativos_contabeis` e gravam achados em `consistency_runs` /
+`consistency_flags`. **Nunca alteram o valor publicado pela CVM**: tudo é metadado ao lado do original.
+Rodam no `bootstrap.sh` e no job semanal; à mão, por empresa ou na base inteira:
+
+```bash
+cd scripts/analysis && source ../../.venv/bin/activate
+python run_all.py --layer 1,2,3,5,6 --cnpj 84.429.695/0001-11   # uma empresa
+python run_all.py --layer 6 --full                               # só o desacúmulo, base inteira
+```
+
+| Camada | Script | O que detecta |
+|---|---|---|
+| 1 | `check_hierarchy_sums.py` | Dentro de cada documento, pai = Σ filhos diretos e fórmulas de nível 2: `nao_detalhado`, `pai_vazio`, `divergencia`, `divergencia_formula`. Exceções: `6.05` = saldo final − inicial, `3.99` ignorada. |
+| 2 | `check_cross_period.py` | O mesmo período em filings diferentes: `reapresentacao` quando o total diverge, `reclassificacao` quando só sublinhas mudam. Baseline = filing mais antigo. |
+| 3 | `check_granularity.py` | Linhas que existem só num dos filings do par: `renumerado`, `zero_padding`, `reclassificado_em_outros`, `reclassificado_em_irmao`, `divergencia_nao_explicada`. |
+| 5 (+4) | `check_text_stability.py` | Trilha de cada linha entre filings consecutivos em `cd_conta_ds_timeline`: `renumerado`, `reformulacao`, `ambiguo`, `nova`, `removida`. |
+| 6 | `derive_quarters.py` | Valor de cada trimestre em `demonstrativos_trimestrais`, publicado ou derivado, com `cd_conta_b`/`casamento` dizendo de qual linha saiu. Flags `reapresentacao_intra_ano`, `par_ambiguo`, `linha_sem_par`. |
 
 ---
 

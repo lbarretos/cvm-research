@@ -72,7 +72,7 @@ run_step "itr"       ingest_itr.py
 # Camada 6 (desacúmulo → demonstrativos_trimestrais; usa os resumos da 2),
 # ~1–2 min cada na base inteira. Pulado se
 # os dois ingestores falharam (não haveria dado novo para checar).
-if [[ " ${FAILED[*]} " == *" dfp "* && " ${FAILED[*]} " == *" itr "* ]]; then
+if [[ " ${FAILED[*]:-} " == *" dfp "* && " ${FAILED[*]:-} " == *" itr "* ]]; then
   log "==> consistency: pulado (dfp e itr falharam)"
 else
   run_step "consistency_l1" ../analysis/run_all.py --layer 1 --full

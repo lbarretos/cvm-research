@@ -173,6 +173,21 @@ Filings consecutivos da mesma fonte (`ordem_exercicio = 'Último'`), comparados 
   (o código pode ter sido reutilizado por outra linha no mesmo filing — renumeração em cascata).
 Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mude. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
 
+### `demonstrativos_trimestrais` — valor de cada trimestre da DRE/DFC_MI/DVA, por conta e por safra (Camada 6)
+`run_id, cnpj_companhia, tipo_doc ('DRE'/'DFC_MI'/'DVA'), safra ('original'/'reapresentado'), exercicio_ini, dt_ini_exerc, dt_fim_exerc,`
+`trimestre (1–4, posição no exercício social), cd_conta, ds_conta, vl_publicado, vl_derivado, origem ('publicado'/'derivado'), vl_final, flag,`
+`fonte_a, data_a, ordem_a (filing do acumulado do trimestre), fonte_b, data_b, ordem_b (filing do acumulado anterior; NULL no 1T)`
+
+**Use `vl_final`** (e `origem` para saber de onde veio). `safra = 'original'` usa só colunas `Último` (o que o mercado viu na época);
+`'reapresentado'` usa só colunas `Penúltimo` dos filings do exercício seguinte. **Nunca subtrai safras diferentes.**
+- DRE 1T–3T: `vl_publicado` é a linha trimestral isolada do ITR (`origem = 'publicado'`); `vl_derivado = acum(Qn) − acum(Qn−1)` serve de conferência.
+- DRE 4T, DFC_MI e DVA (todos os trimestres): só derivado (`4T = DFP − acum(3T)`).
+- `flag`: `reapresentacao_intra_ano` (publicado ≠ derivado, ou 6.05 do 4T da DFC ≠ variação do saldo final de caixa; também em `consistency_flags` `layer = 6`),
+  `linha_sem_par` (conta não existe no acumulado anterior — `vl_derivado` NULL), `sem_anterior`/`sem_3t` (buraco na série — NULL),
+  `componente_reapresentado` (um dos dois filings tem `reapresentacao` na Camada 2). `sem_dfp` só em `consistency_flags` (não há linha de 4T).
+- `3.99` (lucro por ação) não está na tabela: não é aditivo. Exercício social fora do calendário: `trimestre` é a posição no exercício, não o trimestre-calendário.
+Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada).
+
 ---
 
 ## Queries de pesquisa padrão
@@ -395,6 +410,26 @@ ORDER BY data_referencia;
 Ausência de linhas para um filing significa que nada mudou nele (todas as linhas `estavel`). Para comparar valores de
 uma conta que foi renumerada, use `cd_conta_anterior` para buscar o código antigo nos filings anteriores.
 
+### Série trimestral com 4T derivado (Camada 6)
+```sql
+-- Receita e lucro por trimestre, safra original (o que o mercado viu), últimos 8 trimestres
+SELECT exercicio_ini, trimestre, dt_ini_exerc, dt_fim_exerc,
+       MAX(CASE WHEN cd_conta = '3.01' THEN vl_final END) AS receita,
+       MAX(CASE WHEN cd_conta = '3.11' THEN vl_final END) AS lucro,
+       MAX(CASE WHEN cd_conta = '3.01' THEN origem END)   AS origem_receita,
+       GROUP_CONCAT(DISTINCT CASE WHEN cd_conta IN ('3.01','3.11') THEN flag END) AS flags
+FROM demonstrativos_trimestrais
+WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DRE' AND safra = 'original'
+GROUP BY 1, 2, 3, 4 ORDER BY dt_fim_exerc DESC LIMIT 8;
+
+-- Fluxo de caixa operacional trimestral (DFC só existe acumulada na CVM; aqui já vem desacumulada)
+SELECT dt_fim_exerc, trimestre, vl_final, flag
+FROM demonstrativos_trimestrais
+WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DFC_MI' AND cd_conta = '6.01' AND safra = 'original'
+ORDER BY dt_fim_exerc DESC LIMIT 8;
+```
+Para comparar com o que a empresa reapresentou depois, repita com `safra = 'reapresentado'` e mostre as duas colunas lado a lado.
+
 ### Busca full-text no conteúdo de documentos (SQLite FTS5)
 
 ```sql
@@ -436,6 +471,10 @@ LIMIT 20;
 11. **Série histórica de uma conta criada pela empresa (`st_conta_fixa = 'N'`)**: antes de montar a série por `cd_conta`,
     confira em `cd_conta_ds_timeline` se o código foi renumerado ou reformulado no período; monte a série pelo nome
     normalizado (`ds_conta_norm`) + pai, seguindo `cd_conta_anterior`, e informe os anos em que a linha foi `ambiguo` ou `removida`.
+12. **Para valores trimestrais (4T da DRE, qualquer trimestre da DFC/DVA)**: use `demonstrativos_trimestrais` com
+    `safra = 'original'` por padrão, nunca subtraia acumulados à mão misturando `Último` e `Penúltimo`. Mostre `origem` e a
+    `flag`: `reapresentacao_intra_ano` significa que publicado e derivado divergem (apresente os dois); `linha_sem_par`/`sem_3t`
+    significa que o trimestre não pôde ser derivado para aquela conta.
 
 ## Defasagem dos dados
 
@@ -446,7 +485,7 @@ Se um documento recente não aparecer na base, informar ao usuário:
 - O documento pode ser consultado diretamente no portal da CVM: `https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx`
 - Rodar `python ingest_ipe.py` após a segunda-feira atualiza a base
 
-**VLMO / FRE / Recompra / DFP / ITR / consistência (Camadas 1, 2, 3 e 5):** entram no mesmo job semanal (`scripts/update_weekly.sh`). Para forçar agora: `bash scripts/update_weekly.sh`. Logs em `logs/update_*.log`.
+**VLMO / FRE / Recompra / DFP / ITR / consistência (Camadas 1, 2, 3, 5 e 6):** entram no mesmo job semanal (`scripts/update_weekly.sh`). Para forçar agora: `bash scripts/update_weekly.sh`. Logs em `logs/update_*.log`.
 
 ## Anomalias conhecidas: `data_referencia` no futuro em `ipe_docs`
 

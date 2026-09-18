@@ -75,7 +75,7 @@ def query(sql: str) -> list[dict]:
     Tabelas principais: companies, ipe_docs, vlmo_movimentacoes, vlmo_posicao,
     recompra_programas, fre_capital_social, fre_posicao_acionaria,
     fre_remuneracao_orgao, demonstrativos_contabeis, notas_explicativas,
-    consistency_runs, consistency_flags, cd_conta_ds_timeline.
+    consistency_runs, consistency_flags, cd_conta_ds_timeline, demonstrativos_trimestrais.
     Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco. Full-text: ipe_docs_fts, notas_explicativas_fts.
     consistency_flags: achados de consistência (layer=1 hierarchy_sum: nao_detalhado/pai_vazio/divergencia/
     divergencia_formula dentro de um documento; layer=2 cross_period: reapresentacao/reclassificacao entre filings;
@@ -84,6 +84,9 @@ def query(sql: str) -> list[dict]:
     cd_conta NULL = resumo do par; detalhe é JSON — use json_extract).
     cd_conta_ds_timeline: trilha de cada linha (pai + nome) entre filings consecutivos — renumerado/reformulacao/ambiguo/
     nova/removida com cd_conta_anterior (estavel não é gravada).
+    demonstrativos_trimestrais: valor de cada trimestre da DRE/DFC_MI/DVA por conta e safra ('original' = colunas
+    Último, 'reapresentado' = Penúltimo do exercício seguinte); use vl_final e origem; 4T = DFP − acum 3T; flag
+    reapresentacao_intra_ano quando publicado ≠ derivado (layer=6 em consistency_flags).
     Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
     """
     s = sql.strip().rstrip(";")

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Atualização semanal da base CVM Research (SQLite local).
-# Roda todos os ingestores + consistência dos demonstrativos (Camadas 1 a 5) +
+# Roda todos os ingestores + consistência dos demonstrativos (Camadas 1 a 6) +
 # extração de PDFs novos. Pensado para o launchd
 # (segunda-feira ~9h, após a CVM publicar os ZIPs entre 8h00 e 8h30), mas pode
 # ser executado manualmente a qualquer momento:
@@ -68,7 +68,8 @@ run_step "itr"       ingest_itr.py
 # Consistência dos demonstrativos — depende de DFP/ITR recém-ingeridos;
 # idempotente. Camada 1 (soma hierárquica: regressão da ingestão), Camada 2
 # (reapresentações entre filings), Camada 3 (linhas sem par entre filings) e
-# Camada 5 (trilha temporal de nomes/códigos, cd_conta_ds_timeline),
+# Camada 5 (trilha temporal de nomes/códigos, cd_conta_ds_timeline) e
+# Camada 6 (desacúmulo → demonstrativos_trimestrais; usa os resumos da 2),
 # ~1–2 min cada na base inteira. Pulado se
 # os dois ingestores falharam (não haveria dado novo para checar).
 if [[ " ${FAILED[*]} " == *" dfp "* && " ${FAILED[*]} " == *" itr "* ]]; then
@@ -78,6 +79,7 @@ else
   run_step "consistency_l2" ../analysis/run_all.py --layer 2 --full
   run_step "consistency_l3" ../analysis/run_all.py --layer 3 --full
   run_step "consistency_l5" ../analysis/run_all.py --layer 5 --full
+  run_step "consistency_l6" ../analysis/run_all.py --layer 6 --full
 fi
 run_step "extract_pdf" extract_pdf.py --limite "$EXTRACT_LIMIT"
 if [ "$RETRY_FAILED" = "1" ]; then

@@ -363,6 +363,36 @@ CREATE INDEX IF NOT EXISTS idx_cflags_cnpj  ON consistency_flags (cnpj_companhia
 CREATE INDEX IF NOT EXISTS idx_cflags_class ON consistency_flags (layer, classificacao, severity);
 CREATE INDEX IF NOT EXISTS idx_cflags_run   ON consistency_flags (run_id);
 
+-- Camada 5 (Fase 4): trilha temporal de cada linha (pai + nome) entre filings
+-- consecutivos da mesma fonte. Uma linha por mudança (renumerado, reformulacao,
+-- ambiguo, nova, removida) ou primeira ocorrência; 'estavel' não é gravada.
+-- 'removida' fica no filing em que a linha sumiu, com cd_conta/ds_conta da linha
+-- antiga — por isso a UNIQUE inclui classificacao (o código pode ser reutilizado
+-- por outra linha no mesmo filing: renumeração em cascata, 15 mil casos).
+CREATE TABLE IF NOT EXISTS cd_conta_ds_timeline (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id                   TEXT NOT NULL REFERENCES consistency_runs(run_id),
+    cnpj_companhia           TEXT NOT NULL,
+    tipo_doc                 TEXT NOT NULL,
+    cd_conta_pai             TEXT,                 -- NULL no nível 1
+    ds_conta_norm            TEXT NOT NULL,        -- normalize_text(ds_conta)
+    fonte                    TEXT NOT NULL,
+    data_referencia          TEXT NOT NULL,        -- filing B (atual)
+    cd_conta                 TEXT NOT NULL,
+    ds_conta                 TEXT,
+    st_conta_fixa            TEXT,
+    data_referencia_anterior TEXT,                 -- filing A (anterior); NULL em primeira_ocorrencia
+    cd_conta_anterior        TEXT,
+    ds_conta_anterior        TEXT,
+    similarity_score         REAL,                 -- 1.0 em renumerado; score em reformulacao/ambiguo
+    classificacao            TEXT NOT NULL CHECK (classificacao IN
+        ('primeira_ocorrencia','estavel','renumerado','reformulacao','ambiguo','nova','removida')),
+    created_at               TEXT DEFAULT (datetime('now')),
+    UNIQUE (cnpj_companhia, tipo_doc, fonte, data_referencia, cd_conta, classificacao)
+);
+CREATE INDEX IF NOT EXISTS idx_timeline_chave ON cd_conta_ds_timeline (cnpj_companhia, tipo_doc, cd_conta_pai, ds_conta_norm);
+CREATE INDEX IF NOT EXISTS idx_timeline_class ON cd_conta_ds_timeline (classificacao);
+
 -- ── Views ─────────────────────────────────────────────────────────────────────
 -- DISTINCT ON (PostgreSQL) replaced by MAX(versao) CTE — semantically equivalent.
 

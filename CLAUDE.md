@@ -159,6 +159,20 @@ Exclusivas cujo pai também é exclusivo não geram flag (só `detalhe.filhos_de
 
 Para rodar: `cd scripts/analysis && python run_all.py --layer 2,3 --cnpj <CNPJ>` (ou `--full` para a base).
 
+### `cd_conta_ds_timeline` — trilha temporal de cada linha (pai + nome) entre filings (Camada 5)
+`run_id, cnpj_companhia, tipo_doc, fonte, data_referencia (filing atual), cd_conta, ds_conta, st_conta_fixa, cd_conta_pai,`
+`ds_conta_norm, data_referencia_anterior, cd_conta_anterior, ds_conta_anterior, similarity_score, classificacao`
+
+Filings consecutivos da mesma fonte (`ordem_exercicio = 'Último'`), comparados de cima para baixo na hierarquia
+(pai renumerado leva os filhos junto). Uma linha por mudança; `estavel` **não é gravada**:
+- `primeira_ocorrencia`: todas as linhas do primeiro filing da sequência.
+- `renumerado` (`similarity_score = 1`): mesmo nome normalizado em código diferente — `cd_conta_anterior` diz de onde veio.
+- `reformulacao` (score ≥ 0,75) e `ambiguo` (0,55 < score < 0,75; também vira flag `layer = 5` em `consistency_flags`,
+  fila de revisão): nome parecido (difflib com token-sort sobre texto normalizado), só em linhas `st_conta_fixa = 'N'`.
+- `nova` / `removida`: sem par. `removida` fica no filing em que sumiu, com `cd_conta`/`ds_conta` da linha antiga
+  (o código pode ter sido reutilizado por outra linha no mesmo filing — renumeração em cascata).
+Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mude. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
+
 ---
 
 ## Queries de pesquisa padrão
@@ -361,6 +375,26 @@ ORDER BY periodo_fim DESC, severity DESC, cd_conta;
 ```
 `zero_padding` é ruído estrutural (conta padrão vazia) e pode ser filtrado; `renumerado` diz qual código usar no outro filing.
 
+### O que aconteceu com as linhas de um demonstrativo ao longo do tempo (Camada 5)
+```sql
+-- Quantas linhas da DFC foram renumeradas, reformuladas ou removidas nos últimos 5 anos
+SELECT classificacao, COUNT(*) AS linhas
+FROM cd_conta_ds_timeline
+WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DFC_MI' AND fonte = 'DFP'
+  AND data_referencia >= date('now', '-5 years')
+  AND classificacao IN ('renumerado', 'reformulacao', 'ambiguo', 'removida')
+GROUP BY 1 ORDER BY 2 DESC;
+
+-- Trilha de uma conta: por onde ela passou (código e nome) filing a filing
+SELECT data_referencia, cd_conta, ds_conta, classificacao, cd_conta_anterior, ds_conta_anterior, similarity_score
+FROM cd_conta_ds_timeline
+WHERE cnpj_companhia = '<CNPJ>' AND tipo_doc = 'DFC_MI' AND fonte = 'DFP'
+  AND (ds_conta_norm = '<nome normalizado>' OR cd_conta = '<código>' OR cd_conta_anterior = '<código>')
+ORDER BY data_referencia;
+```
+Ausência de linhas para um filing significa que nada mudou nele (todas as linhas `estavel`). Para comparar valores de
+uma conta que foi renumerada, use `cd_conta_anterior` para buscar o código antigo nos filings anteriores.
+
 ### Busca full-text no conteúdo de documentos (SQLite FTS5)
 
 ```sql
@@ -399,6 +433,9 @@ LIMIT 20;
 10. **Quando uma conta "some" entre dois filings** (ex: existia no DFP, não está no ITR seguinte): consulte a Camada 3
     para o par. `renumerado` dá o novo código; `reclassificado_em_outros`/`reclassificado_em_irmao` dizem onde o valor
     foi parar; `divergencia_nao_explicada` exige olhar a Camada 2 do mesmo par (reapresentação) antes de concluir.
+11. **Série histórica de uma conta criada pela empresa (`st_conta_fixa = 'N'`)**: antes de montar a série por `cd_conta`,
+    confira em `cd_conta_ds_timeline` se o código foi renumerado ou reformulado no período; monte a série pelo nome
+    normalizado (`ds_conta_norm`) + pai, seguindo `cd_conta_anterior`, e informe os anos em que a linha foi `ambiguo` ou `removida`.
 
 ## Defasagem dos dados
 
@@ -409,7 +446,7 @@ Se um documento recente não aparecer na base, informar ao usuário:
 - O documento pode ser consultado diretamente no portal da CVM: `https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx`
 - Rodar `python ingest_ipe.py` após a segunda-feira atualiza a base
 
-**VLMO / FRE / Recompra / DFP / ITR / consistência (Camada 2):** entram no mesmo job semanal (`scripts/update_weekly.sh`). Para forçar agora: `bash scripts/update_weekly.sh`. Logs em `logs/update_*.log`.
+**VLMO / FRE / Recompra / DFP / ITR / consistência (Camadas 1, 2, 3 e 5):** entram no mesmo job semanal (`scripts/update_weekly.sh`). Para forçar agora: `bash scripts/update_weekly.sh`. Logs em `logs/update_*.log`.
 
 ## Anomalias conhecidas: `data_referencia` no futuro em `ipe_docs`
 

@@ -283,3 +283,18 @@ def test_match_filings_nao_confia_cegamente_no_codigo_fixo_da_cvm():
     assert mapa["3.01.02"] == "3.01.02" and estaveis == 3
     # E match_filings devolve a mesma coisa quando se pede a regra da Camada 5.
     assert cts.match_filings(anterior, atual, codigo_fixo_confiavel=True)["3.01.02"] == ("3.01.02", "estavel", None)
+
+
+def test_polaridade_invertida_nao_vira_reformulacao():
+    """Multiplan, DFC 2021: o ITR do 3T não tinha 'Pagamento de debêntures', e a
+    similaridade de 0,756 casava a linha do DFP com 'Captação de debêntures'.
+    Sentido oposto não casa em silêncio: cai na fila de revisão."""
+    anterior = {"6.03": ("Financiamento", "S"), "6.03.09": ("Captação de debêntures", "N")}
+    atual = {"6.03": ("Financiamento", "S"), "6.03.14": ("Pagamento de debêntures", "N")}
+    cd_b, classe, score = cts.match_filings(anterior, atual)["6.03.14"]
+    assert (cd_b, classe) == ("6.03.09", "ambiguo") and score >= 0.75
+
+    # Sem conflito de sentido, o mesmo score continua sendo reformulacao.
+    ok = cts.match_filings({"6.03": ("Financiamento", "S"), "6.03.06": ("Pagamento de encargos e debêntures", "N")},
+                           {"6.03": ("Financiamento", "S"), "6.03.08": ("Pagamento de encargos sobre debêntures", "N")})
+    assert ok["6.03.08"][1] == "reformulacao"

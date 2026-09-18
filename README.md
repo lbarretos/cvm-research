@@ -229,7 +229,14 @@ Medido na base inteira depois da correção (safra `original`, 106 s de execuç�
 As colunas `renumerado` e `reformulação` são a massa que antes era subtraída errado. A cobertura da DFC no 4T caiu de
 84% para 78%: linhas que não existem no acumulado anterior agora são NULL em vez de um número inventado. Na DRE, 1.512
 flags de `reapresentacao_intra_ano` desapareceram (13.024 → 11.512) — eram artefato do casamento errado, não divergência
-da fonte. A fila `par_ambiguo` tem 14.993 flags, 57% delas no mesmo código; o limiar é ajustável por `--sim-alto`.
+da fonte. A fila `par_ambiguo` tem 15.579 flags; o limiar é ajustável por `--sim-alto`.
+
+Uma terceira classe do mesmo erro apareceu na validação por amostragem da Multiplan: a similaridade textual não
+distingue sentido contábil. "Captação de debêntures" e "Pagamento de debêntures" pontuam 0,756, e "Aumento" contra
+"Redução de capital social" pontua 0,800, porque só o verbo muda. Na base inteira havia 586 pares casados com o
+sentido invertido, 212 deles gerando valor errado — o maior era a JSL no 2T/2017, com −2.950,7 mi de "Pagamentos de
+empréstimos" derivado contra "Aumento em empréstimos". `consistency_utils.polaridade_conflita` agora força esses pares
+para a fila de revisão. Depois da correção: zero pares com sentido invertido em 125.424 conferidos.
 
 O projeto começou em Supabase/PostgreSQL e migrou para SQLite local em junho de 2026 (um arquivo, zero serviços). O MCP passou de `mcp-server-sqlite` (npx) para um servidor Python próprio em setembro de 2026. Os workflows de GitHub Actions foram removidos: toda a ingestão roda localmente.
 

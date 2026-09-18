@@ -12,7 +12,10 @@ cada pai:
   1. mesmo normalize_text(ds_conta): mesmo código → 'estavel'; outro código → 'renumerado'
   2. sobras 'N' dos dois lados: pareamento guloso por maior text_similarity;
      score ≥ sim_alto → 'reformulacao'; sim_baixo < score < sim_alto → 'ambiguo'
-     (fila de revisão: também vira flag layer 5 em consistency_flags)
+     (fila de revisão: também vira flag layer 5 em consistency_flags).
+     Sentido contábil oposto (consistency_utils.polaridade_conflita) força 'ambiguo'
+     por mais alto que seja o score: "Captação" × "Pagamento de debêntures" dá 0,756
+     e "Aumento" × "Redução de capital social" dá 0,800, mas são linhas contrárias
   3. sobras de B → 'nova'; sobras de A → 'removida' ('S' nunca entra na similaridade)
 Pai de A sem par em B → filhos 'removida'; pai de B sem par → filhos 'nova'.
 Primeiro filing de cada sequência → 'primeira_ocorrencia' para todas as linhas.
@@ -36,7 +39,7 @@ Roda no job semanal (scripts/update_weekly.sh) depois da Camada 3. À mão
 import pandas as pd
 
 from consistency_utils import (add_common_args, clear_flags, finish_run, get_db, latest_rows, new_run,
-                               normalize_text, parent_code, text_similarity, write_flags)
+                               normalize_text, parent_code, polaridade_conflita, text_similarity, write_flags)
 
 LAYER = 5
 CHECK_TYPE = "text_stability"
@@ -120,8 +123,11 @@ def _comparar_pai(fa: dict, fb: dict, sim_alto: float, sim_baixo: float,
         usados_a.add(x)
         usados_b.add(y)
         mapa[x] = y
-        rows.append(_row(y, fb[y][0], fb[y][1], "reformulacao" if score >= sim_alto else "ambiguo",
-                         (x, fa[x][0]), round(score, 4)))
+        # Sentido oposto nunca é reformulação, por mais alto que o score seja: só o verbo
+        # muda em "Captação/Pagamento de debêntures" (0,756) e "Aumento/Redução de capital
+        # social" (0,800). Vai para a fila de revisão em vez de virar valor.
+        classe = "reformulacao" if score >= sim_alto and not polaridade_conflita(fa[x][0], fb[y][0]) else "ambiguo"
+        rows.append(_row(y, fb[y][0], fb[y][1], classe, (x, fa[x][0]), round(score, 4)))
     # 3. sobras
     for cd in sobra_b:
         if cd not in usados_b:

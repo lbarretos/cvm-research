@@ -169,9 +169,13 @@ Filings consecutivos da mesma fonte (`ordem_exercicio = 'Último'`), comparados 
 - `renumerado` (`similarity_score = 1`): mesmo nome normalizado em código diferente — `cd_conta_anterior` diz de onde veio.
 - `reformulacao` (score ≥ 0,75) e `ambiguo` (0,55 < score < 0,75; também vira flag `layer = 5` em `consistency_flags`,
   fila de revisão): nome parecido (difflib com token-sort sobre texto normalizado), só em linhas `st_conta_fixa = 'N'`.
+  Par com **sentido contábil oposto** é sempre `ambiguo`, por mais alto que seja o score: só o verbo muda em
+  "Captação"/"Pagamento de debêntures" (0,756) e "Aumento"/"Redução de capital social" (0,800), e são linhas contrárias.
 - `nova` / `removida`: sem par. `removida` fica no filing em que sumiu, com `cd_conta`/`ds_conta` da linha antiga
   (o código pode ter sido reutilizado por outra linha no mesmo filing — renumeração em cascata).
-Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mude. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
+Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mude — o que **não** vale entre versões do plano
+de contas (a CVM re-letrou o plano dos bancos em 2017). Por isso a Camada 6 casa com `codigo_fixo_confiavel=False` e não
+reaproveita esta trilha. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
 
 ### `demonstrativos_trimestrais` — valor de cada trimestre da DRE/DFC_MI/DVA, por conta e por safra (Camada 6)
 `run_id, cnpj_companhia, tipo_doc ('DRE'/'DFC_MI'/'DVA'), safra ('original'/'reapresentado'), exercicio_ini, dt_ini_exerc, dt_fim_exerc,`
@@ -186,8 +190,9 @@ Contas `S` (padrão CVM) com o mesmo código são estáveis mesmo que o nome mud
 - **`cd_conta_b` e `casamento`**: qual linha do filing anterior foi subtraída e como ela foi encontrada. O mesmo `cd_conta`
   costuma ser **outra linha** no filing anterior — a empresa renumera as contas que cria (`st_conta_fixa = 'N'`) entre
   trimestres e o DFP usa um layout diferente do ITR. O casamento usa a escada da Camada 5: `estavel` (mesmo código e mesmo
-  nome), `renumerado` (mesmo nome normalizado, código diferente), `reformulacao` (similaridade ≥ 0,75). Para auditar um
-  número, compare `cd_conta` no filing A com `cd_conta_b` no filing B, no dado bruto.
+  nome), `renumerado` (mesmo nome normalizado, código diferente), `reformulacao` (similaridade ≥ 0,75 **e** sem inversão
+  de sentido contábil — "Captação" e "Pagamento de debêntures" têm score 0,756 e nunca casam). Para auditar um número,
+  compare `cd_conta` no filing A com `cd_conta_b` no filing B, no dado bruto.
 - `flag`: `reapresentacao_intra_ano` (publicado ≠ derivado, ou 6.05 do 4T da DFC ≠ variação do saldo final de caixa; também em `consistency_flags` `layer = 6`),
   `par_ambiguo` (o único candidato a par tem similaridade entre 0,55 e 0,75 — o valor **não** é calculado de propósito, e a
   flag de linha em `consistency_flags` traz `cd_conta_b`, `ds_conta_b` e `score` para revisão),

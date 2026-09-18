@@ -842,6 +842,8 @@ Reaproveita os grupos da Camada 2 e recebe as linhas exclusivas (presentes só e
 
 ## Fase 4 — Camada 5 (trilha temporal) + Camada 4 (similaridade)
 
+> **Plano de tarefas (executado):** `docs/superpowers/plans/2026-09-18-fase4-camada5-text-stability.md`. Mudanças em relação ao desenho abaixo, medidas no banco: (a) `UNIQUE` inclui `classificacao` (15 mil `removida` cujo código é reutilizado no mesmo filing por renumeração em cascata); (b) colunas extras `run_id` e `data_referencia_anterior`, `cd_conta_pai` nullable; (c) comparação de cima para baixo na hierarquia, com o mapa dos pais casados escolhendo os filhos a comparar (um pai renumerado leva os filhos junto); (d) `text_similarity` usa o maior entre difflib direto e difflib sobre tokens ordenados (reordenação de palavras dava 0,50); (e) `S` com o mesmo código é `estavel` mesmo que o nome mude; (f) **limiar inferior 0,55**, não 0,45 — ver decisão abaixo.
+
 ### Schema
 
 ```sql
@@ -886,6 +888,8 @@ Limiares vêm da distribuição medida em 12.773 mudanças reais de DFC_MI (bimo
 ### Verificação da Fase 4
 
 DFC_MI, DFP: ≈ 12,8 mil mudanças de nome; ≈ 3,6 mil (28%) devem sair como `renumerado`; ≈ 968 somem porque só mudam caixa/acento (normalização). Pergunta-alvo via MCP: "quantas linhas da DFC da empresa X foram renumeradas, reformuladas ou removidas nos últimos 5 anos".
+
+**Medido em 2026-09-18, base pós-Fase 3.** Primeira execução com os cortes do plano (0,75 / 0,45; run `text_stability-20260918T134848Z-a8492c`, 85 s, 35.489 filings, 279.918 linhas): DFC_MI/DFP: `renumerado` **3.645** (esperado ≈ 3,6 mil), `reformulacao` 3.859, `ambiguo` 2.335, `removida` 2.756, `nova` 5.295; 11.958 mudanças de nome por código no protótipo, 961 desfeitas pela normalização (esperado ≈ 968). Histograma dos `ambiguo` por faixa de 0,05: 1.241 / 2.332 / 2.297 / 2.140 / 2.335 / 2.836 / 1.687 (de 0,45 a 0,75) — sem vale claro. **Revisão manual de 51 ambíguos estratificados (17 por faixa):** 0,45–0,55 ≈ 80% de pares errados ("Captação de empréstimos" × "Gastos com emissões de ações", "Ativos contratuais" × "Créditos com Outras Partes Relacionadas"); 0,55–0,65 ≈ 65% certos ("Obrigações Tributárias" × "Tributos a recolher", "(Acréscimo) em estoques" × "Estoques"); 0,65–0,75 ≈ 75% certos ("Arrendamento Mercantil" × "Passivo de Arrendamento"). Amostra de `reformulacao` em 0,75–0,85 toda certa. **Decisão: `sim_baixo = 0,55`, `sim_alto = 0,75`** (parametrizáveis por `--sim-baixo`/`--sim-alto`). Execução final (run `text_stability-20260918T135154Z-235587`, 85 s, **284.586 linhas**): `primeira_ocorrencia` 84.362, `nova` 64.410, `removida` 53.769, `renumerado` 38.246, `reformulacao` 33.599, `ambiguo` **10.200** (−31%; viram flags `layer = 5`). DFC_MI/DFP: renumerado 3.645, reformulacao 3.859, ambiguo 1.550, removida 3.541, nova 6.080. Só 8 linhas renumeradas tinham filhos no filing anterior (o protótipo superestimou); o mapeamento de pai foi conferido num caso real (`1.02.01.06` → `1.02.01.05` levando `…05.01` como `renumerado`). Limitação: a trilha compara colunas `Último` de filings consecutivos; a renumeração em cascata vista na Fase 3 (WEG DFC `6.01.02`, ITR 3T22 × coluna `Penúltimo` do 3T23) está na coluna comparativa reapresentada, não na sequência de originais — continua sendo domínio das Camadas 2/3. Pergunta-alvo (WEG, DFC/DFP, 5 anos): renumerado 2, reformulacao 2, ambiguo 2, removida 1. A Camada 5 passou a rodar no `update_weekly.sh` depois da Camada 3.
 
 ### Testes
 

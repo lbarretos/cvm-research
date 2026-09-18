@@ -1,83 +1,170 @@
-# CVM Research — Base Local
+# CVM Research
 
-Base de dados local de documentos e eventos de empresas abertas brasileiras, organizada para pesquisa via Claude.
+**Uma base local dos documentos e demonstrativos de empresas abertas brasileiras, que o Claude consulta conversando.**
 
-**Fontes:** IPE · VLMO · Recompra · FRE · DFP/ITR · Notas Explicativas (sob demanda)  
-**Cobertura:** 145 empresas (IBOV + cobertura própria) · IPE desde 2015 · demonstrativos desde 2010  
-**Banco:** SQLite local (`cvm_research.db`) — sem servidor, sem Docker, sem cloud  
-**Tamanho:** ~12 GB (mais da metade é texto extraído dos PDFs + índice full-text) · ~4,9M linhas  
-**Atualização:** `bash scripts/update_weekly.sh` (manual) ou job launchd toda segunda 9h
+Baixar os dados da CVM é a parte fácil. O problema é que eles não são comparáveis ao longo do tempo: a
+empresa renumera as contas que cria a cada trimestre, o DFP usa um layout diferente do ITR, o mesmo período
+aparece em cinco documentos com valores diferentes, e a DFC só existe acumulada no ano. Quem monta série
+histórica somando código com código soma linhas trocadas e não percebe.
 
-> **Instalação passo a passo, MCP e troubleshooting:** [INSTALL.md](INSTALL.md)  
-> **Schema, queries e comportamento do Claude:** [CLAUDE.md](CLAUDE.md)  
-> **Backlog:** [TODOS.md](TODOS.md)
+Este repositório baixa, **trata** e deixa o resultado auditável. Cada valor trimestral registra de qual linha
+de qual documento ele saiu. Toda reapresentação fica marcada, com o valor original e o reapresentado lado a
+lado. O que o casamento não conseguiu resolver com confiança vira fila de revisão em vez de número inventado.
 
----
+SQLite local, um arquivo, sem servidor e sem nuvem. Você escolhe as empresas e o período.
 
-## Pré-requisitos
-
-| Ferramenta | Versão mínima | Verificar |
-|---|---|---|
-| macOS | 11+ (Big Sur) | `sw_vers -productVersion` |
-| Python | 3.10+ | `python3 --version` |
-| Claude Code CLI | qualquer | `claude --version` |
-| Claude desktop app | qualquer | (opcional, para chat visual) |
-
-SQLite vem instalado no macOS. Não é preciso Node.js: o MCP é um script Python do próprio projeto.
-
-> ⚠️ **Não coloque o projeto em pasta sincronizada (OneDrive, iCloud, Dropbox).** O banco tem ~12 GB e muda toda semana; sincronizar isso é lento e pode corromper o arquivo. Se ficar em `~/Documents`, `~/Desktop` ou `~/Downloads`, o job automático do launchd precisa de Acesso Total ao Disco (ver [INSTALL.md](INSTALL.md#troubleshooting)).
+**Para quem:** analista de ações que monta modelo à mão e cansou de conferir número por número no PDF;
+pesquisador que precisa de série histórica confiável da CVM; quem quer conversar com dados de empresa
+aberta em vez de garimpar o portal.
 
 ---
 
-## Setup rápido
+## Quick start
+
+1. Instale (30 segundos, abaixo)
+2. Monte uma base enxuta: `bash bootstrap.sh --universo ibov --desde 2022 --sem-pdf` (~20 min)
+3. Pergunte ao Claude: *"Compare a margem EBIT de WEGE3 e EMBR3 desde 2022"*
+4. Pergunte: *"O lucro do 4T24 da Localiza foi reapresentado depois?"*
+5. Pergunte: *"Mostre o fluxo de caixa de financiamento da Multiplan trimestre a trimestre, e de onde veio cada número"*
+
+Pare aí. Você já vai saber se serve.
+
+---
+
+## Instalação — 30 segundos
+
+**Requisitos:** macOS 11+, Python 3.10+, [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+SQLite já vem no macOS. Não precisa de Node, Docker nem conta em lugar nenhum.
+
+### Passo 1 — instalar
+
+Abra o Claude Code e cole isto. Ele faz o resto.
+
+> Instale o CVM Research: rode
+> **`git clone https://github.com/lbarretos/cvm-research.git ~/cvm-research && cd ~/cvm-research && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && bash setup.sh && echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env && claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"`**
+> e confirme com `claude mcp list` que aparece `cvm-research: ✓ Connected`. Depois leia o CLAUDE.md do
+> repositório e me pergunte quais empresas e a partir de que ano eu quero na base antes de montar.
+
+> ⚠️ Não coloque o projeto em pasta sincronizada (OneDrive, iCloud, Dropbox). O banco fica grande e muda
+> toda semana; sincronizar é lento e pode corromper o arquivo.
+
+### Passo 2 — montar a base
+
+Em português mesmo, dentro do Claude Code:
+
+> *"Monte a base com o universo IBOV, documentos de 2022 para cá, sem extrair PDF por enquanto."*
+
+O [CLAUDE.md](CLAUDE.md) ensina o Claude a traduzir isso no comando, mostrar o plano antes e acompanhar.
+No terminal é a mesma coisa:
 
 ```bash
-git clone https://github.com/lbarretos/cvm-research.git
-cd cvm-research
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-bash setup.sh                                          # cria cvm_research.db vazio
-echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env
-claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"
+bash bootstrap.sh --universo ibov --desde 2022 --sem-pdf
 ```
 
-### Carga inicial
+A instalação leva 30 segundos. A base leva mais: veja os tempos em [O pipeline](#o-pipeline).
 
-Pelo Claude Code, em português mesmo:
+---
 
-> *"Monte a base com o universo IBOV, documentos de 2020 para cá."*
+## Veja funcionando
 
-O [CLAUDE.md](CLAUDE.md) ensina o Claude a traduzir isso no comando certo, mostrar o plano
-antes e acompanhar a execução. Direto no terminal é o mesmo:
+```
+Você:   O 2T26 da Multiplan tem R$ 347 mi de pagamento de encargos sobre
+        debêntures. Quanto foi só o trimestre?
 
-```bash
-bash bootstrap.sh --universo ibov --substituir --desde 2020
+Claude: [consulta demonstrativos_trimestrais]
+        −202,1 mi no 2T isolado.
+
+        O acumulado do semestre é −347,0 e o do 1T é −144,9. Mas repare:
+        no 1T essa linha estava no código 6.03.06 com o nome "Pagamento
+        de encargos e debêntures"; no 2T ela está em 6.03.08 como
+        "Pagamento de encargos sobre debêntures".
+
+        O 6.03.08 do 1T era outra coisa: dividendos, −97,5 mi.
+        Subtrair por código daria −249,5 e estaria errado.
+
+Você:   Como você sabe que casou a linha certa?
+
+Claude: A tabela grava isso. Esta linha tem cd_conta_b = 6.03.06 e
+        casamento = 'reformulacao'. Os nomes batem com 0,94 de
+        similaridade. Confere contra o filing:
+
+        ITR 1T26  6.03.06  Pagamento de encargos e debêntures   −144,9
+        ITR 2T26  6.03.08  Pagamento de encargos sobre debênt.  −347,0
+
+Você:   E a série fecha?
+
+Claude: Fecha. Somei os quatro trimestres de cada linha de 2021 a 2025 e
+        comparei com o acumulado do DFP: 30 de 30 batem ao centavo.
 ```
 
-Três blocos, nesta ordem. É retomável: interrompa com Ctrl-C e rode de novo.
+O número que interessa não é o que está no PDF. É o que sobrou depois de acertar qual linha é qual.
 
-| Bloco | O que faz | Referência (IBOV) |
+---
+
+## O pipeline
+
+Quatro etapas, nesta ordem. O `bootstrap.sh` roda as três primeiras.
+
+**Baixa → Trata → Verifica → Pesquisa**
+
+| Etapa | O que roda | Tempo (IBOV, ~78 empresas) |
 |---|---|---|
-| Dados brutos | os sete ingestores da CVM | 20–40 min |
-| **Tratamento** | `run_all.py --layer 1,2,3,5,6 --full` | ~4 min |
-| Texto dos PDFs | `extract_pdf.py` em laço, depois reconstrói o índice FTS | 6–12 h |
+| **Baixa** | sete ingestores puxam os ZIPs da CVM | 20–40 min |
+| **Trata** | cinco camadas de consistência cruzam os documentos | ~4 min |
+| **Verifica** | `pytest` relê o banco e recalcula o tratamento do zero | segundos |
+| **Pesquisa** | você conversa; o Claude consulta pelo MCP | — |
 
-O tratamento não é opcional: sem ele `demonstrativos_trimestrais`, `consistency_flags` e
-`cd_conta_ds_timeline` ficam vazias, e as consultas trimestrais e de reapresentação do
-[CLAUDE.md](CLAUDE.md) não respondem nada. Use `--sem-pdf` para adiar a parte longa e
-`--so-pdf` para retomá-la depois.
+A etapa de texto dos PDFs é separada porque é longa (6–12 h no IBOV) e opcional para quem só quer os
+números. `--sem-pdf` adia, `--so-pdf` retoma. Sem ela você tem tudo dos demonstrativos, mas não tem busca
+full-text nem leitura de fatos relevantes.
 
-### Escolhendo cobertura e período
+**A etapa "Trata" é o que distingue este repositório de um downloader.** Sem ela o banco tem os dados
+brutos e nada mais. São cinco camadas, cada uma resolvendo um jeito diferente de o dado enganar:
 
-**Cobertura** (`--universo`). O IBOV é o ponto de partida recomendado, com cerca de 78
-empresas. Também aceita `ibrx`, `todas` (as ~443 ativas da B3) ou **um arquivo com a sua lista
-de tickers**, que costuma ser a melhor opção quando você já sabe o que quer acompanhar:
+| Camada | Pergunta que responde | Onde grava |
+|---|---|---|
+| 1 | A soma fecha dentro do próprio documento? | `consistency_flags` |
+| 2 | Este período foi reapresentado depois? Quanto mudou? | `consistency_flags` |
+| 3 | Esta conta sumiu, ou só mudou de lugar? | `consistency_flags` |
+| 5 | Por onde esta linha passou ao longo dos anos? | `cd_conta_ds_timeline` |
+| 6 | Quanto foi só este trimestre, e de qual linha saiu? | `demonstrativos_trimestrais` |
 
-```bash
-bash bootstrap.sh --universo minhas-empresas.csv --desde 2018
-```
+Nenhuma delas altera o valor publicado pela CVM. Tudo é metadado ao lado do original, para você decidir.
+Detalhe de cada uma em [CLAUDE.md](CLAUDE.md); o desenho em `docs/superpowers/plans/`.
 
-O arquivo pode ser um CSV com coluna `ticker`, e as outras colunas são ignoradas, ou um ticker
-por linha. `#` começa comentário e ticker fora do catálogo da B3 é avisado e pulado.
+---
+
+## O que dá para perguntar
+
+**Eventos e documentos**
+- *"Fatos relevantes da Embraer no último ano, classificados por tipo de impacto"*
+- *"Resumo das últimas AGOs e AGEs da WEG, com o que foi deliberado"*
+- *"Procure 'arbitragem' nos documentos da Braskem desde 2023"*
+
+**Números**
+- *"Compare a margem EBIT de WEGE3 e EMBR3 de 2016 a 2024"*
+- *"Fluxo de caixa operacional trimestral da Vale nos últimos 8 trimestres"*
+- *"Qual foi o 4T da receita da Suzano em cada ano desde 2020?"*
+
+**Qualidade do dado**
+- *"O EBITDA de 2022 da Natura mudou entre o DFP original e o seguinte?"*
+- *"Quais contas da DFC da Equatorial foram renumeradas nos últimos 5 anos?"*
+- *"Tem algum número trimestral da Cosan que o sistema não conseguiu calcular com confiança?"*
+
+**Insiders e capital**
+- *"Houve compra por insiders da Localiza perto de algum resultado em 2024?"*
+- *"Quais programas de recompra estão vigentes?"*
+- *"Quem são os maiores acionistas da Vale hoje?"*
+
+---
+
+## Cobertura e período
+
+Você escolhe na carga, e pode mudar depois.
+
+**Cobertura** (`--universo`): `ibov` é o ponto de partida recomendado, com cerca de 78 empresas. Também
+aceita `ibrx`, `todas` (as ~443 ativas da B3) ou **um arquivo com a sua lista de tickers**, que costuma ser
+a melhor opção quando você já sabe o que acompanha:
 
 ```
 ticker,empresa
@@ -86,207 +173,97 @@ VALE3,Vale
 WEGE3,WEG
 ```
 
-O universo é aditivo: soma ao `watchlist.csv` e nunca remove. Para começar limpo, acrescente
-`--substituir`, que faz backup do arquivo antes. Este repositório vem com 147 tickers, o IBOV
-mais a cobertura própria do autor.
+CSV com coluna `ticker`, as outras colunas ignoradas, ou um ticker por linha. Ticker fora do catálogo da B3
+é avisado e pulado. O universo é **aditivo**: soma ao `watchlist.csv` e nunca remove. Para começar limpo,
+`--substituir`, que faz backup antes.
 
-**Período** (`--desde ANO`). Vale para todas as fontes de uma vez. Cada uma tem um primeiro ano
-possível (IPE 2015, VLMO 2018, ITR 2011, DFP e FRE 2010) e pedir antes disso é ajustado para
-cima com aviso. Sem `--desde`, cada fonte vai até o início da série. Para controle por fonte,
-use `IPE_DESDE`, `VLMO_DESDE`, `FRE_DESDE`, `DFP_DESDE` e `ITR_DESDE`.
+**Período** (`--desde ANO`): vale para todas as fontes. Cada uma tem um primeiro ano possível (IPE 2015,
+VLMO 2018, ITR 2011, DFP e FRE 2010) e pedir antes disso sobe para o piso com aviso, em vez de baixar vazio.
 
-`bash bootstrap.sh --dry-run` mostra cobertura, período e blocos sem baixar nada, e
-`--help` lista tudo.
+```bash
+bash bootstrap.sh --universo ibov --desde 2020            # IBOV, de 2020 para cá
+bash bootstrap.sh --universo minhas-empresas.csv          # sua lista, série completa
+bash bootstrap.sh --universo todas --sem-pdf              # cobertura máxima, sem texto
+bash bootstrap.sh --dry-run                               # mostra o plano sem baixar nada
+```
 
-Verifique com `claude mcp list` (deve mostrar `cvm-research: ✓ Connected`) e pergunte ao Claude *"Quantas linhas tem a tabela ipe_docs?"*.
-
-O [INSTALL.md](INSTALL.md) cobre também a opção de copiar um banco já populado de outra máquina e o setup no Claude desktop app.
+`bash bootstrap.sh --help` lista tudo. Passo a passo e solução de problemas em [INSTALL.md](INSTALL.md).
 
 ---
 
-## Atualização da base
+## Manutenção
 
-> **Cadência da CVM:** os ZIPs do IPE são atualizados **toda segunda-feira entre 8h00 e 8h30**. Para documentos mais recentes que isso, consulte o portal RAD: `rad.cvm.gov.br`.
-
-```bash
-bash scripts/update_weekly.sh                                   # tudo de uma vez (ingestores + extract_pdf)
-EXTRACT_LIMIT=2000 RETRY_FAILED=1 bash scripts/update_weekly.sh # com re-tentativa de PDFs falhos
-```
-
-Automático (launchd, segunda 09:00):
+A CVM atualiza os ZIPs do IPE **toda segunda entre 8h e 8h30**. Documento mais recente que isso só no
+portal RAD (`rad.cvm.gov.br`).
 
 ```bash
-bash scripts/install_weekly_launchd.sh            # agenda
-bash scripts/install_weekly_launchd.sh --run-now  # agenda e roda agora
-bash scripts/install_weekly_launchd.sh --status   # estado + último log
-bash scripts/install_weekly_launchd.sh --uninstall
+bash scripts/update_weekly.sh                       # ingestores + consistência + PDFs
+bash scripts/install_weekly_launchd.sh              # agenda para toda segunda, 9h
+bash scripts/install_weekly_launchd.sh --status     # estado + último log
 ```
 
-Logs em `logs/update_*.log` (mantidos os 12 mais recentes). Se o Mac estiver dormindo no horário, o launchd executa ao acordar. Dia e hora: `WEEKDAY=1 HOUR=9 MINUTE=0`.
+O job semanal cobre o ano corrente e o anterior. Para refazer o histórico ou mudar a cobertura, rode o
+`bootstrap.sh` de novo. Logs em `logs/update_*.log`, os 12 mais recentes.
 
-Passo a passo, se preferir:
+Confira o tratamento a qualquer momento:
 
 ```bash
-cd scripts/ingest && source ../../.venv/bin/activate
-python ingest_ipe.py && python ingest_vlmo.py && python ingest_recompra.py
-python ingest_fre.py && python ingest_dfp.py && python ingest_itr.py
-python extract_pdf.py --limite 1000
+.venv/bin/python -m pytest tests/ -q
 ```
 
-Notas explicativas (texto completo do ITR/DFP) não entram no fluxo semanal: cada PDF tem dezenas de MB. Ingira sob demanda:
-
-```bash
-python ingest_notas_explicativas.py --cnpj <CNPJ> --ano 2026 --fonte ITR
-```
+A suíte inclui testes que releem o banco e recalculam o tratamento a partir do dado bruto: conferem que
+cada valor trimestral é mesmo a subtração de duas linhas equivalentes. Eles pulam sozinhos se o banco não
+existir ou se a sua cobertura não tem as empresas da amostra.
 
 ---
 
-## Uso com o Claude
+## Referência
 
-Com o MCP conectado, basta conversar. O Claude consulta o banco quando necessário.
+| Arquivo | Para quê |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Schema, queries prontas e como o Claude deve pesquisar. É o arquivo mais importante do repositório. |
+| [INSTALL.md](INSTALL.md) | Instalação detalhada, MCP no Claude Code e no app, troubleshooting |
+| [TODOS.md](TODOS.md) | Backlog |
+| `docs/superpowers/plans/` | Desenho de cada camada de consistência, com as medições |
 
-- *"Resumo das últimas AGOs e AGEs da WEG com o que foi deliberado"*
-- *"Fatos relevantes da Embraer no último ano — classifica por tipo de impacto"*
-- *"Houve compra de ações por insiders da Localiza próximo a algum resultado em 2024?"*
-- *"Compare a margem EBIT de WEGE3 e EMBR3 de 2016 a 2024"*
-- *"Quais programas de recompra estão vigentes?"*
-- *"Quem são os maiores acionistas da Vale hoje?"*
+### Fontes
 
----
-
-## Estrutura do projeto
-
-```
-cvm-research/
-├── README.md                       # este arquivo
-├── INSTALL.md                      # instalação, MCP (Code e desktop), troubleshooting
-├── CLAUDE.md                       # schema, queries e instruções para o Claude
-├── TODOS.md                        # backlog
-├── watchlist.csv                   # 145 empresas com CNPJ, ticker e código CVM
-├── schema.sql                      # schema SQLite completo (tabelas + views + FTS5)
-├── setup.sh                        # cria cvm_research.db a partir de schema.sql
-├── bootstrap.sh                    # carga inicial completa: brutos + consistência + PDFs (retomável)
-├── requirements.txt                # dependências Python (inclui mcp)
-├── .env.example                    # template do .env (DATABASE_URL)
-├── scripts/
-│   ├── update_weekly.sh            # roda todos os ingestores + consistência + extract_pdf (lock + log)
-│   ├── install_weekly_launchd.sh   # agenda update_weekly.sh no launchd (segunda 9h)
-│   ├── mcp/cvm_mcp.py              # servidor MCP (stdio, somente leitura)
-│   ├── ingest/
-│       ├── utils.py                # conexão SQLite + helpers de download/conversão
-│       ├── catalog.py              # baixa catálogo B3+CVM → company_catalog.csv
-│       ├── add_companies.py        # adiciona empresas do catálogo à watchlist
-│       ├── ingest_companies.py     # sincroniza watchlist.csv → tabela companies
-│       ├── ingest_ipe.py           # documentos CVM (metadados) — flag: --desde ANO
-│       ├── ingest_vlmo.py          # insider trading
-│       ├── ingest_recompra.py      # programas de recompra
-│       ├── ingest_fre.py           # capital, acionistas, remuneração
-│       ├── ingest_dfp.py           # demonstrativos anuais — flags: --historico, --desde ANO
-│       ├── ingest_itr.py           # demonstrativos trimestrais — flag: --desde ANO
-│       ├── ingest_notas_explicativas.py  # texto completo do ITR/DFP (sob demanda)
-│       └── extract_pdf.py          # extração de texto dos PDFs do IPE
-│   └── analysis/                   # consistência dos demonstrativos (no job semanal, após DFP/ITR)
-│       ├── consistency_utils.py    # latest_rows, tolerância, consistency_runs/flags
-│       ├── check_hierarchy_sums.py # Camada 1: soma hierárquica intra-documento (regressão da ingestão)
-│       ├── check_cross_period.py   # Camada 2: cruzamento entre filings (reapresentação)
-│       ├── check_granularity.py    # Camada 3: linhas sem par entre filings (renumeração, Outros, irmão)
-│       ├── check_text_stability.py # Camada 5 (+4): trilha temporal de nomes/códigos por pai (cd_conta_ds_timeline)
-│       ├── derive_quarters.py      # Camada 6: desacúmulo por safra → demonstrativos_trimestrais
-│       └── run_all.py              # orquestrador: --layer 2 --cnpj|--full
-├── tests/                          # pytest (sem rede, tudo mockado)
-├── docs/superpowers/plans/         # registros de design de features já implementadas
-└── logs/                           # logs do update semanal (não versionado)
-```
-
-### Fontes de dados
-
-| Script | Fonte | Tabelas populadas | Cadência |
-|---|---|---|---|
-| `catalog.py` | B3 API + CVM | `company_catalog.csv` (arquivo) | ao expandir cobertura |
-| `add_companies.py` | `company_catalog.csv` | `watchlist.csv` (arquivo) | ao expandir cobertura |
-| `ingest_companies.py` | `watchlist.csv` | `companies` | após mudar watchlist |
-| `ingest_ipe.py` | IPE ZIPs anuais | `ipe_docs` (metadados) | semanal (seg após 8h30) |
-| `extract_pdf.py` | PDFs do `link_download` | `ipe_docs.texto_extraido`, `ipe_docs_fts` | semanal, em lotes |
-| `ingest_vlmo.py` | VLMO ZIPs anuais | `vlmo_posicao`, `vlmo_movimentacoes` | semanal |
-| `ingest_recompra.py` | Recompra ZIPs | `recompra_programas` | semanal |
-| `ingest_fre.py` | FRE ZIPs anuais | `fre_capital_social`, `fre_posicao_acionaria`, `fre_remuneracao_orgao` | semanal |
-| `ingest_dfp.py` | DFP ZIPs anuais | `demonstrativos_contabeis` (fonte='DFP'; grava `st_conta_fixa`) | semanal |
-| `ingest_itr.py` | ITR ZIPs anuais | `demonstrativos_contabeis` (fonte='ITR'; trimestre isolado + acumulado; grava `st_conta_fixa`) | semanal |
-| `ingest_notas_explicativas.py` | Pacote ZIP do filing (rad.cvm.gov.br) | `notas_explicativas`, `notas_explicativas_fts` | sob demanda |
-
-## Análise de consistência dos demonstrativos
-
-Scripts em `scripts/analysis/` cruzam os quadros de `demonstrativos_contabeis` e gravam achados em
-`consistency_runs` / `consistency_flags` (metadados; o valor publicado pela CVM nunca é alterado).
-As Camadas 1, 2, 3, 5 e 6 rodam no job semanal logo após `ingest_dfp`/`ingest_itr` (base inteira, ~1,5 min).
-À mão, para uma empresa ou para forçar agora:
-
-```bash
-cd scripts/analysis && source ../../.venv/bin/activate
-python run_all.py --layer 2 --cnpj 84.429.695/0001-11   # uma empresa (~1 s)
-python run_all.py --layer 1,2,3,5,6 --cnpj 84.429.695/0001-11 # todas as camadas
-python run_all.py --layer 2 --full                       # base inteira (145 empresas, ~1,5 min)
-```
-
-| Camada | Script | O que detecta |
+| Script | Fonte na CVM | Tabelas |
 |---|---|---|
-| 1 | `check_hierarchy_sums.py` | Dentro de cada documento, pai = Σ filhos diretos e fórmulas de nível 2 (DRE/DFC): `nao_detalhado` (pai sem abertura), `pai_vazio`, `divergencia`, `divergencia_formula`. Exceções: `6.05` = saldo final − inicial, `3.99` ignorada. |
-| 2 | `check_cross_period.py` | O mesmo período em filings diferentes (DFP × ITRs seguintes × DFP seguinte): `reapresentacao` quando o total diverge, `reclassificacao` quando só sublinhas mudam. Baseline = filing mais antigo. |
-| 3 | `check_granularity.py` | Linhas que existem só num dos filings do par: `renumerado` (mesmo nome ou mesmo valor em outro código), `zero_padding`, `reclassificado_em_outros`, `reclassificado_em_irmao` (pai inalterado), `divergencia_nao_explicada`. |
-| 5 (+4) | `check_text_stability.py` | Trilha temporal de cada linha (pai + nome) entre filings consecutivos em `cd_conta_ds_timeline`: `renumerado`, `reformulacao`/`ambiguo` (similaridade textual), `nova`, `removida`. |
-| 6 | `derive_quarters.py` | Valor de cada trimestre da DRE/DFC_MI/DVA por conta e safra em `demonstrativos_trimestrais`: publicado (DRE 1T–3T) ou derivado por diferença de acumulados da mesma safra (4T = DFP − 3T); flags `reapresentacao_intra_ano`, `componente_reapresentado`, `linha_sem_par`, `sem_3t`. |
+| `ingest_ipe.py` | IPE (ZIPs anuais) | `ipe_docs` |
+| `extract_pdf.py` | PDFs dos documentos | `ipe_docs.texto_extraido`, `ipe_docs_fts` |
+| `ingest_dfp.py` / `ingest_itr.py` | DFP e ITR | `demonstrativos_contabeis` |
+| `ingest_vlmo.py` | VLMO | `vlmo_posicao`, `vlmo_movimentacoes` |
+| `ingest_fre.py` | FRE | `fre_capital_social`, `fre_posicao_acionaria`, `fre_remuneracao_orgao` |
+| `ingest_recompra.py` | Recompra | `recompra_programas` |
+| `ingest_notas_explicativas.py` | Pacote do filing (rad.cvm.gov.br) | `notas_explicativas` (sob demanda) |
+| `scripts/analysis/run_all.py` | — (cruza o que já está no banco) | `consistency_flags`, `cd_conta_ds_timeline`, `demonstrativos_trimestrais` |
 
-Plano e camadas seguintes: `docs/superpowers/plans/2026-09-17-consistencia-dados-financeiros.md`.
+Estrutura completa das pastas e dos scripts: [INSTALL.md](INSTALL.md).
+
+### Um limite que vale saber
+
+A CVM não arquiva versões anteriores dos documentos: cada base guarda a versão que estava no ZIP no dia do
+download. Duas instalações montadas em datas diferentes divergem nos períodos reapresentados no intervalo.
+O repositório reproduz o método com fidelidade total, e o dado com a fidelidade que a fonte permite. Ao
+comparar números com outra máquina, cite a data da carga.
 
 ---
 
 ## Histórico
 
-**18/09/2026 — casamento de linhas no desacúmulo (Camada 6).** A Camada 6 subtraía acumulados casando as linhas por
-`cd_conta`, que não é estável entre filings: a empresa renumera as contas que cria (`st_conta_fixa = 'N'`) entre
-trimestres e o DFP usa um layout diferente do ITR. Resultado: 21% das linhas derivadas da DFC no 2T e no 3T e 39% no 4T
-subtraíam uma linha de outra, quase sempre sem flag — cerca de 24,6 mil valores errados só na DFC de 2T e 3T, em todas
-as 145 empresas. O caso relatado foi a Multiplan, cuja `6.03.08` da DFC é "Dividendos" no 1T e "Pagamento de encargos
-sobre debêntures" no 2T: o 2T26 saía −249,5 mi em vez de −202,1 mi.
+O projeto começou em Supabase/PostgreSQL e migrou para SQLite local em junho de 2026 (um arquivo, zero
+serviços). O MCP passou de `mcp-server-sqlite` (npx) para um servidor Python próprio em setembro de 2026.
+Os workflows de GitHub Actions foram removidos: toda a ingestão roda localmente.
 
-Passou a usar `match_filings`, a escada de casamento da Camada 5, e a gravar o par em `cd_conta_b`/`casamento`. Pares de
-similaridade ambígua (0,55 a 0,75) não são casados automaticamente: viram `par_ambiguo`, fila de revisão em
-`consistency_flags`. Os testes contra o dado bruto acharam um segundo caso da mesma família: na revisão do plano dos
-bancos, entre o ITR do 3T/2017 e o DFP/2017, o Itaú teve `3.01.02` mudando de "Receita de Dividendos" para o resultado
-de câmbio — por isso o casamento da Camada 6 não confia no código fixo da CVM sem olhar o nome (a Camada 5 mantém a
-regra antiga). Plano, medições e decisões em
-`docs/superpowers/plans/2026-09-18-fase6-casamento-de-linhas-no-desacumulo.md`.
+**18/09/2026 — casamento de linhas no desacúmulo (Camada 6).** A Camada 6 subtraía acumulados casando as
+linhas por `cd_conta`, que não é estável entre filings. Resultado: 21% das linhas derivadas da DFC no 2T e
+no 3T e 39% no 4T subtraíam uma linha de outra, quase sempre sem flag — cerca de 24,6 mil valores errados
+só na DFC de 2T e 3T, em todas as empresas. Passou a usar a escada de casamento da Camada 5 e a gravar o
+par em `cd_conta_b`/`casamento`. Pares de similaridade ambígua viram fila de revisão em vez de número.
 
-Medido na base inteira depois da correção (safra `original`, 106 s de execução, 1.797.994 linhas):
-
-| tipo_doc | trimestre | linhas | com valor | mesmo código | renumerado | reformulação | ambíguo | sem par |
-|---|---|---|---|---|---|---|---|---|
-| DFC_MI | 2 | 93.391 | 89,8% | 68.425 | 8.487 | 6.989 | 1.908 | 7.199 |
-| DFC_MI | 3 | 87.891 | 91,1% | 65.548 | 8.278 | 6.276 | 1.577 | 5.853 |
-| DFC_MI | 4 | 100.763 | 78,0% | 51.442 | 14.725 | 12.422 | 3.222 | 11.193 |
-| DRE | 2 | 55.611 | 100,0% | 52.892 | 369 | 610 | 142 | 1.382 |
-| DRE | 3 | 51.946 | 100,0% | 49.636 | 357 | 519 | 120 | 1.140 |
-| DRE | 4 | 56.562 | 87,1% | 47.681 | 637 | 930 | 230 | 2.097 |
-| DVA | 2 | 77.891 | 98,4% | 75.875 | 379 | 395 | 101 | 811 |
-| DVA | 3 | 72.399 | 98,5% | 70.802 | 230 | 310 | 48 | 763 |
-| DVA | 4 | 80.072 | 88,8% | 69.927 | 522 | 641 | 157 | 1.748 |
-
-As colunas `renumerado` e `reformulação` são a massa que antes era subtraída errado. A cobertura da DFC no 4T caiu de
-84% para 78%: linhas que não existem no acumulado anterior agora são NULL em vez de um número inventado. Na DRE, 1.512
-flags de `reapresentacao_intra_ano` desapareceram (13.024 → 11.512) — eram artefato do casamento errado, não divergência
-da fonte. A fila `par_ambiguo` tem 15.579 flags; o limiar é ajustável por `--sim-alto`.
-
-Uma terceira classe do mesmo erro apareceu na validação por amostragem da Multiplan: a similaridade textual não
-distingue sentido contábil. "Captação de debêntures" e "Pagamento de debêntures" pontuam 0,756, e "Aumento" contra
-"Redução de capital social" pontua 0,800, porque só o verbo muda. Na base inteira havia 586 pares casados com o
-sentido invertido, 212 deles gerando valor errado — o maior era a JSL no 2T/2017, com −2.950,7 mi de "Pagamentos de
-empréstimos" derivado contra "Aumento em empréstimos". `consistency_utils.polaridade_conflita` agora força esses pares
-para a fila de revisão. Depois da correção: zero pares com sentido invertido em 125.424 conferidos.
-
-O projeto começou em Supabase/PostgreSQL e migrou para SQLite local em junho de 2026 (um arquivo, zero serviços). O MCP passou de `mcp-server-sqlite` (npx) para um servidor Python próprio em setembro de 2026. Os workflows de GitHub Actions foram removidos: toda a ingestão roda localmente.
-
-## Testes
-
-```bash
-.venv/bin/python -m pytest tests/ -q
-```
+Duas variantes do mesmo erro apareceram na validação. A CVM re-letrou o plano dos bancos entre o ITR do
+3T/2017 e o DFP/2017, então confiar no código fixo da CVM também erra. E a similaridade textual não
+distingue sentido contábil: "Captação" e "Pagamento de debêntures" pontuam 0,756, e havia 586 pares casados
+com o sentido invertido. Depois da correção: zero inversões e zero erros de aritmética em 1,23 milhão de
+valores conferidos contra o dado bruto.

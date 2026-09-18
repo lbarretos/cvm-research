@@ -218,6 +218,73 @@ as empresas novas também atualiza as antigas. Nada é perdido.
 
 ---
 
+## Estrutura do projeto
+
+```
+cvm-research/
+├── README.md                       # visão geral, quick start, casos de uso
+├── INSTALL.md                      # este arquivo
+├── CLAUDE.md                       # schema, queries e instruções para o Claude
+├── TODOS.md                        # backlog
+├── watchlist.csv                   # empresas cobertas: ticker, CNPJ, código CVM
+├── schema.sql                      # schema SQLite completo (tabelas + views + FTS5)
+├── setup.sh                        # cria cvm_research.db a partir de schema.sql
+├── bootstrap.sh                    # carga inicial: brutos + consistência + PDFs (retomável)
+├── requirements.txt                # dependências Python, com versões fixadas
+├── .env.example                    # template do .env (DATABASE_URL)
+├── scripts/
+│   ├── update_weekly.sh            # ingestores + consistência + extract_pdf (lock + log)
+│   ├── install_weekly_launchd.sh   # agenda o update_weekly.sh (segunda 9h)
+│   ├── mcp/cvm_mcp.py              # servidor MCP (stdio, somente leitura)
+│   ├── migrations/                 # migrações de schema, uma por arquivo datado
+│   ├── ingest/
+│   │   ├── utils.py                # conexão SQLite + helpers de download/conversão
+│   │   ├── catalog.py              # baixa catálogo B3+CVM → company_catalog.csv
+│   │   ├── add_companies.py        # adiciona empresas do catálogo à watchlist
+│   │   ├── ingest_companies.py     # sincroniza watchlist.csv → tabela companies
+│   │   ├── ingest_ipe.py           # documentos CVM (metadados) — --desde ANO
+│   │   ├── ingest_vlmo.py          # insider trading
+│   │   ├── ingest_recompra.py      # programas de recompra
+│   │   ├── ingest_fre.py           # capital, acionistas, remuneração
+│   │   ├── ingest_dfp.py           # demonstrativos anuais — --historico, --desde ANO
+│   │   ├── ingest_itr.py           # demonstrativos trimestrais — --desde ANO
+│   │   ├── ingest_notas_explicativas.py  # texto completo do ITR/DFP (sob demanda)
+│   │   └── extract_pdf.py          # extração de texto dos PDFs do IPE
+│   └── analysis/                   # o "tratamento" — roda depois de DFP/ITR
+│       ├── consistency_utils.py    # latest_rows, tolerância, similaridade, polaridade
+│       ├── check_hierarchy_sums.py # Camada 1: soma dentro do documento
+│       ├── check_cross_period.py   # Camada 2: reapresentação entre filings
+│       ├── check_granularity.py    # Camada 3: linhas sem par entre filings
+│       ├── check_text_stability.py # Camada 5 (+4): trilha de nomes e códigos
+│       ├── derive_quarters.py      # Camada 6: desacúmulo → demonstrativos_trimestrais
+│       └── run_all.py              # orquestrador: --layer 1,2,3,5,6 --cnpj|--full
+├── tests/                          # pytest; os *_real.py leem o banco e pulam sem ele
+├── docs/superpowers/plans/         # desenho de cada camada, com as medições
+└── logs/                           # logs do update semanal (não versionado)
+```
+
+### As camadas de consistência
+
+Cruzam os quadros de `demonstrativos_contabeis` e gravam achados em `consistency_runs` /
+`consistency_flags`. **Nunca alteram o valor publicado pela CVM**: tudo é metadado ao lado do original.
+Rodam no `bootstrap.sh` e no job semanal; à mão, por empresa ou na base inteira:
+
+```bash
+cd scripts/analysis && source ../../.venv/bin/activate
+python run_all.py --layer 1,2,3,5,6 --cnpj 84.429.695/0001-11   # uma empresa
+python run_all.py --layer 6 --full                               # só o desacúmulo, base inteira
+```
+
+| Camada | Script | O que detecta |
+|---|---|---|
+| 1 | `check_hierarchy_sums.py` | Dentro de cada documento, pai = Σ filhos diretos e fórmulas de nível 2: `nao_detalhado`, `pai_vazio`, `divergencia`, `divergencia_formula`. Exceções: `6.05` = saldo final − inicial, `3.99` ignorada. |
+| 2 | `check_cross_period.py` | O mesmo período em filings diferentes: `reapresentacao` quando o total diverge, `reclassificacao` quando só sublinhas mudam. Baseline = filing mais antigo. |
+| 3 | `check_granularity.py` | Linhas que existem só num dos filings do par: `renumerado`, `zero_padding`, `reclassificado_em_outros`, `reclassificado_em_irmao`, `divergencia_nao_explicada`. |
+| 5 (+4) | `check_text_stability.py` | Trilha de cada linha entre filings consecutivos em `cd_conta_ds_timeline`: `renumerado`, `reformulacao`, `ambiguo`, `nova`, `removida`. |
+| 6 | `derive_quarters.py` | Valor de cada trimestre em `demonstrativos_trimestrais`, publicado ou derivado, com `cd_conta_b`/`casamento` dizendo de qual linha saiu. Flags `reapresentacao_intra_ano`, `par_ambiguo`, `linha_sem_par`. |
+
+---
+
 ## Troubleshooting
 
 | Sintoma | Causa | Solução |

@@ -75,12 +75,14 @@ def query(sql: str) -> list[dict]:
     Tabelas principais: companies, ipe_docs, vlmo_movimentacoes, vlmo_posicao,
     recompra_programas, fre_capital_social, fre_posicao_acionaria,
     fre_remuneracao_orgao, demonstrativos_contabeis, notas_explicativas,
-    consistency_runs, consistency_flags.
+    consistency_runs, consistency_flags, cd_conta_ds_timeline.
     Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco. Full-text: ipe_docs_fts, notas_explicativas_fts.
     consistency_flags: achados de consistência (layer=1 hierarchy_sum: nao_detalhado/pai_vazio/divergencia/
     divergencia_formula dentro de um documento; layer=2 cross_period: reapresentacao/reclassificacao entre filings;
     layer=3 granularity: renumerado/zero_padding/reclassificado_em_outros/reclassificado_em_irmao/divergencia_nao_explicada
-    para linhas só num dos filings;
+    para linhas só num dos filings; layer=5 text_stability: ambiguo, fila de revisão da similaridade).
+    cd_conta_ds_timeline: trilha de cada linha (pai + nome) entre filings consecutivos — renumerado/reformulacao/ambiguo/
+    nova/removida com cd_conta_anterior (estavel não é gravada;
     cd_conta NULL = resumo do par; detalhe é JSON — use json_extract).
     Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
     """

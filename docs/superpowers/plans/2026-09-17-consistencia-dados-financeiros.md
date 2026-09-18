@@ -899,6 +899,8 @@ DFC_MI, DFP: ≈ 12,8 mil mudanças de nome; ≈ 3,6 mil (28%) devem sair como `
 
 ## Fase 5 — Camada 6 (desacúmulo) + `demonstrativos_trimestrais`
 
+> **Plano de tarefas (executado):** `docs/superpowers/plans/2026-09-18-fase5-camada6-derive-quarters.md`. Mudanças em relação ao desenho abaixo, medidas no banco: (a) `UNIQUE (cnpj, tipo_doc, safra, exercicio_ini, trimestre, cd_conta)` — numa mudança de exercício social (ex: `50.746.577/0001-15`, abr/2012–mar/2013 seguido do calendário 2013) dois trimestres terminam no mesmo dia; (b) colunas `run_id` e `exercicio_ini`; (c) flags novas `linha_sem_par` (conta ausente do acumulado anterior — em 3.142 de 3.286 pares DFP × ITR 3T da DFC há código exclusivo; derivar com o lado ausente = 0 jogaria o ano inteiro no 4T) e `sem_anterior` (2T sem 1T, 3T sem 2T); (d) `3.99` (LPA) fora da derivação, não é aditivo; (e) checagem do 4T da DFC pelo saldo final `6.05.02` da própria DFC (vale nas duas safras) com o BPA `1.01.01` como reserva só na safra original — o BPA `Penúltimo` do ITR 3T(Y+1) é 31/12/Y, não 30/09/Y; (f) `componente_reapresentado` em qualquer trimestre derivado cujo minuendo ou subtraendo esteja num resumo `reapresentacao` da Camada 2, não só no 4T.
+
 ### Schema
 
 ```sql
@@ -940,6 +942,8 @@ Regra de safra: **os dois operandos vêm sempre de filings da mesma safra**. `sa
 ### Verificação da Fase 5
 
 Só é medível depois da Fase 0 (a base atual não tem os acumulados de 2T/3T). Expectativa, pelo que os pares anuais mostraram: 10–20% dos docs com `reapresentacao_intra_ano`. WEGE3 2024: 1T 8.033 mi, 2T 9.274 mi, 3T 9.857 mi (publicados) e 4T = DFP 2024 (37.987 mi) − acumulado 3T.
+
+**Medido em 2026-09-18, base pós-Fase 4, run `derive_quarters-20260918T141423Z-70ea31`** (76 s, 42.422 trimestres = exercício × trimestre × safra, **1.797.994 linhas** em `demonstrativos_trimestrais`; 77 documentos irregulares fora). WEGE3 2024 `3.01`: 8.033,3 / 9.274,4 / 9.856,9 publicados e **4T derivado 10.822,3 mi**, iguais nas duas safras. DRE 1T–3T: 325.073 linhas publicadas, **13.024 (4,0%) com `reapresentacao_intra_ano`**; dos 3.469 ITRs 2T/3T da safra original, 1.559 (45%) têm alguma sublinha divergente mas só **130 (3,7%) têm receita ou lucro (`3.01`/`3.11`) divergentes** — a expectativa de 10–20% ficou entre as duas medidas. Exemplo real detectado: HAPV3 2025, ITRs 1T/2T com receita acumulada de 1,5 e 2,3 bi e 3T com 23,7 bi (publicado 7,9 bi × derivado 21,4 bi) — inconsistência da própria fonte. 4T com valor: DRE 88%, DFC 84%, DVA 89% das linhas (o resto é `linha_sem_par` 52.637 ou `sem_3t` 39.540, este concentrado nos primeiros anos: DFP desde 2010, ITR desde 2011). `componente_reapresentado` em 172.658 linhas (4.431 trimestres). Checagem de caixa do 4T da DFC: 83 de 3.286 (2,5%) fora da tolerância, todas pelo saldo final `6.05.02`. `sem_anterior` 3.412 linhas (90 trimestres), `sem_dfp` 57 exercícios. A Camada 6 passou a rodar no `update_weekly.sh` depois da Camada 5 (depende dos resumos da Camada 2).
 
 ### Testes
 

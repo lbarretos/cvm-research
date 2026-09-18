@@ -73,6 +73,23 @@ reapresentados no intervalo. Ao comparar números com outra instalação, cite a
 
 ---
 
+## Visualizador local
+
+Existe uma tabela navegável das demonstrações em `scripts/viewer/`. Ofereça quando o usuário
+quiser **folhear** um demonstrativo inteiro, comparar muitas linhas de uma vez ou conferir um
+número na tela; para responder uma pergunta pontual, consultar o banco pelo MCP é mais direto.
+
+```bash
+.venv/bin/python scripts/viewer/server.py     # http://127.0.0.1:8765
+```
+
+Somente leitura. Três visões: ITR e DFP como reportados, e a série trimestral com 4T (Camada 6).
+Cada linha é uma linha econômica, não um `cd_conta`: quando a empresa renumera a conta, a série
+segue na mesma linha e a célula mostra o código daquele filing sobrescrito. Aceita `?t=TICKER` na
+URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rodado.
+
+---
+
 ## Acesso ao banco (MCP `cvm-research`)
 
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).

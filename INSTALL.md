@@ -236,6 +236,9 @@ cvm-research/
 │   ├── update_weekly.sh            # ingestores + consistência + extract_pdf (lock + log)
 │   ├── install_weekly_launchd.sh   # agenda o update_weekly.sh (segunda 9h)
 │   ├── mcp/cvm_mcp.py              # servidor MCP (stdio, somente leitura)
+│   ├── viewer/                     # visualizador web local (somente leitura)
+│   │   ├── server.py               # http://127.0.0.1:8765 — API JSON + encadeamento
+│   │   └── index.html              # tabela; uma linha por linha econômica, não por código
 │   ├── migrations/                 # migrações de schema, uma por arquivo datado
 │   ├── ingest/
 │   │   ├── utils.py                # conexão SQLite + helpers de download/conversão
@@ -282,6 +285,29 @@ python run_all.py --layer 6 --full                               # só o desacú
 | 3 | `check_granularity.py` | Linhas que existem só num dos filings do par: `renumerado`, `zero_padding`, `reclassificado_em_outros`, `reclassificado_em_irmao`, `divergencia_nao_explicada`. |
 | 5 (+4) | `check_text_stability.py` | Trilha de cada linha entre filings consecutivos em `cd_conta_ds_timeline`: `renumerado`, `reformulacao`, `ambiguo`, `nova`, `removida`. |
 | 6 | `derive_quarters.py` | Valor de cada trimestre em `demonstrativos_trimestrais`, publicado ou derivado, com `cd_conta_b`/`casamento` dizendo de qual linha saiu. Flags `reapresentacao_intra_ano`, `par_ambiguo`, `linha_sem_par`. |
+
+---
+
+## Visualizador local
+
+```bash
+.venv/bin/python scripts/viewer/server.py            # http://127.0.0.1:8765
+.venv/bin/python scripts/viewer/server.py --port 9000
+```
+
+Abre o banco com `mode=ro`, então nunca escreve. Serve o `index.html` e uma API JSON em
+`/api/companies` e `/api/statement`. Precisa da `.venv`: ele importa
+`check_text_stability.match_filings` para encadear as linhas com a mesma escada que a Camada 6
+usa, em vez de manter uma segunda definição de "mesma linha".
+
+Cada linha da tabela é uma linha econômica. Quando a empresa renumera uma conta, a série segue na
+mesma linha e a célula traz o código daquele filing sobrescrito; o cabeçalho explica os
+marcadores. Par de similaridade ambígua não encadeia, pelo mesmo critério conservador do banco:
+viram duas linhas em vez de uma série inventada.
+
+A visão "Série trimestral (com 4T)" lê `demonstrativos_trimestrais`, então exige que a Camada 6
+tenha rodado (`bash bootstrap.sh` já faz isso). Sem ela, a visão fica vazia e as outras duas,
+que leem `demonstrativos_contabeis`, continuam funcionando.
 
 ---
 

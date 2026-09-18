@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CVM · Demonstrações</title>
+<style>
+:root{--bg:#fafaf9;--fg:#1c1917;--mut:#78716c;--line:#e7e5e4;--head:#f5f5f4;--acc:#1d4ed8;--neg:#b91c1c;--bar:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#e7e5e4;--mut:#a8a29e;--line:#2a2927;--head:#1c1b1a;--acc:#7aa2ff;--neg:#f87171;--bar:#191817}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bar);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+label{display:flex;flex-direction:column;gap:2px;color:var(--mut);font-size:11px}
+select,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 7px}
+input[list]{width:260px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{font:inherit;color:var(--fg);background:var(--bg);border:0;padding:5px 11px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--acc);color:#fff}
+.seg button:disabled{opacity:.4;cursor:default}
+#info{padding:8px 16px;color:var(--mut);border-bottom:1px solid var(--line)}
+#info b{color:var(--fg)}
+#wrap{overflow:auto;max-height:calc(100vh - 128px)}
+table{border-collapse:separate;border-spacing:0;min-width:100%}
+th,td{padding:3px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+thead th{position:sticky;top:0;background:var(--head);z-index:2;text-align:right;font-weight:600}
+thead th small{display:block;color:var(--mut);font-weight:400}
+td.cd,th.cd{position:sticky;left:0;background:var(--bg);z-index:1;color:var(--mut);font-variant-numeric:tabular-nums}
+thead th.cd{z-index:3;background:var(--head);text-align:left}
+td.ds,th.ds{position:sticky;left:84px;background:var(--bg);z-index:1;text-align:left;max-width:460px;overflow:hidden;text-overflow:ellipsis}
+thead th.ds{z-index:3;background:var(--head)}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+td.neg{color:var(--neg)}
+td.nul{color:var(--mut)}
+tr.l1 td{font-weight:600;background:var(--head)}
+tr.l1 td.cd,tr.l1 td.ds{background:var(--head)}
+.dot{color:#d97706;margin-left:4px;cursor:help}
+.tag{font-size:9px;vertical-align:super;margin-left:3px;color:var(--mut)}
+.flag{color:#d97706;margin-left:3px;cursor:help}
+td.der{font-style:italic}
+.msg{padding:40px 16px;color:var(--mut)}
+</style>
+</head>
+<body>
+<header>
+  <label>Empresa
+    <input id="emp" list="lista" placeholder="ticker ou nome" autocomplete="off">
+    <datalist id="lista"></datalist>
+  </label>
+  <label>Setor <select id="setor"><option value="">todos</option></select></label>
+  <label>Fonte
+    <span class="seg" id="fonte"><button data-v="ITR" class="on">ITR trimestral</button><button data-v="DFP">DFP anual</button><button data-v="TRI">Série trimestral (com 4T)</button></span>
+  </label>
+  <label>Demonstração
+    <span class="seg" id="tipo">
+      <button data-v="DRE" class="on">DRE</button><button data-v="BPA">BP Ativo</button><button data-v="BPP">BP Passivo</button><button data-v="DFC_MI">DFC</button><button data-v="DVA">DVA</button>
+    </span>
+  </label>
+  <label>Período (DRE do ITR)
+    <span class="seg" id="modo"><button data-v="iso" class="on">Trimestre</button><button data-v="acum">Acumulado</button></span>
+  </label>
+  <label>Safra (série trimestral)
+    <span class="seg" id="safra"><button data-v="original" class="on">Original</button><button data-v="reapresentado">Reapresentado</button></span>
+  </label>
+  <label>Colunas <select id="n"><option>4</option><option selected>8</option><option>12</option><option>20</option><option>40</option></select></label>
+  <label>Unidade <select id="un"><option value="1e6" selected>R$ milhões</option><option value="1e3">R$ mil</option><option value="1">R$</option></select></label>
+  <label>Nível <select id="nv"><option value="1">1 (totais)</option><option value="2">até 2</option><option value="3">até 3</option><option value="99" selected>todos</option></select></label>
+</header>
+<div id="info"></div>
+<div id="wrap"><div class="msg">Escolha uma empresa.</div></div>
+<script>
+const S={cnpj:null,fonte:'ITR',tipo:'DRE',modo:'iso',safra:'original'};
+let COMPANIES=[],DATA=null;
+const $=id=>document.getElementById(id);
+
+function seg(id,key){
+  $(id).addEventListener('click',e=>{
+    const b=e.target.closest('button');if(!b||b.disabled)return;
+    S[key]=b.dataset.v;
+    [...$(id).children].forEach(x=>x.classList.toggle('on',x===b));
+    load();
+  });
+}
+seg('fonte','fonte');seg('tipo','tipo');seg('modo','modo');seg('safra','safra');
+['n'].forEach(id=>$(id).addEventListener('change',load));
+['un','nv'].forEach(id=>$(id).addEventListener('change',render));
+
+function fillList(){
+  const s=$('setor').value;
+  $('lista').innerHTML=COMPANIES.filter(c=>!s||c.setor===s)
+    .map(c=>`<option value="${c.ticker} · ${c.nome_cvm}"></option>`).join('');
+}
+$('setor').addEventListener('change',fillList);
+$('emp').addEventListener('change',()=>{
+  const t=$('emp').value.split(' · ')[0].trim().toUpperCase();
+  const c=COMPANIES.find(c=>c.ticker===t)||COMPANIES.find(c=>c.nome_cvm.toUpperCase().includes(t));
+  if(c){S.cnpj=c.cnpj;$('emp').value=`${c.ticker} · ${c.nome_cvm}`;load();}
+});
+
+async function init(){
+  COMPANIES=await (await fetch('/api/companies')).json();
+  [...new Set(COMPANIES.map(c=>c.setor))].sort().forEach(s=>$('setor').insertAdjacentHTML('beforeend',`<option>${s}</option>`));
+  fillList();
+  const p=new URLSearchParams(location.search).get('t')||'WEGE3';
+  $('emp').value=p;$('emp').dispatchEvent(new Event('change'));
+}
+
+async function load(){
+  if(!S.cnpj)return;
+  const iso=S.fonte==='ITR'&&S.tipo==='DRE';
+  $('modo').querySelectorAll('button').forEach(b=>b.disabled=!(S.fonte==='ITR'&&S.tipo==='DRE'));
+  $('safra').querySelectorAll('button').forEach(b=>b.disabled=S.fonte!=='TRI');
+  $('wrap').innerHTML='<div class="msg">Carregando…</div>';
+  const q=new URLSearchParams({cnpj:S.cnpj,fonte:S.fonte,tipo:S.tipo,modo:S.modo,safra:S.safra,n:$('n').value});
+  DATA=await (await fetch('/api/statement?'+q)).json();
+  render();
+}
+
+const fmtD=d=>d?d.split('-').reverse().join('/'):'';
+function num(v,cd,u){
+  if(v===null)return ['—','nul'];
+  if(cd.startsWith('3.99'))return [v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),v<0?'neg':''];
+  const x=v/u;
+  const dec=u===1?0:(u===1e3?0:1);
+  return [x.toLocaleString('pt-BR',{minimumFractionDigits:dec,maximumFractionDigits:dec}),v<0?'neg':''];
+}
+
+function render(){
+  if(!DATA)return;
+  const c=COMPANIES.find(c=>c.cnpj===S.cnpj);
+  if(DATA.error){$('wrap').innerHTML=`<div class="msg">Erro: ${DATA.error}</div>`;return;}
+  const leg=DATA.tri?' · <i>itálico</i> = trimestre derivado por diferença de acumulados · <span class="flag">⚠</span> = flag da Camada 6 (passe o mouse)':'';
+  const cdleg=DATA.rows.some(r=>r.cds&&new Set(r.cds.filter(Boolean)).size>1)
+    ?' · <span class="dot">⇄</span> = a empresa mudou o código desta conta entre filings; o código de cada coluna aparece sobrescrito na célula':'';
+  const fin=c.setor==='Financeiro'?' · <b>setor Financeiro</b>: plano contábil de instituição financeira, exibido como reportado':'';
+  $('info').innerHTML=`<b>${c.ticker}</b> ${c.nome_cvm} · ${c.setor} · CNPJ ${c.cnpj}${fin}${leg}${cdleg}`;
+  if(!DATA.rows.length){$('wrap').innerHTML='<div class="msg">Sem dados para esta combinação.</div>';return;}
+  const u=parseFloat($('un').value),nv=parseInt($('nv').value);
+  const head=DATA.columns.map(k=>k.tri?`<th>${k.tri}T${k.fim.slice(2,4)}<small>${fmtD(k.ini)} → ${fmtD(k.fim)}</small></th>`:`<th>${fmtD(k.data)}<small>${k.ini?fmtD(k.ini)+' → ':''}${fmtD(k.fim)}${k.versao?' · v'+k.versao:''}</small></th>`).join('');
+  const rows=DATA.rows.filter(r=>r.cd.split('.').length<=nv).map(r=>{
+    const lv=r.cd.split('.').length;
+    const cells=r.v.map((v,i)=>{const[t,cl]=num(v,r.cd,u);
+      const der=r.o&&r.o[i]==='derivado',fl=r.f&&r.f[i];
+      const cdc=r.cds&&r.cds[i],out=cdc&&cdc!==r.cd
+        ?`<span class="tag" title="nesta coluna a empresa reportou esta linha no código ${cdc}">${cdc}</span>`:'';
+      return `<td class="n ${cl}${der?' der':''}"${der?' title="derivado: acumulado − acumulado anterior"':''}>${t}${out}${fl?`<span class="flag" title="${fl}">⚠</span>`:''}</td>`}).join('');
+    const varia=r.cds&&new Set(r.cds.filter(Boolean)).size>1;
+    const marks=(r.fixa==='N'?'<span class="dot" title="conta criada pela empresa (não padrão CVM)">●</span>':'')
+      +(r.nomes>1?'<span class="dot" title="o nome desta conta mudou ao longo dos filings">↻</span>':'')
+      +(varia?`<span class="dot" title="a empresa reportou esta linha em códigos diferentes: ${[...new Set(r.cds.filter(Boolean))].join(', ')}">⇄</span>`:'');
+    return `<tr class="${lv===1?'l1':''}"><td class="cd">${r.cd}</td><td class="ds" style="padding-left:${10+(lv-1)*14}px" title="${r.ds}">${r.ds}${marks}</td>${cells}</tr>`;
+  }).join('');
+  $('wrap').innerHTML=`<table><thead><tr><th class="cd">Conta</th><th class="ds">Descrição</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+init();
+</script>
+</body>
+</html>

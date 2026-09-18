@@ -101,6 +101,27 @@ O número que interessa não é o que está no PDF. É o que sobrou depois de ac
 
 ---
 
+## Visualizador
+
+Além de conversar, dá para folhear as demonstrações numa tabela. Um servidor local, sem
+dependência externa além da `.venv`:
+
+```bash
+.venv/bin/python scripts/viewer/server.py
+```
+
+Abre em `http://127.0.0.1:8765`. Somente leitura. Três visões: **ITR trimestral** e **DFP anual**
+como reportados, e **série trimestral com 4T**, que é a saída da Camada 6 com o quarto trimestre
+derivado. Dá para trocar empresa, demonstração, safra, unidade e nível de detalhe.
+
+Cada linha da tabela é uma **linha econômica**, não um `cd_conta`. Quando a empresa renumera uma
+conta entre filings, a série continua na mesma linha e a célula mostra, sobrescrito, o código que
+aquele documento usou. Três marcadores ao lado da descrição: `●` conta criada pela empresa, `↻` o
+nome mudou, `⇄` o código mudou. Na série trimestral, itálico é valor derivado e `⚠` é flag da
+Camada 6, com o motivo no tooltip.
+
+---
+
 ## O pipeline
 
 Quatro etapas, nesta ordem. O `bootstrap.sh` roda as três primeiras.

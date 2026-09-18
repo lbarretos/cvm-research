@@ -12,6 +12,7 @@ Convenções:
     o acerto de 81% para 87,6%).
 """
 import argparse
+import difflib
 import json
 import re
 import sqlite3
@@ -28,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ingest"))
 from utils import get_db  # noqa: E402  — reaproveita DATABASE_URL, WAL e foreign_keys
 
 __all__ = ["get_db", "tolerancia", "parent_code", "parse_hierarchy", "total_codes", "latest_rows",
-           "normalize_text", "is_outros", "OUTROS_RE",
+           "normalize_text", "is_outros", "text_similarity", "OUTROS_RE",
            "cnpjs_financeiros", "new_run", "finish_run", "write_flags", "clear_flags", "add_common_args",
            "TIPOS_DOC", "FLAG_COLS", "EXCECOES_SOMA", "FORMULAS_NIVEL2", "SETOR_FINANCEIRO"]
 
@@ -112,6 +113,19 @@ def normalize_text(s) -> str:
 
 def is_outros(ds_conta) -> bool:
     return bool(OUTROS_RE.search(normalize_text(ds_conta)))
+
+
+def text_similarity(a, b) -> float:
+    """Similaridade em [0, 1] entre dois nomes de conta (Camada 4): difflib sobre o
+    texto normalizado, tomando o maior entre a ordem original e os tokens ordenados
+    (token-sort), para que "Empréstimos e Financiamentos" ≈ "Financiamentos e
+    Empréstimos". Vazio de um lado → 0.0."""
+    na, nb = normalize_text(a), normalize_text(b)
+    if not na or not nb:
+        return 0.0
+    direto = difflib.SequenceMatcher(None, na, nb).ratio()
+    ordenado = difflib.SequenceMatcher(None, " ".join(sorted(na.split())), " ".join(sorted(nb.split()))).ratio()
+    return max(direto, ordenado)
 
 
 def total_codes(tipo_doc: str, doc: pd.DataFrame) -> list[str]:

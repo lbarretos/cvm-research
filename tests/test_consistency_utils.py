@@ -130,6 +130,14 @@ def test_is_outros_regex():
     assert not cu.is_outros(None)
 
 
+def test_text_similarity_pares_conhecidos_e_reordenacao():
+    assert abs(cu.text_similarity("Obrigações pós emprego", "Obrigação de benefício pós-emprego") - 0.75) < 0.01
+    assert abs(cu.text_similarity("Partes relacionadas", "Fornecedores") - 0.19) < 0.01
+    assert cu.text_similarity("Empréstimos e Financiamentos", "FINANCIAMENTOS E EMPRÉSTIMOS") == 1.0   # token-sort
+    assert cu.text_similarity("Caixa", "Caixa") == 1.0 and cu.text_similarity("", "Caixa") == 0.0
+    assert cu.text_similarity(None, None) == 0.0
+
+
 # ── latest_rows ──────────────────────────────────────────────────────────────
 
 def test_latest_rows_versao_maxima_por_documento_e_periodo_na():

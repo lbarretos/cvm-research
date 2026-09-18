@@ -36,7 +36,7 @@ from consistency_utils import (add_common_args, clear_flags, finish_run, get_db,
 
 LAYER = 5
 CHECK_TYPE = "text_stability"
-SIM_ALTO, SIM_BAIXO = 0.75, 0.45
+SIM_ALTO, SIM_BAIXO = 0.75, 0.55   # revisão manual de 51 ambíguos em 2026-09-18: 0,45–0,55 era ~80% errado
 CLASSES = ["primeira_ocorrencia", "estavel", "renumerado", "reformulacao", "ambiguo", "nova", "removida"]
 TIMELINE_COLS = ["run_id", "cnpj_companhia", "tipo_doc", "cd_conta_pai", "ds_conta_norm", "fonte", "data_referencia",
                  "cd_conta", "ds_conta", "st_conta_fixa", "data_referencia_anterior", "cd_conta_anterior",
@@ -253,7 +253,7 @@ def main(argv=None) -> str:
     parser.add_argument("--sim-alto", dest="sim_alto", type=float, default=SIM_ALTO,
                         help="score mínimo para 'reformulacao' (padrão 0.75)")
     parser.add_argument("--sim-baixo", dest="sim_baixo", type=float, default=SIM_BAIXO,
-                        help="score máximo para 'nova'/'removida' (padrão 0.45); entre os dois é 'ambiguo'")
+                        help="score máximo para 'nova'/'removida' (padrão 0.55); entre os dois é 'ambiguo'")
     args = parser.parse_args(argv)
     if not args.cnpj and not args.full:
         parser.error("informe --cnpj ou confirme a base inteira com --full")

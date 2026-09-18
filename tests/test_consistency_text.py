@@ -96,8 +96,8 @@ def test_reformulacao_ambiguo_nova_removida_e_flag_de_ambiguo():
     B["6.01.01.03"] = ("Obrigação de benefício pós-emprego", "N")     # score 0,75 → reformulacao (mesmo código)
     B.pop("6.01.01.04"); B["6.01.01.05"] = ("Partes relacionadas e coligadas", "N")   # score alto → reformulacao
     B["6.01.01.06"] = ("Juros pagos", "N")                             # nova
-    A2 = dict(A, **{"6.01.01.08": ("Provisão para Bens Não de Uso", "N")})
-    B["6.01.01.09"] = ("Imparidade Imobilizado de Uso", "N")            # score ≈ 0,55 → ambiguo
+    A2 = dict(A, **{"6.01.01.08": ("Empréstimos a Clientes", "N")})
+    B["6.01.01.09"] = ("Empréstimos a Clientes Líquidos de Provisão", "N")   # score ≈ 0,68 → ambiguo
     rows, flags, stats = cts.check_text_stability(_df(_doc(A2, "2022-12-31"), _doc(B, "2023-12-31")))
     novos = {r["cd_conta"]: r for r in rows if r["data_referencia"] == "2023-12-31"}
     assert novos["6.01.01.03"]["classificacao"] == "reformulacao" and novos["6.01.01.03"]["cd_conta_anterior"] == "6.01.01.03"
@@ -105,14 +105,14 @@ def test_reformulacao_ambiguo_nova_removida_e_flag_de_ambiguo():
     assert novos["6.01.01.05"]["classificacao"] == "reformulacao" and novos["6.01.01.05"]["cd_conta_anterior"] == "6.01.01.04"
     assert novos["6.01.01.06"]["classificacao"] == "nova" and novos["6.01.01.06"]["cd_conta_anterior"] is None
     assert novos["6.01.01.09"]["classificacao"] == "ambiguo" and novos["6.01.01.09"]["cd_conta_anterior"] == "6.01.01.08"
-    assert 0.45 < novos["6.01.01.09"]["similarity_score"] < 0.75
+    assert 0.55 < novos["6.01.01.09"]["similarity_score"] < 0.75
     assert stats["DFC_MI"]["reformulacao"] == 2 and stats["DFC_MI"]["ambiguo"] == 1 and stats["DFC_MI"]["nova"] == 1
     f, = flags
     assert (f["layer"], f["check_type"], f["classificacao"], f["severity"], f["cd_conta"]) == \
         (5, "text_stability", "ambiguo", "warn", "6.01.01.09")
     assert (f["fonte_ref"], f["data_ref"], f["fonte_cmp"], f["data_cmp"]) == ("DFP", "2022-12-31", "DFP", "2023-12-31")
     assert f["detalhe"] == {"score": novos["6.01.01.09"]["similarity_score"], "cd_conta_anterior": "6.01.01.08",
-                            "ds_conta_anterior": "Provisão para Bens Não de Uso"}
+                            "ds_conta_anterior": "Empréstimos a Clientes"}
 
 
 def test_removida_com_codigo_reutilizado_gera_duas_linhas():
@@ -165,11 +165,11 @@ def test_sequencias_separadas_por_fonte_e_tipo_e_penultimo_ignorado():
 
 
 def test_limiares_parametrizados():
-    A2 = dict(A, **{"6.01.01.08": ("Provisão para Bens Não de Uso", "N")})
-    B = dict(A, **{"6.01.01.09": ("Imparidade Imobilizado de Uso", "N")})       # score ≈ 0,55
+    A2 = dict(A, **{"6.01.01.08": ("Empréstimos a Clientes", "N")})
+    B = dict(A, **{"6.01.01.09": ("Empréstimos a Clientes Líquidos de Provisão", "N")})   # score ≈ 0,68
     rows, _, _ = cts.check_text_stability(_df(_doc(A2, "2022-12-31"), _doc(B, "2023-12-31")), sim_alto=0.5)
     assert [r["classificacao"] for r in rows if r["data_referencia"] == "2023-12-31"] == ["reformulacao"]
-    rows, _, _ = cts.check_text_stability(_df(_doc(A2, "2022-12-31"), _doc(B, "2023-12-31")), sim_baixo=0.6)
+    rows, _, _ = cts.check_text_stability(_df(_doc(A2, "2022-12-31"), _doc(B, "2023-12-31")), sim_baixo=0.7)
     assert _classes([r for r in rows if r["data_referencia"] == "2023-12-31"]) == {("6.01.01.09", "nova"), ("6.01.01.08", "removida")}
 
 
@@ -178,8 +178,8 @@ def test_limiares_parametrizados():
 def _db_com_docs():
     conn = _db()
     conn.execute("INSERT INTO companies (cnpj, ticker, nome_cvm) VALUES (?, 'WEGE3', 'WEG')", (CNPJ,))
-    A2 = dict(A, **{"6.01.01.08": ("Provisão para Bens Não de Uso", "N")})
-    B = dict(A); B.pop("6.01.01.02"); B["6.01.01.07"] = ("Depreciação", "N"); B["6.01.01.09"] = ("Imparidade Imobilizado de Uso", "N")
+    A2 = dict(A, **{"6.01.01.08": ("Empréstimos a Clientes", "N")})
+    B = dict(A); B.pop("6.01.01.02"); B["6.01.01.07"] = ("Depreciação", "N"); B["6.01.01.09"] = ("Empréstimos a Clientes Líquidos de Provisão", "N")
     rows = _doc(A2, "2022-12-31") + _doc(B, "2023-12-31")
     cols = ["cnpj_companhia", "fonte", "tipo_doc", "data_referencia", "versao", "ordem_exercicio",
             "dt_ini_exerc", "dt_fim_exerc", "cd_conta", "ds_conta", "vl_conta", "st_conta_fixa"]

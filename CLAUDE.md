@@ -121,8 +121,13 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 - `'Fato Relevante'` — eventos materiais (M&A, guidance, regulatório)
 - `'Assembleia'` — AGO e AGE; `tipo` = `'AGO'` ou `'AGE'`
 - `'Comunicado ao Mercado'` — comunicados gerais
-- `'Resultado'` — release de resultados trimestrais
 - `'Aviso aos Acionistas'`
+- `'Dados Econômico-Financeiros'` — o `tipo` diz o documento:
+  - `'Press-release'` — **release de resultados** trimestral (não existe categoria `'Resultado'`)
+  - `'Relatório de Análise Gerencial'` — MD&A (poucas empresas)
+  - `'Demonstrações Financeiras Intermediárias'` / `'Demonstrações Financeiras Anuais Completas'` — PDF
+    do ITR/DFP com notas explicativas; antes de rodar `ingest_notas_explicativas.py`, veja se já está aqui
+  - também `'Relatório de Agência de Rating'`, `'Relatório de Agente Fiduciário'`, `'Laudo de Avaliação'`
 
 ### `vlmo_movimentacoes` — movimentações de valores mobiliários por insiders
 `cnpj_companhia, data_referencia, tipo_cargo, tipo_movimentacao,`

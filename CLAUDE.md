@@ -155,7 +155,7 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 `numero_membros_remunerados, valor_maior_remuneracao, valor_menor_remuneracao, valor_medio_remuneracao`
 
 ### `fre_posicao_acionaria` — principais acionistas e cadeia de controle
-`cnpj_companhia, data_referencia, versao, id_acionista, id_acionista_relacionado, acionista, acionista_controlador,`
+`cnpj_companhia, data_referencia, versao, id_acionista, id_acionista_relacionado, acionista, cpf_cnpj_acionista, acionista_controlador,`
 `percentual_acao_ordinaria_circulacao, percentual_acao_preferencial_circulacao, percentual_total_acoes_circulacao`
 
 ⚠️ A tabela mistura dois níveis, como o CSV `posicao_acionaria` do FRE:
@@ -163,7 +163,10 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
   "Ações Tesouraria"); o percentual é sobre o capital da companhia.
 - `id_acionista_relacionado` preenchido — a linha descreve quem detém o acionista cujo `id_acionista` é esse valor
   (holding da cadeia de controle, em quantos níveis houver); o percentual é sobre o capital **dessa holding**.
-  Ex.: na WEG, "WPA Participações 50,088%" é direto; "ANNE MARIE WERNINGHAUS 33,333%" é fatia de uma holding.
+  Ex.: na WEG (FRE 2026), "WPA Participações 50,088%" é direto; "ANNE MARIE WERNINGHAUS 33,333%" é a fatia dela na
+  Diether Werninghaus Administradora, que está três níveis abaixo da WPA (WPA → G Werninghaus → Diether → Anne Marie).
+- A cadeia tem vários níveis e a mesma pessoa aparece em mais de um (Anne Marie também é direta, com 0,000%), sempre
+  com `id_acionista` diferente. Não agrupe por nome sem filtrar o nível.
 
 Nunca ordene ou some percentuais sem filtrar o nível. Para "maiores acionistas" use **`vw_acionistas_diretos`**:
 só linhas diretas, no FRE mais recente de cada empresa (maior `data_referencia` e, nela, maior `versao`). Para

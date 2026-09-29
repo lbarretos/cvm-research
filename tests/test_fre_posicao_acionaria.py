@@ -35,22 +35,27 @@ def _db():
     return conn
 
 
-def _csv_row(id_acionista, acionista, pct, relacionado="", data="2026-12-31", versao="2", cnpj=WEG):
+def _csv_row(id_acionista, acionista, pct, relacionado="", data="2026-12-31", versao="2", cnpj=WEG, cpf_cnpj=""):
     return {
         "CNPJ_Companhia": cnpj, "Nome_Companhia": "WEG S.A.",
         "Data_Referencia": data, "Versao": versao, "ID_Documento": "1",
         "ID_Acionista": str(id_acionista), "ID_Acionista_Relacionado": relacionado,
-        "Acionista": acionista, "Tipo_Pessoa_Acionista": "PJ",
+        "Acionista": acionista, "Tipo_Pessoa_Acionista": "PJ", "CPF_CNPJ_Acionista": cpf_cnpj,
         "Percentual_Total_Acoes_Circulacao": pct, "Acionista_Controlador": "S",
     }
 
 
-# Estrutura do exemplo da WEG: dois diretos e dois níveis de cadeia abaixo da WPA.
+# Recorte do FRE 2026 da WEG (fre_cia_aberta_posicao_acionaria_2026.csv, IDs reais):
+# WPA → G Werninghaus → Diether Werninghaus → ANNE MARIE (33,333% da holding de 3º nível).
+# ANNE MARIE também é acionista direta (0,000%): a mesma pessoa aparece nos dois níveis,
+# com ID_Acionista diferente em cada linha.
 WEG_CSV = [
-    _csv_row(10, "WPA Participações e Serviços S.A.", "50.088"),
-    _csv_row(11, "Outros", "34.796"),
-    _csv_row(20, "ANNE MARIE WERNINGHAUS", "33.333", relacionado="10"),
-    _csv_row(21, "Helana Administradora Ltda", "100", relacionado="20"),
+    _csv_row(8228789, "WPA Participações e Serviços S.A.", "50.088000", cpf_cnpj="00.000.000/0001-00"),
+    _csv_row(8228895, "Outros", "34.796000"),
+    _csv_row(8228547, "ANNE MARIE WERNINGHAUS", "0.000000"),
+    _csv_row(8228848, "G Werninghaus Administradora Ltda", "33.333000", relacionado="8228789"),
+    _csv_row(8228849, "Diether Werninghaus Administradora Ltda", "25.000000", relacionado="8228848"),
+    _csv_row(8228850, "ANNE MARIE WERNINGHAUS", "33.333000", relacionado="8228849"),
 ]
 
 
@@ -61,13 +66,12 @@ def _carrega(conn, linhas):
 
 def test_process_grava_relacionado():
     rows = ingest_fre.process_posicao_acionaria(pd.DataFrame(WEG_CSV, dtype=str), {WEG})
-    got = {r["acionista"]: r["id_acionista_relacionado"] for r in rows}
+    got = {r["id_acionista"]: r["id_acionista_relacionado"] for r in rows}
     assert got == {
-        "WPA Participações e Serviços S.A.": None,
-        "Outros": None,
-        "ANNE MARIE WERNINGHAUS": 10,
-        "Helana Administradora Ltda": 20,
+        8228789: None, 8228895: None, 8228547: None,
+        8228848: 8228789, 8228849: 8228848, 8228850: 8228849,
     }
+    assert rows[0]["cpf_cnpj_acionista"] == "00.000.000/0001-00"
 
 
 def test_process_relacionado_nan_vira_null():
@@ -97,7 +101,30 @@ def test_view_so_diretos():
         "SELECT acionista, percentual_total_acoes_circulacao FROM vw_acionistas_diretos "
         "WHERE cnpj_companhia = ? ORDER BY percentual_total_acoes_circulacao DESC", (WEG,)
     ).fetchall()
-    assert got == [("WPA Participações e Serviços S.A.", 50.088), ("Outros", 34.796)]
+    assert got == [
+        ("WPA Participações e Serviços S.A.", 50.088),
+        ("Outros", 34.796),
+        ("ANNE MARIE WERNINGHAUS", 0.0),
+    ]
+
+
+def test_cadeia_sobe_por_id_acionista():
+    """ID_Acionista_Relacionado aponta para o ID_Acionista da holding de cima, no mesmo documento."""
+    conn = _db()
+    _carrega(conn, WEG_CSV)
+    got = conn.execute(
+        "WITH RECURSIVE cadeia(id, nivel) AS ("
+        "  SELECT id_acionista, 0 FROM fre_posicao_acionaria WHERE id_acionista = 8228850"
+        "  UNION ALL"
+        "  SELECT p.id_acionista_relacionado, c.nivel + 1 FROM cadeia c"
+        "  JOIN fre_posicao_acionaria p ON p.id_acionista = c.id"
+        "  WHERE p.id_acionista_relacionado IS NOT NULL)"
+        "SELECT p.acionista FROM cadeia c JOIN fre_posicao_acionaria p ON p.id_acionista = c.id ORDER BY c.nivel"
+    ).fetchall()
+    assert [r[0] for r in got] == [
+        "ANNE MARIE WERNINGHAUS", "Diether Werninghaus Administradora Ltda",
+        "G Werninghaus Administradora Ltda", "WPA Participações e Serviços S.A.",
+    ]
 
 
 def test_view_so_fre_mais_recente():
@@ -116,6 +143,7 @@ def test_view_so_fre_mais_recente():
     ).fetchall()
     assert got == [
         ("11.111.111/0001-11", "2024-12-31", 1, "Controlador Outra"),
+        (WEG, "2026-12-31", 2, "ANNE MARIE WERNINGHAUS"),
         (WEG, "2026-12-31", 2, "Outros"),
         (WEG, "2026-12-31", 2, "WPA Participações e Serviços S.A."),
     ]
@@ -132,7 +160,7 @@ def test_upsert_atualiza_relacionado():
     got = conn.execute(
         "SELECT COUNT(*), COUNT(id_acionista_relacionado) FROM fre_posicao_acionaria"
     ).fetchone()
-    assert got == (4, 2)
+    assert got == (6, 3)
 
 
 def test_migracao_banco_antigo():
@@ -162,4 +190,4 @@ def test_migracao_banco_antigo():
     assert "id_acionista_relacionado" in cols
     assert conn.execute("SELECT COUNT(*) FROM fre_posicao_acionaria").fetchone() == (0,)
     _carrega(conn, WEG_CSV)
-    assert conn.execute("SELECT COUNT(*) FROM vw_acionistas_diretos").fetchone() == (2,)
+    assert conn.execute("SELECT COUNT(*) FROM vw_acionistas_diretos").fetchone() == (3,)

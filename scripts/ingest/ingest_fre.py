@@ -78,6 +78,7 @@ def process_posicao_acionaria(df: pd.DataFrame, cnpjs: set) -> list[dict]:
             "id_acionista_relacionado":                   _int(r.get("ID_Acionista_Relacionado")),
             "acionista":                                  r.get("Acionista"),
             "tipo_pessoa_acionista":                      r.get("Tipo_Pessoa_Acionista"),
+            "cpf_cnpj_acionista":                         r.get("CPF_CNPJ_Acionista"),
             "quantidade_acao_ordinaria_circulacao":       _int(r.get("Quantidade_Acao_Ordinaria_Circulacao")),
             "percentual_acao_ordinaria_circulacao":       _float(r.get("Percentual_Acao_Ordinaria_Circulacao")),
             "quantidade_acao_preferencial_circulacao":    _int(r.get("Quantidade_Acao_Preferencial_Circulacao")),

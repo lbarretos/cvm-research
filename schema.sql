@@ -475,7 +475,7 @@ SELECT
     MAX(CASE WHEN cd_conta = '3.03' THEN vl_conta END) AS resultado_bruto,
     MAX(CASE WHEN cd_conta = '3.05' THEN vl_conta END) AS ebit,
     MAX(CASE WHEN cd_conta = '3.06' THEN vl_conta END) AS resultado_financeiro,
-    MAX(CASE WHEN cd_conta = '3.08' THEN vl_conta END) AS ebt,
+    MAX(CASE WHEN cd_conta = '3.07' THEN vl_conta END) AS ebt,  -- Resultado Antes dos Tributos (3.08 é o IR/CS)
     MAX(CASE WHEN cd_conta = '3.11' THEN vl_conta END) AS lucro_liquido
 FROM latest
 GROUP BY cnpj_companhia, fonte, data_referencia;
@@ -522,7 +522,7 @@ SELECT
     MAX(CASE WHEN cd_conta = '3.03' THEN vl_conta END) AS resultado_bruto,
     MAX(CASE WHEN cd_conta = '3.05' THEN vl_conta END) AS ebit,
     MAX(CASE WHEN cd_conta = '3.06' THEN vl_conta END) AS resultado_financeiro,
-    MAX(CASE WHEN cd_conta = '3.08' THEN vl_conta END) AS ebt,
+    MAX(CASE WHEN cd_conta = '3.07' THEN vl_conta END) AS ebt,  -- Resultado Antes dos Tributos (3.08 é o IR/CS)
     MAX(CASE WHEN cd_conta = '3.11' THEN vl_conta END) AS lucro_liquido
 FROM latest
 GROUP BY cnpj_companhia, fonte, data_referencia;

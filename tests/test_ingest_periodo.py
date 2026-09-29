@@ -228,3 +228,60 @@ def test_ingestao_multi_tipo_doc_bpa_bpp_dre_convivem_nas_views():
         (cnpj,),
     ).fetchone()
     assert dre == (200_000.0, 30_000.0)
+
+
+MIGRACAO_EBT = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations",
+                            "2026-09-29_vw_dre_ebt_3_07.sql")
+
+
+def _dre_weg_2t26():
+    """DRE da WEG no ITR 2026-06-30. 3.07 e 3.08 do trimestre isolado são os reais;
+    a divisão de 3.07 entre 3.05 e 3.06 e o acumulado são sintéticos (só precisam fechar)."""
+    comum = {"cnpj_companhia": "84.429.695/0001-11", "fonte": "ITR", "tipo_doc": "DRE",
+             "data_referencia": "2026-06-30", "versao": 1, "ordem_exercicio": "Último",
+             "dt_fim_exerc": "2026-06-30", "st_conta_fixa": "S"}
+    contas = {
+        "2026-04-01": {"3.05": 1_900_000_000.0, "3.06": 82_192_000.0,
+                       "3.07": 1_982_192_000.0, "3.08": -335_648_000.0},
+        "2026-01-01": {"3.05": 3_700_000_000.0, "3.06": 150_000_000.0,
+                       "3.07": 3_850_000_000.0, "3.08": -650_000_000.0},
+    }
+    return [{**comum, "dt_ini_exerc": ini, "cd_conta": cd, "ds_conta": cd, "vl_conta": vl}
+            for ini, linhas in contas.items() for cd, vl in linhas.items()]
+
+
+def _assert_ebt_antes_dos_tributos(conn):
+    for view, esperado in (("vw_dre", 1_982_192_000.0), ("vw_dre_acumulada", 3_850_000_000.0)):
+        ebit, fin, ebt = conn.execute(
+            f"SELECT ebit, resultado_financeiro, ebt FROM {view}").fetchone()
+        assert ebt == esperado == ebit + fin, view  # 3.07, não o IR/CS de 3.08
+
+
+def test_vw_dre_ebt_e_resultado_antes_dos_tributos():
+    """Regressão: ebt lia 3.08 (IR/CS) — no 2T26 da WEG a view devolvia -335.648.000."""
+    conn = _db()
+    _upsert_sqlite(conn, "demonstrativos_contabeis", _dre_weg_2t26(), "dem_contabeis_uniq")
+    _assert_ebt_antes_dos_tributos(conn)
+
+
+def test_migracao_ebt_corrige_banco_existente_e_espelha_schema():
+    with open(SCHEMA, encoding="utf-8") as f:
+        schema = f.read()
+    antigo = schema.replace("cd_conta = '3.07' THEN vl_conta END) AS ebt",
+                            "cd_conta = '3.08' THEN vl_conta END) AS ebt")
+    assert antigo != schema
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(antigo)
+    _upsert_sqlite(conn, "demonstrativos_contabeis", _dre_weg_2t26(), "dem_contabeis_uniq")
+    assert conn.execute("SELECT ebt FROM vw_dre").fetchone()[0] == -335_648_000.0  # o bug
+
+    with open(MIGRACAO_EBT, encoding="utf-8") as f:
+        # dot-commands (.bail on) são do cliente sqlite3, não SQL
+        migracao = "".join(l for l in f if not l.startswith("."))
+    for _ in range(2):  # idempotente
+        conn.executescript(migracao)
+    _assert_ebt_antes_dos_tributos(conn)
+
+    novo = _db()
+    views = "SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name"
+    assert conn.execute(views).fetchall() == novo.execute(views).fetchall()

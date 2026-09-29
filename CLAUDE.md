@@ -154,9 +154,22 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
 `cnpj_companhia, data_referencia, orgao_administracao, numero_membros,`
 `numero_membros_remunerados, valor_maior_remuneracao, valor_menor_remuneracao, valor_medio_remuneracao`
 
-### `fre_posicao_acionaria` — principais acionistas
-`cnpj_companhia, data_referencia, acionista, acionista_controlador,`
+### `fre_posicao_acionaria` — principais acionistas e cadeia de controle
+`cnpj_companhia, data_referencia, versao, id_acionista, id_acionista_relacionado, acionista, acionista_controlador,`
 `percentual_acao_ordinaria_circulacao, percentual_acao_preferencial_circulacao, percentual_total_acoes_circulacao`
+
+⚠️ A tabela mistura dois níveis, como o CSV `posicao_acionaria` do FRE:
+- `id_acionista_relacionado IS NULL` — acionista **direto** da companhia listada (inclui as linhas "Outros" e
+  "Ações Tesouraria"); o percentual é sobre o capital da companhia.
+- `id_acionista_relacionado` preenchido — a linha descreve quem detém o acionista cujo `id_acionista` é esse valor
+  (holding da cadeia de controle, em quantos níveis houver); o percentual é sobre o capital **dessa holding**.
+  Ex.: na WEG, "WPA Participações 50,088%" é direto; "ANNE MARIE WERNINGHAUS 33,333%" é fatia de uma holding.
+
+Nunca ordene ou some percentuais sem filtrar o nível. Para "maiores acionistas" use **`vw_acionistas_diretos`**:
+só linhas diretas, no FRE mais recente de cada empresa (maior `data_referencia` e, nela, maior `versao`). Para
+subir a cadeia, junte `id_acionista_relacionado` com `id_acionista` do mesmo `(cnpj_companhia, data_referencia, versao)`.
+Banco anterior à coluna: `sqlite3 cvm_research.db < scripts/migrations/2026-09-29_fre_acionista_relacionado.sql`,
+`sqlite3 cvm_research.db < schema.sql` e `python ingest_fre.py --desde 2010` (a migração esvazia a tabela).
 
 ### `demonstrativos_contabeis` — DFP (anual) e ITR (trimestral) estruturados
 `cnpj_companhia, fonte ('DFP'/'ITR'), tipo_doc ('BPA'/'BPP'/'DRE'/'DFC_MI'/'DVA'),`
@@ -387,14 +400,27 @@ ORDER BY data_referencia DESC;
 
 ### Composição acionária (principais acionistas)
 ```sql
-SELECT data_referencia, acionista, acionista_controlador,
+-- Acionistas diretos, FRE mais recente (a view já filtra nível, data e versão)
+SELECT data_referencia, versao, acionista, acionista_controlador,
        percentual_acao_ordinaria_circulacao  AS pct_on,
        percentual_acao_preferencial_circulacao AS pct_pn,
        percentual_total_acoes_circulacao     AS pct_total
-FROM fre_posicao_acionaria
+FROM vw_acionistas_diretos
 WHERE cnpj_companhia = '<CNPJ>'
-ORDER BY data_referencia DESC, percentual_total_acoes_circulacao DESC NULLS LAST
+ORDER BY percentual_total_acoes_circulacao DESC NULLS LAST
 LIMIT 20;
+
+-- Cadeia de controle: quem detém cada acionista direto (um nível acima; repita a junção para subir mais)
+SELECT d.acionista AS acionista_direto, d.percentual_total_acoes_circulacao AS pct_na_companhia,
+       c.acionista AS socio_do_acionista,  c.percentual_total_acoes_circulacao AS pct_no_acionista_direto
+FROM vw_acionistas_diretos d
+JOIN fre_posicao_acionaria c
+  ON  c.cnpj_companhia  = d.cnpj_companhia
+  AND c.data_referencia = d.data_referencia
+  AND c.versao          = d.versao
+  AND c.id_acionista_relacionado = d.id_acionista
+WHERE d.cnpj_companhia = '<CNPJ>'
+ORDER BY d.percentual_total_acoes_circulacao DESC, c.percentual_total_acoes_circulacao DESC;
 ```
 
 ### DRE trimestral (últimos 8 trimestres) via view

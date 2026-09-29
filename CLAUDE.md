@@ -103,8 +103,8 @@ Sempre use CNPJ como chave. Para buscar pelo ticker ou nome:
 -- Por ticker
 SELECT cnpj, nome_cvm FROM companies WHERE ticker = 'WEGE3';
 
--- Por nome parcial
-SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm ILIKE '%fleury%';
+-- Por nome parcial (LIKE no SQLite ignora maiúsculas só em ASCII: acento tem que bater)
+SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm LIKE '%fleury%';
 ```
 
 ## Tabelas e campos principais
@@ -312,12 +312,12 @@ LIMIT 20;
 ### Fatos relevantes do último ano
 ```sql
 SELECT data_referencia, assunto,
-       LEFT(texto_extraido, 500) AS preview,
+       substr(texto_extraido, 1, 500) AS preview,
        link_download
 FROM ipe_docs
 WHERE cnpj_companhia = '<CNPJ>'
   AND categoria = 'Fato Relevante'
-  AND data_referencia >= CURRENT_DATE - INTERVAL '1 year'
+  AND data_referencia >= date('now', '-1 year')
 ORDER BY data_referencia DESC;
 ```
 
@@ -333,35 +333,46 @@ LIMIT 30;
 
 ### Movimentações de insiders (compras e vendas)
 ```sql
-SELECT data_referencia, data_movimentacao, tipo_cargo, tipo_movimentacao,
-       tipo_ativo, caracteristica, quantidade, preco_unitario, volume
-FROM vlmo_movimentacoes
-WHERE cnpj_companhia = '<CNPJ>'
-  AND tipo_movimentacao IN (
+-- Só a última versao de cada (empresa, mês): uma versao nova é o reenvio completo do formulário
+SELECT v.data_referencia, v.data_movimentacao, v.tipo_cargo, v.tipo_movimentacao,
+       v.tipo_ativo, v.caracteristica, v.quantidade, v.preco_unitario, v.volume
+FROM vlmo_movimentacoes v
+WHERE v.cnpj_companhia = '<CNPJ>'
+  AND v.versao = (SELECT MAX(versao) FROM vlmo_movimentacoes m
+                  WHERE m.cnpj_companhia = v.cnpj_companhia
+                    AND m.data_referencia = v.data_referencia)
+  AND v.tipo_movimentacao IN (
       'Compra à vista', 'Compra à termo', 'Compra',
       'Venda à vista', 'Venda à termo', 'Venda'
   )
-ORDER BY data_movimentacao DESC
+ORDER BY v.data_movimentacao DESC
 LIMIT 30;
 ```
 
 ### Triangulação: fato relevante + insider trading na mesma semana
 ```sql
+-- vlmo.data_referencia é sempre o dia 1 do mês: a janela usa data_movimentacao
+-- (preenchida em 100% das compras/vendas desde 2018-12). Só a última versao do formulário mensal.
 SELECT
     i.data_referencia   AS data_fato,
     i.assunto           AS fato,
+    v.data_movimentacao,
     v.tipo_cargo,
     v.tipo_movimentacao,
     v.volume
 FROM ipe_docs i
 JOIN vlmo_movimentacoes v
   ON i.cnpj_companhia = v.cnpj_companhia
- AND v.data_referencia BETWEEN i.data_referencia - 7 AND i.data_referencia + 7
+ AND v.data_movimentacao BETWEEN date(i.data_referencia, '-7 days')
+                             AND date(i.data_referencia, '+7 days')
 WHERE i.cnpj_companhia = '<CNPJ>'
   AND i.categoria = 'Fato Relevante'
+  AND v.versao = (SELECT MAX(versao) FROM vlmo_movimentacoes m
+                  WHERE m.cnpj_companhia = v.cnpj_companhia
+                    AND m.data_referencia = v.data_referencia)
   AND v.tipo_movimentacao IN ('Compra à vista', 'Compra à termo', 'Compra',
                              'Venda à vista', 'Venda à termo', 'Venda')
-ORDER BY i.data_referencia DESC;
+ORDER BY i.data_referencia DESC, v.data_movimentacao;
 ```
 
 ### Programas de recompra vigentes

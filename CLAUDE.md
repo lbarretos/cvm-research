@@ -352,27 +352,31 @@ LIMIT 30;
 ### Triangulação: fato relevante + insider trading na mesma semana
 ```sql
 -- vlmo.data_referencia é sempre o dia 1 do mês: a janela usa data_movimentacao
--- (preenchida em 100% das compras/vendas desde 2018-12). Só a última versao do formulário mensal.
+-- (sem NULL em compras/vendas). Só a última versao do formulário mensal.
+-- Uma linha por movimentação: fatos na mesma janela vão juntos em `fatos`, então SUM(volume) não dobra.
+-- antes_do_fato = 1 se a operação precede ao menos um dos fatos (o caso que interessa para informação privilegiada).
 SELECT
-    i.data_referencia   AS data_fato,
-    i.assunto           AS fato,
     v.data_movimentacao,
     v.tipo_cargo,
     v.tipo_movimentacao,
-    v.volume
-FROM ipe_docs i
-JOIN vlmo_movimentacoes v
+    ROUND(v.volume, 2)                                  AS volume,
+    MAX(v.data_movimentacao < i.data_referencia)        AS antes_do_fato,
+    COUNT(*)                                            AS n_fatos,
+    GROUP_CONCAT(i.data_referencia || ' ' || i.assunto, ' | ') AS fatos
+FROM vlmo_movimentacoes v
+JOIN ipe_docs i
   ON i.cnpj_companhia = v.cnpj_companhia
  AND v.data_movimentacao BETWEEN date(i.data_referencia, '-7 days')
                              AND date(i.data_referencia, '+7 days')
-WHERE i.cnpj_companhia = '<CNPJ>'
+WHERE v.cnpj_companhia = '<CNPJ>'
   AND i.categoria = 'Fato Relevante'
   AND v.versao = (SELECT MAX(versao) FROM vlmo_movimentacoes m
                   WHERE m.cnpj_companhia = v.cnpj_companhia
                     AND m.data_referencia = v.data_referencia)
   AND v.tipo_movimentacao IN ('Compra à vista', 'Compra à termo', 'Compra',
                              'Venda à vista', 'Venda à termo', 'Venda')
-ORDER BY i.data_referencia DESC, v.data_movimentacao;
+GROUP BY v.id
+ORDER BY v.data_movimentacao DESC;
 ```
 
 ### Programas de recompra vigentes

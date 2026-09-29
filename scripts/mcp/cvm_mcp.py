@@ -76,7 +76,10 @@ def query(sql: str) -> list[dict]:
     recompra_programas, fre_capital_social, fre_posicao_acionaria,
     fre_remuneracao_orgao, demonstrativos_contabeis, notas_explicativas,
     consistency_runs, consistency_flags, cd_conta_ds_timeline, demonstrativos_trimestrais.
-    Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco. Full-text: ipe_docs_fts, notas_explicativas_fts.
+    Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco,
+    vw_acionistas_diretos (acionistas diretos no FRE mais recente). Full-text: ipe_docs_fts, notas_explicativas_fts.
+    fre_posicao_acionaria mistura acionistas diretos e a cadeia de controle das holdings:
+    id_acionista_relacionado NULL = direto; preenchido = percentual sobre o capital da holding, não da companhia.
     consistency_flags: achados de consistência (layer=1 hierarchy_sum: nao_detalhado/pai_vazio/divergencia/
     divergencia_formula dentro de um documento; layer=2 cross_period: reapresentacao/reclassificacao entre filings;
     layer=3 granularity: renumerado/zero_padding/reclassificado_em_outros/reclassificado_em_irmao/divergencia_nao_explicada

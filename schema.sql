@@ -200,6 +200,10 @@ CREATE TABLE IF NOT EXISTS fre_posicao_acionaria (
     versao                                   INTEGER,
     id_documento                             INTEGER,
     id_acionista                             INTEGER,
+    -- ID_Acionista_Relacionado do CSV: NULL = acionista direto da companhia listada;
+    -- preenchido = a linha descreve quem detém o acionista de id_acionista = este valor
+    -- (cadeia de controle), e os percentuais são do capital desse acionista, não da companhia.
+    id_acionista_relacionado                 INTEGER,
     acionista                                TEXT,
     tipo_pessoa_acionista                    TEXT,
     cpf_cnpj_acionista                       TEXT,
@@ -220,6 +224,7 @@ CREATE TABLE IF NOT EXISTS fre_posicao_acionaria (
 
 CREATE INDEX IF NOT EXISTS idx_fre_acionist_cnpj        ON fre_posicao_acionaria (cnpj_companhia, data_referencia DESC);
 CREATE INDEX IF NOT EXISTS idx_fre_acionist_controlador ON fre_posicao_acionaria (acionista_controlador);
+CREATE INDEX IF NOT EXISTS idx_fre_acionist_relacionado ON fre_posicao_acionaria (cnpj_companhia, data_referencia, versao, id_acionista_relacionado);
 
 CREATE TABLE IF NOT EXISTS fre_remuneracao_orgao (
     id                         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -559,3 +564,37 @@ SELECT
     MAX(CASE WHEN tipo_doc = 'BPP' AND cd_conta = '2.03'    THEN vl_conta END) AS patrimonio_liquido
 FROM latest
 GROUP BY cnpj_companhia, fonte, data_referencia;
+
+-- vw_acionistas_diretos: só os acionistas diretos da companhia listada
+-- (id_acionista_relacionado NULL), no FRE mais recente de cada empresa
+-- (maior data_referencia e, nela, maior versao). As linhas com
+-- id_acionista_relacionado preenchido descrevem a cadeia de controle de um
+-- acionista e têm percentual sobre o capital DELE; ficam de fora.
+-- "Outros" e "Ações Tesouraria" são linhas diretas e entram.
+CREATE VIEW IF NOT EXISTS vw_acionistas_diretos AS
+WITH data_max AS (
+    SELECT cnpj_companhia, MAX(data_referencia) AS data_referencia
+    FROM fre_posicao_acionaria
+    GROUP BY cnpj_companhia
+),
+versao_max AS (
+    SELECT p.cnpj_companhia, p.data_referencia, MAX(p.versao) AS versao
+    FROM fre_posicao_acionaria p
+    JOIN data_max d
+      ON  p.cnpj_companhia  = d.cnpj_companhia
+      AND p.data_referencia = d.data_referencia
+    GROUP BY p.cnpj_companhia, p.data_referencia
+)
+SELECT p.cnpj_companhia, p.nome_companhia, p.data_referencia, p.versao,
+       p.id_acionista, p.acionista, p.tipo_pessoa_acionista, p.acionista_controlador,
+       p.participante_acordo_acionistas,
+       p.quantidade_acao_ordinaria_circulacao, p.percentual_acao_ordinaria_circulacao,
+       p.quantidade_acao_preferencial_circulacao, p.percentual_acao_preferencial_circulacao,
+       p.quantidade_total_acoes_circulacao, p.percentual_total_acoes_circulacao,
+       p.data_composicao_capital_social
+FROM fre_posicao_acionaria p
+JOIN versao_max v
+  ON  p.cnpj_companhia  = v.cnpj_companhia
+  AND p.data_referencia = v.data_referencia
+  AND p.versao          = v.versao
+WHERE p.id_acionista_relacionado IS NULL;

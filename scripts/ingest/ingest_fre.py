@@ -64,14 +64,21 @@ def process_capital_social(df: pd.DataFrame, cnpjs: set) -> list[dict]:
     return rows
 
 def process_posicao_acionaria(df: pd.DataFrame, cnpjs: set) -> list[dict]:
+    # O CSV traz a companhia e, abaixo dela, os acionistas de cada holding da cadeia.
+    # ID_Acionista_Relacionado vazio = acionista direto. Sem a coluna não há como
+    # separar os níveis; gravar NULL marcaria a cadeia inteira como direta.
+    if "ID_Acionista_Relacionado" not in df.columns:
+        raise ValueError("posicao_acionaria sem a coluna ID_Acionista_Relacionado — layout da CVM mudou?")
     df = df[df["CNPJ_Companhia"].isin(cnpjs)]
     rows = []
     for _, r in df.iterrows():
         rows.append({
             **_base(r),
             "id_acionista":                               _int(r.get("ID_Acionista")),
+            "id_acionista_relacionado":                   _int(r.get("ID_Acionista_Relacionado")),
             "acionista":                                  r.get("Acionista"),
             "tipo_pessoa_acionista":                      r.get("Tipo_Pessoa_Acionista"),
+            "cpf_cnpj_acionista":                         r.get("CPF_CNPJ_Acionista"),
             "quantidade_acao_ordinaria_circulacao":       _int(r.get("Quantidade_Acao_Ordinaria_Circulacao")),
             "percentual_acao_ordinaria_circulacao":       _float(r.get("Percentual_Acao_Ordinaria_Circulacao")),
             "quantidade_acao_preferencial_circulacao":    _int(r.get("Quantidade_Acao_Preferencial_Circulacao")),

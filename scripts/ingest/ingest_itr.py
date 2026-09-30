@@ -19,11 +19,10 @@ from datetime import date
 
 import pandas as pd
 
-from utils import _date, _float, _int, download_year, get_db, upsert, watchlist_cnpjs
+from utils import SCALE, _date, _int, download_year, get_db, upsert, vl_escalado, watchlist_cnpjs
 
 FONTE = "ITR"
 TIPOS = ["BPA", "BPP", "DRE", "DFC_MI", "DVA"]
-SCALE = {"MIL": 1000, "UNIDADE": 1}
 CONFLICT = "dem_contabeis_uniq"   # ver utils._INDEX_COLUMNS — chave inclui o período
 
 # CVM grava ORDEM_EXERC em caixa alta; normaliza para o valor do CHECK constraint
@@ -56,9 +55,9 @@ def process_df(df: pd.DataFrame, cnpjs: set, tipo_doc: str) -> list[dict]:
         if escala not in SCALE:
             raise ValueError(f"Escala desconhecida: {escala!r} — CNPJ {r.get('CNPJ_CIA')} tipo {tipo_doc}")
 
-        # VL_CONTA pode ser string vazia em contas estruturais (pai) → None, não crash
-        vl_raw = _float(r.get("VL_CONTA"))
-        vl = None if vl_raw is None else vl_raw * SCALE[escala]
+        # VL_CONTA pode ser string vazia em contas estruturais (pai) → None, não crash.
+        # 3.99 (lucro por ação) já vem em R$/ação e não é escalado.
+        vl = vl_escalado(r.get("VL_CONTA"), escala, r.get("CD_CONTA"))
 
         versao_raw = _int(r.get("VERSAO"))
         versao = versao_raw if versao_raw is not None else 1

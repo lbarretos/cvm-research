@@ -137,6 +137,10 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm LIKE '%fleury%';
 **tipo_movimentacao compras:** `'Compra à vista'`, `'Compra à termo'`, `'Compra'`, `'Posse'`, `'Saldo Inicial'`
 **tipo_movimentacao vendas:** `'Venda à vista'`, `'Venda à termo'`, `'Venda'`, `'Desligamento/saída'`, `'Saldo Final'`
 
+`'Saldo Inicial'` tem `data_movimentacao` NULL. Bancos carregados antes de 30/09/2026 guardavam uma cópia desses saldos
+por recarga do VLMO (até 6×): somar quantidade de saldo dava múltiplos do real. Corrigir com
+`sqlite3 cvm_research.db < scripts/migrations/2026-09-30_vlmo_mov_uniq_nulls.sql`.
+
 ### `vlmo_posicao` — posição consolidada de valores mobiliários (por documento)
 `protocolo_entrega (PK), cnpj_companhia, data_referencia, categoria, tipo, link_download`
 
@@ -179,6 +183,12 @@ Banco anterior à coluna: `sqlite3 cvm_research.db < scripts/migrations/2026-09-
 `data_referencia, versao, ordem_exercicio ('Último'/'Penúltimo'),`
 `dt_ini_exerc, dt_fim_exerc, cd_conta, ds_conta, vl_conta (em R$ — já normalizado MIL×1000),`
 `st_conta_fixa ('S' = conta padrão CVM, 'N' = criada pela empresa)`
+
+**Lucro por ação (DRE `3.99` e descendentes, ON/PN)** está em **R$/ação**, sem a escala MIL: a CVM publica o LPA
+assim em qualquer escala. Bancos carregados antes de 30/09/2026 tinham o LPA ×1000 (Petrobras DFP 2025 = 8.540 em vez
+de 8,54); corrigir com `sqlite3 cvm_research.db < scripts/migrations/2026-09-30_lpa_escala.sql` e rodar o tratamento
+(`run_all.py --layer 1,2,3,5,6 --full`). Algumas empresas digitam o LPA errado na própria fonte (VIVA3 ITR 2019–2020
+traz o lucro total, centenas de milhões): valor de LPA acima de R$ 1.000 é erro da CVM, não conversão; não corrija.
 
 **Views prontas (preferir sobre query direta):**
 - `vw_dre` — DRE resumida: `receita_liquida, custo_bens_servicos, resultado_bruto, ebit, resultado_financeiro, ebt, lucro_liquido`

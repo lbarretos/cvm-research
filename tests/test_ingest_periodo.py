@@ -232,6 +232,8 @@ def test_ingestao_multi_tipo_doc_bpa_bpp_dre_convivem_nas_views():
 
 MIGRACAO_EBT = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations",
                             "2026-09-29_vw_dre_ebt_3_07.sql")
+MIGRACAO_PLANO = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations",
+                              "2026-09-30_vw_plano_contas.sql")
 
 
 def _dre_weg_2t26():
@@ -282,6 +284,10 @@ def test_migracao_ebt_corrige_banco_existente_e_espelha_schema():
         conn.executescript(migracao)
     _assert_ebt_antes_dos_tributos(conn)
 
+    # as migrações seguintes, em ordem, levam as views ao schema atual
+    with open(MIGRACAO_PLANO, encoding="utf-8") as f:
+        conn.executescript("".join(l for l in f if not l.startswith(".")))
+    _assert_ebt_antes_dos_tributos(conn)
     novo = _db()
     views = "SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name"
     assert conn.execute(views).fetchall() == novo.execute(views).fetchall()

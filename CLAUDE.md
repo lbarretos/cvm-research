@@ -125,7 +125,9 @@ invisível ao FTS; mostre o `link_download`. O `(cid:N)` de fonte WinAnsi e o te
 
 **Categorias relevantes:**
 - `'Fato Relevante'` — eventos materiais (M&A, guidance, regulatório)
-- `'Assembleia'` — AGO e AGE; `tipo` = `'AGO'` ou `'AGE'`
+- `'Assembleia'` — `tipo` = `'AGE'`, `'AGO/E'` (assembleia conjunta, a mais comum em abril) ou `'AGO'`; `'AGDEB'` é de
+  debenturistas. `especie` diz o documento: `'Proposta da Administração'` (proposto), `'Ata'`/`'Sumário das Decisões'`
+  (aprovado), `'Mapa final de votação'`, `'Edital de Convocação'`, `'Boletim de voto a distância'`
 - `'Comunicado ao Mercado'` — comunicados gerais
 - `'Aviso aos Acionistas'`
 - `'Dados Econômico-Financeiros'` — o `tipo` diz o documento:
@@ -140,8 +142,10 @@ invisível ao FTS; mostre o `link_download`. O `(cid:N)` de fonte WinAnsi e o te
 `tipo_ativo, caracteristica (ON/PN), quantidade, preco_unitario, volume`
 
 **tipo_cargo relevantes:** `'Conselho de Administração ou Vinculado'`, `'Diretor ou Vinculado'`, `'Controlador ou Vinculado'`
-**tipo_movimentacao compras:** `'Compra à vista'`, `'Compra à termo'`, `'Compra'`, `'Posse'`, `'Saldo Inicial'`
-**tipo_movimentacao vendas:** `'Venda à vista'`, `'Venda à termo'`, `'Venda'`, `'Desligamento/saída'`, `'Saldo Final'`
+**tipo_movimentacao de mercado:** compras `'Compra à vista'`, `'Compra à termo'`, `'Compra'`; vendas `'Venda à vista'`,
+`'Venda à termo'`, `'Venda'`. **Não são operações:** `'Saldo Inicial'`/`'Saldo Final'` (posição), `'Posse'`/`'Desligamento/saída'`
+(o insider entra ou sai do cargo), aluguel (`'Contratação/Devolução de empréstimo'`), planos de remuneração e eventos
+societários (`'Desdobramento/bonificação'`, `'Subscrição'`).
 
 `'Saldo Inicial'` tem `data_movimentacao` NULL. Bancos carregados antes de 30/09/2026 guardavam uma cópia desses saldos
 por recarga do VLMO (até 6×): somar quantidade de saldo dava múltiplos do real. Corrigir com
@@ -252,7 +256,7 @@ este busca cada documento individualmente em `rad.cvm.gov.br` (o portal de
 consulta de documentos da CVM, não o feed de dados abertos) — mais lento e mais
 sensível a rate limit, por isso o `time.sleep(0.5)` entre documentos e o
 `--limite` default de 20. Além disso, ao contrário de `demonstrativos_contabeis`
-(que guarda todas as versões), aqui só a versão mais recente é mantida — uma
+(que guarda as versões presentes no ZIP da CVM no dia da carga — em geral só a mais recente), aqui só a versão mais recente é mantida — uma
 reapresentação (nova `versao`) descarta o `texto_extraido` da versão anterior.
 
 ### `consistency_flags` — achados de consistência dos demonstrativos (metadados, não valores)

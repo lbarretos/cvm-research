@@ -93,7 +93,9 @@ def get_db() -> sqlite3.Connection:
     path = url.removeprefix("sqlite:///")
     if not os.path.isabs(path):
         path = str(Path(__file__).parents[2] / path)
-    conn = sqlite3.connect(path)
+    # timeout: quanto esperar pelo lock de escrita de outro processo antes de "database is locked".
+    # O padrão de 5 s derrubou o job semanal de 30/09/2026 (migração e run_all rodando em paralelo).
+    conn = sqlite3.connect(path, timeout=300)
     mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
     if mode != "wal":
         print(f"AVISO: journal_mode=WAL não ativo (modo atual: {mode!r}). "

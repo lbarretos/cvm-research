@@ -5,7 +5,8 @@ Banco: SQLite local (`cvm_research.db`) · fontes IPE (2015+) + VLMO (2018+) + R
 Cobertura e período são escolhidos na carga (ver a seção seguinte); nesta instalação, confira com
 `SELECT COUNT(*) FROM companies` e `SELECT MIN(data_referencia) FROM ipe_docs`.
 Montar do zero: `bash bootstrap.sh --universo ibov`. Manter: `bash scripts/update_weekly.sh` (manual)
-ou job launchd toda segunda 9h (`scripts/install_weekly_launchd.sh`).
+ou job launchd toda segunda 9h, com recuperação no login e a cada 4 h se a segunda foi perdida
+(`scripts/install_weekly_launchd.sh`).
 
 ## Montar a base do zero (quando o banco está vazio ou é um clone novo)
 
@@ -693,8 +694,9 @@ camadas de consistência e o texto dos PDFs em laço. Retomável. É o único ca
 `demonstrativos_trimestrais`, `consistency_flags` e `cd_conta_ds_timeline` preenchidas; os
 ingestores sozinhos só trazem o dado bruto.
 
-**Manutenção:** automática com `bash scripts/install_weekly_launchd.sh` (segunda 9h; `--status`
-mostra o último log), ou `bash scripts/update_weekly.sh` à mão. O job semanal atualiza só o ano
+**Manutenção:** automática com `bash scripts/install_weekly_launchd.sh` (segunda 9h, e no login e a
+cada 4 h enquanto a semana não tiver uma execução sem falhas; `--status` mostra o último sucesso e o
+último log), ou `bash scripts/update_weekly.sh` à mão. O job semanal atualiza só o ano
 corrente e o anterior; para refazer o histórico use o `bootstrap.sh`. Passo a passo:
 
 ```bash

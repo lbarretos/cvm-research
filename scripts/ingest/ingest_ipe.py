@@ -11,14 +11,7 @@ from utils import get_db, watchlist_cnpjs, _http_get, _sanitize, upsert
 
 BASE_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/IPE/DADOS"
 
-# Só extrai texto para estas categorias (as demais ficam como metadado)
-CATEGORIAS_EXTRAIR = {
-    "Fato Relevante",
-    "Assembleia",
-    "Comunicado ao Mercado",
-    "Aviso aos Acionistas",
-    "Resultado",
-}
+# As categorias que recebem texto extraído estão em extract_pdf.CATEGORIAS_PRIORITARIAS
 
 def download_year(year: int) -> pd.DataFrame:
     url = f"{BASE_URL}/ipe_cia_aberta_{year}.zip"

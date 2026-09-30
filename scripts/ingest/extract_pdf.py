@@ -7,7 +7,8 @@ Uso:
   python extract_pdf.py                              # processa todos pendentes da watchlist
   python extract_pdf.py --cnpj 02.286.479/0001-08   # só uma empresa
   python extract_pdf.py --categoria "Fato Relevante" --limite 100
-  python extract_pdf.py --categoria "Resultado" --cnpj 16.670.085/0001-55 --limite 50
+  python extract_pdf.py --categoria "Dados Econômico-Financeiros" --tipo "Press-release" --cnpj 16.670.085/0001-55 --limite 50
+  python extract_pdf.py --categoria "Reunião da Administração"   # atas de conselho (dividendos, JCP)
   python extract_pdf.py --retry-failed               # re-tenta falhas anteriores
   python extract_pdf.py --rebuild-fts                # só reconstrói o índice FTS5
 
@@ -23,12 +24,17 @@ import httpx
 import pdfplumber
 from utils import get_db, watchlist_cnpjs
 
-CATEGORIAS_PRIORITARIAS = {
-    "Fato Relevante",
-    "Assembleia",
-    "Comunicado ao Mercado",
-    "Aviso aos Acionistas",
-    "Resultado",
+# categoria → tipos aceitos (None = todos os tipos da categoria).
+# Não existe categoria "Resultado": o release de resultados é 'Dados Econômico-Financeiros'
+# com tipo 'Press-release'; os demais tipos dela são DFs completas, laudos e relatórios de
+# rating/agente fiduciário, longos e já cobertos por demonstrativos_contabeis/notas_explicativas.
+CATEGORIAS_PRIORITARIAS: dict[str, set[str] | None] = {
+    "Fato Relevante": None,
+    "Assembleia": None,
+    "Comunicado ao Mercado": None,
+    "Aviso aos Acionistas": None,
+    "Reunião da Administração": None,   # atas de RCA: dividendos, JCP, recompra
+    "Dados Econômico-Financeiros": {"Press-release"},
 }
 
 HEADERS = {
@@ -64,17 +70,27 @@ def fetch_pdf_text(url: str) -> str | None:
 
 # ── Operações SQLite ──────────────────────────────────────────────────────────
 
-def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set, categorias: set,
+def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set,
+                     categorias: dict[str, set[str] | None],
                      limite: int, retry_failed: bool = False) -> list[dict]:
-    """Retorna documentos sem texto_extraido para as empresas e categorias fornecidas."""
+    """Retorna documentos sem texto_extraido para as empresas e categorias fornecidas.
+
+    `categorias` mapeia categoria → tipos aceitos; None aceita todos os tipos.
+    """
     cnpjs_list = list(cnpjs)
-    cats_list  = list(categorias)
-    if not cnpjs_list or not cats_list:
+    if not cnpjs_list or not categorias:
         return []
     falhou_val = 1 if retry_failed else 0
 
     cnpj_ph = ",".join("?" * len(cnpjs_list))
-    cat_ph  = ",".join("?" * len(cats_list))
+    filtros, filtro_params = [], []
+    for categoria, tipos in categorias.items():
+        if tipos is None:
+            filtros.append("categoria = ?")
+            filtro_params.append(categoria)
+        else:
+            filtros.append(f"(categoria = ? AND tipo IN ({','.join('?' * len(tipos))}))")
+            filtro_params.extend([categoria, *sorted(tipos)])
 
     sql = f"""
         SELECT protocolo_entrega, cnpj_companhia, categoria, assunto, link_download
@@ -82,11 +98,11 @@ def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set, categorias: set,
         WHERE texto_extraido IS NULL
           AND extracao_falhou = ?
           AND cnpj_companhia IN ({cnpj_ph})
-          AND categoria      IN ({cat_ph})
+          AND ({" OR ".join(filtros)})
         ORDER BY data_entrega DESC
         LIMIT ?
     """
-    params = [falhou_val, *cnpjs_list, *cats_list, limite]
+    params = [falhou_val, *cnpjs_list, *filtro_params, limite]
     cur = conn.execute(sql, params)
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -126,7 +142,7 @@ def _rebuild_fts(conn: sqlite3.Connection) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200,
-         retry_failed=False, rebuild_fts=False):
+         retry_failed=False, rebuild_fts=False, tipo_filter=None):
     conn = get_db()
 
     if rebuild_fts:
@@ -134,10 +150,15 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
         return
 
     cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
-    cats   = {categoria_filter} if categoria_filter else CATEGORIAS_PRIORITARIAS
+    if categoria_filter:
+        cats = {categoria_filter: {tipo_filter} if tipo_filter else None}
+    else:
+        cats = CATEGORIAS_PRIORITARIAS
     modo   = " [retry falhas anteriores]" if retry_failed else ""
     print(f"Backend: SQLite local{modo}")
-    print(f"Empresas: {len(cnpjs)} | Categorias: {sorted(cats)}")
+    print(f"Empresas: {len(cnpjs)} | Categorias: "
+          + ", ".join(c if t is None else f"{c} ({', '.join(sorted(t))})"
+                      for c, t in sorted(cats.items())))
 
     docs = _fetch_pendentes(conn, cnpjs, cats, limite, retry_failed)
     print(f"Pendentes para extração: {len(docs)}")
@@ -176,6 +197,7 @@ if __name__ == "__main__":
     )
     p.add_argument("--cnpj",         help="Filtrar por CNPJ")
     p.add_argument("--categoria",    help="Filtrar por categoria")
+    p.add_argument("--tipo",         help="Com --categoria: filtrar também por tipo (ex: Press-release)")
     p.add_argument("--limite",       type=int, default=200,
                    help="Máximo de documentos a processar (default: 200)")
     p.add_argument("--retry-failed", action="store_true",
@@ -183,4 +205,6 @@ if __name__ == "__main__":
     p.add_argument("--rebuild-fts",  action="store_true",
                    help="Apenas reconstrói o índice FTS5 sem baixar nenhum PDF")
     args = p.parse_args()
-    main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts)
+    if args.tipo and not args.categoria:
+        p.error("--tipo exige --categoria")
+    main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts, args.tipo)

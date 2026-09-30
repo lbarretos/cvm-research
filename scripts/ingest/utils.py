@@ -182,11 +182,13 @@ def _upsert_sqlite(conn, table: str, rows: list[dict], conflict: str, batch: int
 
 # ── HTTP com retry ────────────────────────────────────────────────────────────
 
-def _http_get(url: str, timeout: int = 120, retries: int = 3) -> httpx.Response:
+def _http_get(url: str, timeout: int = 120, retries: int = 6) -> httpx.Response:
     """GET com retry exponencial para erros de rede transitórios.
 
     Apenas ConnectError e TimeoutException disparam retry — erros HTTP (4xx/5xx)
     propagam imediatamente, pois retry não resolve problema de dados ou autenticação.
+    Esperas de 4s, 8s, 16s, 32s e 60s (teto): com o default de 6 tentativas, a rede
+    tem ~2 min para voltar — o DNS logo após o Mac acordar leva mais que segundos.
     """
     for attempt in range(retries):
         try:
@@ -196,7 +198,7 @@ def _http_get(url: str, timeout: int = 120, retries: int = 3) -> httpx.Response:
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
             if attempt == retries - 1:
                 raise
-            wait = 2 ** attempt  # 1s, 2s, 4s, ...
+            wait = min(4 * 2 ** attempt, 60)
             print(f"  Tentativa {attempt + 1}/{retries} falhou ({exc}). Aguardando {wait}s...")
             time.sleep(wait)
     raise RuntimeError("unreachable")  # satisfaz type checker

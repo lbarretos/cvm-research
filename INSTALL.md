@@ -175,8 +175,15 @@ A CVM publica os ZIPs atualizados toda **segunda-feira entre 8h00 e 8h30**.
 ```bash
 bash scripts/update_weekly.sh                       # manual, tudo de uma vez
 bash scripts/install_weekly_launchd.sh --run-now    # agenda no launchd (segunda 9h) e roda agora
-bash scripts/install_weekly_launchd.sh --status     # estado e último log
+bash scripts/install_weekly_launchd.sh --status     # estado, último sucesso e último log
 ```
+
+O launchd não recupera um horário perdido com o Mac **desligado** (só dormindo). Por isso o job
+também dispara no login e a cada 4 h, com `update_weekly.sh --se-vencido`: se já houve uma execução
+sem falhas depois da segunda 9h, sai em segundos; se não, roda. Depois de 3 tentativas com falha na
+mesma semana ele para até a segunda seguinte (rodar à mão continua funcionando). O último sucesso fica
+em `logs/.ultimo_sucesso`, e o log termina com `WARNING:` quando o documento mais novo do IPE tem mais
+de 9 dias.
 
 Notas explicativas (PDF completo do ITR/DFP) não entram no semanal; ingira sob demanda:
 
@@ -234,7 +241,7 @@ cvm-research/
 ├── .env.example                    # template do .env (DATABASE_URL)
 ├── scripts/
 │   ├── update_weekly.sh            # ingestores + consistência + extract_pdf (lock + log)
-│   ├── install_weekly_launchd.sh   # agenda o update_weekly.sh (segunda 9h)
+│   ├── install_weekly_launchd.sh   # agenda o update_weekly.sh (segunda 9h + recuperação)
 │   ├── mcp/cvm_mcp.py              # servidor MCP (stdio, somente leitura)
 │   ├── viewer/                     # visualizador web local (somente leitura)
 │   │   ├── server.py               # http://127.0.0.1:8765 — API JSON + encadeamento
@@ -320,7 +327,7 @@ que leem `demonstrativos_contabeis`, continuam funcionando.
 | `launchd.err.log`: `Operation not permitted` | Projeto em `~/Documents`, `~/Desktop` ou `~/Downloads` (pasta protegida pelo TCC) | Ajustes do Sistema → Privacidade e Segurança → Acesso Total ao Disco → adicionar `/bin/bash`; ou mover o projeto para fora dessas pastas e reinstalar o job |
 | `pip`/`python` da venv apontam para outra pasta | Venv copiada de outro local | `rm -rf .venv && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` |
 | `KeyError: 'DATABASE_URL'` | `.env` não existe | `echo 'DATABASE_URL=sqlite:///cvm_research.db' > .env` |
-| Banco mostra dados antigos | Update semanal não rodou | `bash scripts/update_weekly.sh` e conferir `logs/update_*.log` |
+| Banco mostra dados antigos | Update semanal não rodou, ou esgotou as 3 tentativas da semana | `bash scripts/install_weekly_launchd.sh --status` (último sucesso e situação); `bash scripts/update_weekly.sh` e conferir `logs/update_*.log` e `logs/launchd.out.log` |
 | `database is locked` | Ingestor rodando ao mesmo tempo | Esperar o `update_weekly.sh` terminar (lock em `logs/.update_weekly.lock`) |
 | `unable to open database file` | Banco em pasta sincronizada com WAL ativo | Mover o projeto para fora do OneDrive/iCloud |
 

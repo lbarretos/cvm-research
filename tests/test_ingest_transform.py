@@ -164,7 +164,7 @@ def test_http_get_retry_sucesso_na_segunda(mock_get, mock_sleep):
 
     assert result is resp
     assert mock_get.call_count == 2
-    mock_sleep.assert_called_once_with(1)  # backoff: 2^0 = 1s
+    mock_sleep.assert_called_once_with(4)  # primeira espera do backoff
 
 
 @patch("utils.time.sleep")
@@ -409,3 +409,31 @@ def test_fetch_doc_metadata_dfp_usa_url_dfp(mock_http_get):
         "https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_2025.zip",
         timeout=300,
     )
+
+
+@patch("utils.time.sleep")
+@patch("utils.httpx.get")
+def test_http_get_default_aguenta_dns_lento(mock_get, mock_sleep):
+    """Default: 6 tentativas com backoff 4/8/16/32/60s (~2 min) — o DNS logo após o
+    Mac acordar pode levar mais que os ~7s das 3 tentativas antigas."""
+    mock_get.side_effect = httpx.ConnectError("[Errno 8] nodename nor servname provided")
+
+    with pytest.raises(httpx.ConnectError):
+        _http_get("http://exemplo.com", timeout=5)
+
+    assert mock_get.call_count == 6
+    esperas = [c.args[0] for c in mock_sleep.call_args_list]
+    assert esperas == [4, 8, 16, 32, 60]
+    assert 100 <= sum(esperas) <= 150
+
+
+@patch("utils.time.sleep")
+@patch("utils.httpx.get")
+def test_http_get_retry_em_timeout(mock_get, mock_sleep):
+    """Timeout também dispara retry, como ConnectError."""
+    resp = MagicMock()
+    resp.raise_for_status.return_value = None
+    mock_get.side_effect = [httpx.ConnectTimeout("t"), httpx.ReadTimeout("t"), resp]
+
+    assert _http_get("http://exemplo.com", timeout=5) is resp
+    assert mock_sleep.call_count == 2

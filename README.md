@@ -219,8 +219,8 @@ portal RAD (`rad.cvm.gov.br`).
 
 ```bash
 bash scripts/update_weekly.sh                       # ingestores + consistência + PDFs
-bash scripts/install_weekly_launchd.sh              # agenda para toda segunda, 9h
-bash scripts/install_weekly_launchd.sh --status     # estado + último log
+bash scripts/install_weekly_launchd.sh              # agenda para toda segunda, 9h (recupera no login / a cada 4 h)
+bash scripts/install_weekly_launchd.sh --status     # estado + último sucesso + último log
 ```
 
 O job semanal cobre o ano corrente e o anterior. Para refazer o histórico ou mudar a cobertura, rode o

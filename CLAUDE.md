@@ -117,6 +117,11 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm LIKE '%fleury%';
 `categoria, tipo, especie, assunto, link_download,`
 `texto_extraido (NULL = não extraído), extracao_falhou, chars_extraidos`
 
+⚠️ Texto com `(cid:N)` que sobrou é de fonte Identity-H (N é índice de glifo, não caractere): ilegível e
+invisível ao FTS; mostre o `link_download`. O `(cid:N)` de fonte WinAnsi e o texto lido como StandardEncoding
+("Relaçıes", "SuperintendŒncia") são reparados na extração por `utils.repair_pdf_text`
+(`repair_text_encoding.py` conserta o que já estava no banco).
+
 **Categorias relevantes:**
 - `'Fato Relevante'` — eventos materiais (M&A, guidance, regulatório)
 - `'Assembleia'` — AGO e AGE; `tipo` = `'AGO'` ou `'AGE'`

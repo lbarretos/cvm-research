@@ -181,8 +181,13 @@ Banco anterior à coluna: `sqlite3 cvm_research.db < scripts/migrations/2026-09-
 `st_conta_fixa ('S' = conta padrão CVM, 'N' = criada pela empresa)`
 
 **Views prontas (preferir sobre query direta):**
-- `vw_dre` — DRE resumida: `receita_liquida, custo_bens_servicos, resultado_bruto, ebit, resultado_financeiro, ebt, lucro_liquido`
-- `vw_balanco` — BPA + BPP: `ativo_total, ativo_circulante, caixa, divida_curto_prazo, divida_longo_prazo, patrimonio_liquido`
+- `vw_dre` — DRE resumida: `receita_liquida, custo_bens_servicos, resultado_bruto, ebit, resultado_financeiro, ebt, lucro_liquido, plano_contas`
+- `vw_balanco` — BPA + BPP: `ativo_total, ativo_circulante, caixa, divida_curto_prazo, divida_longo_prazo, patrimonio_liquido, plano_contas`
+- `vw_dre_financeiro` — DRE de banco: `receita_intermediacao, despesa_intermediacao, resultado_bruto_intermediacao,
+  outras_receitas_despesas_operacionais, lair, ir_cs, lucro_liquido, lucro_controladora`
+- `vw_dre_seguradora` — DRE de seguradora: `receita_operacoes, despesa_operacoes, resultado_bruto, despesas_administrativas,
+  outras_receitas_despesas_operacionais, equivalencia_patrimonial, ebit, resultado_financeiro, ebt, ir_cs, lucro_liquido, lucro_controladora`
+- `vw_plano_contas` — plano de cada filing: `cnpj_companhia, fonte, data_referencia, plano_contas ('padrao'/'banco'/'seguradora')`
 
 **Períodos no ITR:** no 2T e 3T a DRE tem duas linhas por conta — trimestre isolado
 (`dt_ini_exerc` = início do trimestre) e acumulado no ano (`dt_ini_exerc` = início do
@@ -191,7 +196,25 @@ DFC_MI e DVA só têm acumulado no ITR. BPA/BPP têm `dt_ini_exerc` NULL (posiç
 Ao consultar `demonstrativos_contabeis` direto para DRE de ITR, filtre `dt_ini_exerc`,
 senão as linhas dobram.
 
-⚠️ Bancos e seguradoras usam plano COSIF — retornarão NULL nas views. Diagnóstico: `SELECT cnpj_companhia FROM vw_dre WHERE receita_liquida IS NULL GROUP BY 1`
+⚠️ **Plano de contas.** Bancos e seguradoras publicam a DRE e o balanço em outro plano, com os mesmos códigos
+significando outra coisa (no banco, 3.05 é o LAIR e o lucro é 3.09 ou 3.11). `vw_plano_contas` classifica cada filing
+pelo nome da conta fixa 3.01 — **não** por `companies.setor`: B3SA3, ITSA4, CXSE3 e PSSA3 são `'Financeiro'` e usam o
+plano padrão. Nesta base: `banco` = ITUB4, BBAS3, BBDC4, BPAC11; `seguradora` = IRBR3, BBSE3.
+- `vw_dre` / `vw_dre_acumulada`: fora do plano padrão todas as colunas de valor vêm NULL (a linha do filing fica, com
+  `plano_contas` dizendo o porquê). Use `vw_dre_financeiro` ou `vw_dre_seguradora` (mesmo período de `vw_dre`: trimestre
+  isolado no ITR; não há versão acumulada).
+- `vw_dre_financeiro`: dois layouts de banco. 9 linhas (ITUB4, BPAC11; BBAS3/BBDC4 até 2019) com lucro em 3.09; 11 linhas
+  (BBAS3/BBDC4 desde 2020), em que 3.09 é o lucro antes das participações nos lucros (3.10) e o lucro é 3.11. A view
+  escolhe pela presença de 3.11.
+- `vw_dre_seguradora`: 13 linhas; `ebit` = 3.07, `ebt` = 3.09, `lucro_liquido` = 3.13. BBSE3 é holding: receita e custo
+  vêm 0 e o resultado está em equivalência patrimonial. IRBR3 publica `3.13.01` = 0 desde 2023 (não abre controladora e
+  não controladores), então `lucro_controladora` = 0 ali; use `lucro_liquido`.
+- `vw_balanco`: `ativo_total` vale em todos os planos. Banco: o resto vem NULL (1.01 é "Caixa e Equivalentes", o passivo
+  é aberto por instrumento e o PL é 2.07 ou 2.08 conforme o ano — consulte `demonstrativos_contabeis`). Seguradora:
+  circulante, caixa e PL valem; `divida_*` vem NULL (2.01.04/2.02.01 são provisões técnicas e exigível a longo prazo).
+
+Diagnóstico: `SELECT DISTINCT c.ticker, p.plano_contas FROM vw_plano_contas p JOIN companies c ON c.cnpj = p.cnpj_companhia WHERE p.plano_contas <> 'padrao'`.
+Banco anterior a estas views: `sqlite3 cvm_research.db < scripts/migrations/2026-09-30_vw_plano_contas.sql` (só views).
 
 ### `notas_explicativas` — texto completo do ITR/DFP (com notas explicativas)
 `cnpj_companhia, fonte ('ITR'/'DFP'), data_referencia, versao,`
@@ -304,7 +327,20 @@ reaproveita esta trilha. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
   `par_ambiguo` (o único candidato a par tem similaridade entre 0,55 e 0,75 — o valor **não** é calculado de propósito, e a
   flag de linha em `consistency_flags` traz `cd_conta_b`, `ds_conta_b` e `score` para revisão),
   `linha_sem_par` (a linha não tem correspondente no acumulado anterior — `vl_derivado` NULL), `sem_anterior`/`sem_3t` (buraco na série — NULL),
-  `componente_reapresentado` (um dos dois filings tem `reapresentacao` na Camada 2). `sem_dfp` só em `consistency_flags` (não há linha de 4T).
+  `reclassificacao_entre_filings` (ver abaixo), `componente_reapresentado` (um dos dois filings tem `reapresentacao` na Camada 2).
+  `sem_dfp` só em `consistency_flags` (não há linha de 4T).
+- `reclassificacao_entre_filings` (`warn`): minuendo e subtraendo foram publicados em **layouts diferentes** para a linha. O
+  código e o nome são os mesmos (`casamento = 'estavel'`), mas o conteúdo mudou de linha entre um documento e outro, e a
+  subtração mistura os dois. Ex.: Vale 4T24 original, em que o ITR 3T24 trazia R$ 11,756 bi em 3.04.04 e o DFP 2024 já no
+  layout novo, com o valor em 3.04.03: o 4T sai −11,756 bi em 3.04.04 e com 11,756 bi a mais em 3.04.03. O total (3.04)
+  fecha. Evidência na Camada 2: na safra original, a linha do subtraendo é `reclassificacao` contra a sua versão Penúltimo
+  (com o mesmo nome nas duas, para não confundir com renumeração) e a do minuendo não diverge da sua. Na safra reapresentado,
+  marca as linhas dos mesmos dois documentos (o 4T23 reapresentado da Vale usa o DFP 2024 e o ITR 3T24) que divergem entre
+  versões. Vale para toda linha derivada (DRE 4T, DFC/DVA 2T–4T), não para a DRE 1T–3T publicada. Sem versão posterior do
+  minuendo (o 4T do exercício mais recente) não há como saber e não há flag. Resumo por trimestre em `consistency_flags`
+  (`layer = 6`, `cd_conta` NULL, `detalhe.linhas`). Na base de 2026-09-30: ~9 mil linhas de 1,8 milhão, 630 delas
+  no 4T original da DRE. Banco anterior à flag: `sqlite3 cvm_research.db < scripts/migrations/2026-09-30_trimestrais_reclassificacao.sql`,
+  `sqlite3 cvm_research.db < schema.sql` e `run_all.py --layer 6 --full` (a Camada 6 se recusa a rodar sem a migração).
 - `3.99` (lucro por ação) não está na tabela: não é aditivo. Exercício social fora do calendário: `trimestre` é a posição no exercício, não o trimestre-calendário.
 Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada). `--sim-alto`/`--sim-baixo` movem os
 limiares do casamento (padrão 0,75 e 0,55).
@@ -454,6 +490,19 @@ ORDER BY data_referencia DESC
 LIMIT 8;
 ```
 
+### DRE de banco ou seguradora
+```sql
+-- Confira o plano antes: vw_dre vem NULL para banco e seguradora
+SELECT DISTINCT plano_contas FROM vw_plano_contas WHERE cnpj_companhia = '<CNPJ>';
+
+SELECT fonte, data_referencia, dt_ini_exerc, dt_fim_exerc,
+       receita_intermediacao, resultado_bruto_intermediacao, lair, ir_cs, lucro_liquido, lucro_controladora
+FROM vw_dre_financeiro            -- vw_dre_seguradora para seguradoras (ebit, ebt, lucro_liquido …)
+WHERE cnpj_companhia = '<CNPJ>' AND fonte = 'DFP'
+ORDER BY data_referencia DESC
+LIMIT 5;
+```
+
 ### Balanço anual (DFP) — últimos 5 anos
 ```sql
 SELECT data_referencia, dt_fim_exerc,
@@ -597,6 +646,21 @@ ORDER BY score DESC;
 ```
 Para comparar com o que a empresa reapresentou depois, repita com `safra = 'reapresentado'` e mostre as duas colunas lado a lado.
 
+```sql
+-- Linhas com layout misturado no trimestre e o que a Camada 2 mostra para o subtraendo (filing B)
+SELECT t.dt_fim_exerc, t.trimestre, t.cd_conta, t.ds_conta, ROUND(t.vl_final/1e6, 1) AS vl_mi,
+       r.vl_final IS NOT NULL AS tem_reapresentado, ROUND(r.vl_final/1e6, 1) AS reapresentado_mi,
+       t.fonte_a || ' ' || t.data_a AS filing_a, t.fonte_b || ' ' || t.data_b AS filing_b
+FROM demonstrativos_trimestrais t
+LEFT JOIN demonstrativos_trimestrais r
+  ON r.cnpj_companhia = t.cnpj_companhia AND r.tipo_doc = t.tipo_doc AND r.exercicio_ini = t.exercicio_ini
+ AND r.trimestre = t.trimestre AND r.cd_conta = t.cd_conta AND r.safra = 'reapresentado'
+WHERE t.cnpj_companhia = '<CNPJ>' AND t.safra = 'original' AND t.flag = 'reclassificacao_entre_filings'
+ORDER BY t.dt_fim_exerc DESC, t.tipo_doc, t.cd_conta;
+```
+Na safra original, a versão reapresentada do mesmo trimestre costuma ser a que está num layout só (Vale 4T24: 3.04.03 =
+−11,2 bi e 3.04.04 = 0 no reapresentado); confira se ela também não tem a flag antes de usá-la.
+
 ### Busca full-text no conteúdo de documentos (SQLite FTS5)
 
 ```sql
@@ -623,7 +687,10 @@ LIMIT 20;
 3. **Para resumir assembleias**: leia `texto_extraido` e destaque deliberações sobre remuneração, mudanças estatutárias, eleição de conselho, aprovação de contas.
 4. **Para fatos relevantes**: classifique o impacto — M&A, guidance, regulatório, operacional, financeiro.
 5. **Para insider trading**: correlacione compras/vendas com fatos relevantes próximos e recompras vigentes.
-6. **Para financeiros (DRE/Balanço)**: use `vw_dre` e `vw_balanco` primeiro. Se NULL nos campos chave, verifique se a empresa é banco/seguradora (COSIF). Para contas específicas não nas views, consulte `demonstrativos_contabeis` diretamente filtrando por `cd_conta`.
+6. **Para financeiros (DRE/Balanço)**: use `vw_dre` e `vw_balanco` primeiro. Se vierem NULL, olhe `plano_contas`: `banco` →
+   `vw_dre_financeiro`, `seguradora` → `vw_dre_seguradora` (não decida pelo `companies.setor`). Nunca leia 3.05/3.07/3.11 de um
+   banco ou seguradora como EBIT/EBT/lucro do plano padrão. Para contas específicas não nas views, consulte
+   `demonstrativos_contabeis` diretamente filtrando por `cd_conta`.
 7. **Para "esse número foi reapresentado?"**: consulte `consistency_flags` (Camada 2) filtrando por
    `cnpj_companhia`, `tipo_doc` e `periodo_fim`. Apresente sempre o valor original (`valor_ref`) e o
    reapresentado (`valor_cmp`) lado a lado — o padrão do banco é o original, nunca substituir.
@@ -643,7 +710,9 @@ LIMIT 20;
     `flag`: `reapresentacao_intra_ano` significa que publicado e derivado divergem (apresente os dois); `linha_sem_par`/`sem_3t`
     significa que o trimestre não pôde ser derivado para aquela conta; `par_ambiguo` significa que a linha mudou de nome o
     bastante para o casamento ficar duvidoso e o valor foi deliberadamente não calculado (o candidato está no `detalhe` da
-    flag `layer = 6`). Em contas criadas pela empresa (`st_conta_fixa = 'N'`), cite `cd_conta_b` e `casamento` ao apresentar
+    flag `layer = 6`); `reclassificacao_entre_filings` significa que o valor mistura dois layouts: avise que a linha está
+    distorcida (em geral as linhas-irmãs se compensam e o pai está certo), mostre o total do pai e, se a safra reapresentado do mesmo
+    trimestre não tiver a flag, apresente-a ao lado. Em contas criadas pela empresa (`st_conta_fixa = 'N'`), cite `cd_conta_b` e `casamento` ao apresentar
     o número: eles dizem qual linha do filing anterior entrou na subtração.
 
 ## Defasagem dos dados

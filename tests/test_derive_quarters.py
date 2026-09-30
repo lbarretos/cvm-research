@@ -42,6 +42,7 @@ def test_schema_trimestrais():
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(sql, (CNPJ, "2025-01-01", "2025-03-31", 1, "inventada"))   # CHECK flag
     conn.execute(sql.replace("'3.01'", "'3.02'"), (CNPJ, "2024-10-01", "2024-12-31", 4, "par_ambiguo"))
+    conn.execute(sql.replace("'3.01'", "'3.04'"), (CNPJ, "2024-10-01", "2024-12-31", 4, "reclassificacao_entre_filings"))
     sql_cas = ("INSERT INTO demonstrativos_trimestrais (run_id, cnpj_companhia, tipo_doc, safra, exercicio_ini, dt_ini_exerc, "
                "dt_fim_exerc, trimestre, cd_conta, origem, casamento) VALUES ('r', ?, 'DRE', 'original', '2024-01-01', ?, ?, ?, ?, 'derivado', ?)")
     conn.execute(sql_cas, (CNPJ, "2024-10-01", "2024-12-31", 4, "3.03", "reformulacao"))
@@ -107,7 +108,8 @@ def test_dre_publicado_nos_tres_primeiros_e_4t_derivado():
     assert q[2]["dt_ini_exerc"] == "2024-04-01" and q[2]["dt_fim_exerc"] == "2024-06-30"
     assert len(rows) == 8 and flags == []
     assert stats["DRE"] == {"exercicios": 1, "trimestres": 4, "linhas": 8, "docs_irregulares": 0,
-                            "reapresentacao_intra_ano": 0, "componente_reapresentado": 0, "linha_sem_par": 0,
+                            "reapresentacao_intra_ano": 0, "reclassificacao_entre_filings": 0,
+                            "componente_reapresentado": 0, "linha_sem_par": 0,
                             "par_ambiguo": 0, "sem_anterior": 0, "sem_3t": 0, "sem_dfp": 0}
 
 
@@ -314,6 +316,129 @@ def test_primeiro_trimestre_nao_tem_casamento():
     assert (r["cd_conta_b"], r["casamento"], r["vl_derivado"]) == (None, None, -97.5e6)
 
 
+# ── layouts diferentes entre minuendo e subtraendo (Camada 2 'reclassificacao') ──
+
+def _v(d03, d04, d02):
+    """Bloco 3.04 da DRE (valores em R$ bi). Vale 2024: o ITR 3T24 põe o ganho de 11,756 bi em
+    3.04.04; o DFP 2024 e os filings de 2025 já usam o layout novo, com ele em 3.04.03."""
+    return {"3.04": ("Despesas/Receitas Operacionais", (d02 + d03 + d04) * 1e9),
+            "3.04.02": ("Despesas Gerais e Administrativas", d02 * 1e9),
+            "3.04.03": ("Perdas pela Não Recuperabilidade de Ativos", d03 * 1e9),
+            "3.04.04": ("Outras Receitas Operacionais", d04 * 1e9)}
+
+
+def _exercicio(ano, ordem, data_ano, blocos):
+    """Os quatro acumulados de `ano` publicados nos filings de `data_ano` (Último: data_ano = ano)."""
+    fins = ["03-31", "06-30", "09-30", "12-31"]
+    return [_doc("DFP" if n == 3 else "ITR", f"{data_ano}-{fins[n]}", ordem, f"{ano}-01-01", f"{ano}-{fins[n]}", blocos[n])
+            for n in range(4)]
+
+
+VALE24 = _exercicio(2024, "Último", 2024, [_v(0, 0, -0.2), _v(0, 0, -0.4), _v(0, 11.756, -0.6), _v(0.51, 0, -0.8)])
+VALE24_REAP = _exercicio(2024, "Penúltimo", 2025, [_v(0, 0, -0.2), _v(0, 0, -0.4), _v(11.756, 0, -0.6), _v(0.51, 0, -0.8)])
+
+
+def _div(pares):
+    """Saída de divergencias_camada2 a partir de flags de linha da Camada 2:
+    pares = [(ref, cmp, periodo_ini, periodo_fim, classificacao, {cd: (valor_ref, valor_cmp)})],
+    ref/cmp = (fonte, data, ordem)."""
+    out = {}
+    for ref, cmp, pi, pf, classe, linhas in pares:
+        for cd, (vr, vc) in linhas.items():
+            out.setdefault(("DRE", *ref, pi, pf), {})[cd] = (vc - vr, classe)
+            out.setdefault(("DRE", *cmp, pi, pf), {})[cd] = (vr - vc, classe)
+    return out
+
+
+# Camada 2 do 9M24: ITR 3T24 (Último) × ITR 3T25 (Penúltimo) — 11,756 bi saem de 3.04.04 e vão para 3.04.03
+DIV_9M24 = (("ITR", "2024-09-30", "Último"), ("ITR", "2025-09-30", "Penúltimo"), "2024-01-01", "2024-09-30",
+            "reclassificacao", {"3.04.03": (0.0, 11.756e9), "3.04.04": (11.756e9, 0.0)})
+
+
+def _q4(rows, safra, ano=2024):
+    return {r["cd_conta"]: r for r in rows if r["safra"] == safra and r["trimestre"] == 4 and r["exercicio_ini"] == f"{ano}-01-01"}
+
+
+def test_reclassificacao_entre_filings_vale_4t24():
+    rows, flags, stats = dq.derive_quarters(_df(*VALE24, *VALE24_REAP), divergencias=_div([DIV_9M24]))
+    orig, reap = _q4(rows, "original"), _q4(rows, "reapresentado")
+    # original: DFP 2024 (layout novo) − ITR 3T24 (layout antigo) — linha a linha distorcido, com flag
+    assert (round(orig["3.04.04"]["vl_final"] / 1e9, 3), orig["3.04.04"]["casamento"], orig["3.04.04"]["flag"]) == \
+        (-11.756, "estavel", "reclassificacao_entre_filings")
+    assert (round(orig["3.04.03"]["vl_final"] / 1e9, 3), orig["3.04.03"]["flag"]) == (0.51, "reclassificacao_entre_filings")
+    # o total e a linha que não mudou de layout seguem sem flag
+    assert (orig["3.04"]["flag"], round(orig["3.04.02"]["vl_final"] / 1e9, 3), orig["3.04.02"]["flag"]) == (None, -0.2, None)
+    # reapresentado: DFP 2025 e ITR 3T25 no mesmo layout — o 4T certo, sem flag
+    assert (round(reap["3.04.03"]["vl_final"] / 1e9, 3), reap["3.04.03"]["flag"]) == (-11.246, None)
+    assert (reap["3.04.04"]["vl_final"], reap["3.04.04"]["flag"]) == (0.0, None)
+    f, = [x for x in flags if x["classificacao"] == "reclassificacao_entre_filings"]
+    assert (f["layer"], f["severity"], f["cd_conta"], f["periodo_ini"], f["periodo_fim"]) == (6, "warn", None, "2024-10-01", "2024-12-31")
+    assert (f["fonte_ref"], f["data_ref"], f["fonte_cmp"], f["data_cmp"]) == ("DFP", "2024-12-31", "ITR", "2024-09-30")
+    assert f["detalhe"] == {"safra": "original", "trimestre": 4, "exercicio_ini": "2024-01-01", "linhas": 2}
+    assert stats["DRE"]["reclassificacao_entre_filings"] == 2
+
+
+def test_reclassificacao_propaga_para_a_safra_reapresentada_do_ano_anterior():
+    """O DFP 2024 e o ITR 3T24 também trazem o 12M23 e o 9M23 (Penúltimo): o 4T23 reapresentado
+    subtrai os mesmos dois documentos, em layouts diferentes. O 4T23 original (DFP 2023 − ITR 3T23,
+    os dois no layout antigo) está certo."""
+    ano23 = _exercicio(2023, "Último", 2023, [_v(0, 0, -0.2), _v(0, 0, -0.4), _v(0, 2, -0.6), _v(0, 3, -0.8)])
+    ano23_reap = _exercicio(2023, "Penúltimo", 2024, [_v(0, 0, -0.2), _v(0, 0, -0.4), _v(0, 2, -0.6), _v(3, 0, -0.8)])
+    div_12m23 = (("DFP", "2023-12-31", "Último"), ("DFP", "2024-12-31", "Penúltimo"), "2023-01-01", "2023-12-31",
+                 "reclassificacao", {"3.04.03": (0.0, 3e9), "3.04.04": (3e9, 0.0)})
+    rows, _, _ = dq.derive_quarters(_df(*ano23, *ano23_reap, *VALE24, *VALE24_REAP), divergencias=_div([DIV_9M24, div_12m23]))
+    orig23, reap23 = _q4(rows, "original", 2023), _q4(rows, "reapresentado", 2023)
+    assert (orig23["3.04.04"]["vl_final"], orig23["3.04.04"]["flag"]) == (1e9, None)
+    assert (reap23["3.04.03"]["vl_final"], reap23["3.04.03"]["flag"]) == (3e9, "reclassificacao_entre_filings")
+    assert (reap23["3.04.04"]["vl_final"], reap23["3.04.04"]["flag"]) == (-2e9, "reclassificacao_entre_filings")
+    assert reap23["3.04.02"]["flag"] is None
+    # sem a marcação do par de documentos na safra original de 2024, não há evidência para o 4T23
+    rows, _, _ = dq.derive_quarters(_df(*ano23, *ano23_reap), divergencias=_div([div_12m23]))
+    assert {r["flag"] for r in _q4(rows, "reapresentado", 2023).values()} == {None}
+
+
+def test_sem_flag_quando_os_dois_filings_mudaram_ou_nao_ha_versao_posterior():
+    # layout trocado depois dos dois: o DFP 2024 também tinha o ganho em 3.04.04 e também diverge
+    antigo = _exercicio(2024, "Último", 2024, [_v(0, 0, -0.2), _v(0, 0, -0.4), _v(0, 11.756, -0.6), _v(-11.246, 11.756, -0.8)])
+    div_12m = (("DFP", "2024-12-31", "Último"), ("DFP", "2025-12-31", "Penúltimo"), "2024-01-01", "2024-12-31",
+               "reclassificacao", {"3.04.03": (-11.246e9, 0.51e9), "3.04.04": (11.756e9, 0.0)})
+    rows, _, _ = dq.derive_quarters(_df(*antigo, *VALE24_REAP), divergencias=_div([DIV_9M24, div_12m]))
+    assert {r["flag"] for r in _q4(rows, "original").values()} == {None}
+    # sem o DFP 2025 não se sabe em que layout o DFP 2024 está
+    rows, _, _ = dq.derive_quarters(_df(*VALE24, *VALE24_REAP[:3]), divergencias=_div([DIV_9M24]))
+    assert {r["flag"] for r in _q4(rows, "original").values()} == {None}
+    # divergência classificada como reapresentacao (valor mudou, não só de linha) não é evidência de layout
+    reap = (*DIV_9M24[:4], "reapresentacao", DIV_9M24[5])
+    rows, _, _ = dq.derive_quarters(_df(*VALE24, *VALE24_REAP), divergencias=_div([reap]))
+    assert {r["flag"] for r in _q4(rows, "original").values()} == {None}
+
+
+def test_renumeracao_na_versao_posterior_nao_e_reclassificacao():
+    """A Camada 2 compara por código: uma linha inserida no ITR 3T25 desloca 3.04.04 para 3.04.05 e
+    aparece como 'reclassificacao', mas o conteúdo não mudou de linha (o nome em 3.04.04 mudou)."""
+    reap_3t = {**_v(0, 0, -0.6), "3.04.04": ("Resultado na alienação de participação", 0.0),
+               "3.04.05": ("Outras Receitas Operacionais", 11.756e9)}
+    reap = [*VALE24_REAP[:2], _doc("ITR", "2025-09-30", "Penúltimo", "2024-01-01", "2024-09-30", reap_3t), VALE24_REAP[3]]
+    div = (*DIV_9M24[:5], {"3.04.04": (11.756e9, 0.0), "3.04.05": (0.0, 11.756e9)})
+    rows, _, _ = dq.derive_quarters(_df(*VALE24, *reap), divergencias=_div([div]))
+    assert _q4(rows, "original")["3.04.04"]["flag"] is None
+
+
+def test_divergencias_camada2_le_os_dois_lados_com_sinal():
+    conn = _db()
+    conn.execute("INSERT INTO consistency_runs (run_id, layer, check_type) VALUES ('l2', 2, 'cross_period')")
+    sql = """INSERT INTO consistency_flags (run_id, layer, check_type, classificacao, severity, cnpj_companhia, tipo_doc,
+        cd_conta, periodo_ini, periodo_fim, fonte_ref, data_ref, ordem_ref, fonte_cmp, data_cmp, ordem_cmp, valor_ref, valor_cmp, diff_abs)
+        VALUES ('l2', 2, 'cross_period', ?, 'info', ?, 'DRE', ?, '2024-01-01', '2024-09-30',
+        'ITR', '2024-09-30', 'Último', 'ITR', '2025-09-30', 'Penúltimo', ?, ?, ?)"""
+    conn.execute(sql, ("reclassificacao", CNPJ, "3.04.04", 11.756e9, 0.0, -11.756e9))
+    conn.execute(sql, ("reclassificacao", CNPJ, None, None, None, None))           # resumo do par: fora
+    conn.execute(sql, ("reapresentacao", "00.000.000/0001-91", "3.04.04", 1.0, 2.0, 1.0))  # outra empresa: fora
+    assert dq.divergencias_camada2(conn, CNPJ) == {
+        ("DRE", "ITR", "2024-09-30", "Último", "2024-01-01", "2024-09-30"): {"3.04.04": (-11.756e9, "reclassificacao")},
+        ("DRE", "ITR", "2025-09-30", "Penúltimo", "2024-01-01", "2024-09-30"): {"3.04.04": (11.756e9, "reclassificacao")}}
+
+
 # ── main(): ponta a ponta com banco em memória ───────────────────────────────
 
 def _db_com_docs():
@@ -370,3 +495,34 @@ def test_main_full_e_exigencia_de_cnpj(monkeypatch):
     assert conn.execute("SELECT escopo FROM consistency_runs WHERE run_id = ?", (run_id,)).fetchone()[0] == "full"
     with pytest.raises(SystemExit):
         dq.main([])
+
+
+def test_main_recusa_tabela_sem_a_flag_nova_sem_apagar_nada(monkeypatch):
+    """Banco anterior à migração 2026-09-30: o CHECK antigo recusaria a flag no INSERT, depois do
+    DELETE da empresa. main() tem de parar antes."""
+    conn = _db_com_docs()
+    monkeypatch.setattr(dq, "get_db", lambda: conn)
+    dq.main(["--cnpj", CNPJ])
+    antes = conn.execute("SELECT COUNT(*) FROM demonstrativos_trimestrais").fetchone()[0]
+    ddl = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'demonstrativos_trimestrais'").fetchone()[0]
+    conn.execute("ALTER TABLE demonstrativos_trimestrais RENAME TO t_nova")
+    conn.execute(ddl.replace("'reclassificacao_entre_filings',", ""))
+    conn.execute("INSERT INTO demonstrativos_trimestrais SELECT * FROM t_nova")
+    with pytest.raises(SystemExit, match="2026-09-30_trimestrais_reclassificacao"):
+        dq.main(["--cnpj", CNPJ])
+    assert conn.execute("SELECT COUNT(*) FROM demonstrativos_trimestrais").fetchone()[0] == antes > 0
+
+
+def test_migracao_trimestrais_reclassificacao_recria_a_tabela_pelo_schema():
+    with open(SCHEMA, encoding="utf-8") as f:
+        schema = f.read()
+    antigo = schema.replace("'reclassificacao_entre_filings',", "")
+    assert antigo != schema
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(antigo)
+    caminho = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations", "2026-09-30_trimestrais_reclassificacao.sql")
+    with open(caminho, encoding="utf-8") as f:
+        conn.executescript("".join(l for l in f if not l.startswith(".")))
+    conn.executescript(schema)
+    ddl = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'demonstrativos_trimestrais'").fetchone()[0]
+    assert "'reclassificacao_entre_filings'" in ddl

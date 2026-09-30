@@ -32,12 +32,32 @@ Flags (uma por linha; precedência nesta ordem):
   - 'par_ambiguo' (warn): o único candidato tem similaridade na faixa ambígua; não
     deriva e vira flag de linha em consistency_flags com o candidato e o score
   - 'sem_anterior' / 'sem_3t' (info): não há acumulado anterior (2T/3T; 4T)
+  - 'reclassificacao_entre_filings' (warn): linha derivada (casamento 'estavel') cujo
+    minuendo e subtraendo foram publicados em layouts diferentes — o mesmo código tem
+    conteúdo diferente nos dois documentos e a subtração mistura os dois. Ex.: Vale
+    4T24, o ITR 3T24 trazia R$ 11,756 bi em 3.04.04 e o DFP 2024 já no layout novo, que
+    põe o valor em 3.04.03; o 4T original sai −11,756 bi em 3.04.04 e +11,756 bi a mais
+    em 3.04.03. Evidência nas flags de linha da Camada 2:
+      safra original: a linha do subtraendo é 'reclassificacao' contra a versão
+        Penúltimo do exercício seguinte, com o mesmo nome nas duas versões, e a do
+        minuendo não diverge (de forma nenhuma) da sua, que existe. O minuendo,
+        publicado depois, já estava no layout novo; o subtraendo não. O mesmo nome
+        separa conteúdo que mudou de linha de renumeração (a Camada 2 compara por
+        código: uma linha inserida no meio desloca todas as seguintes). O sinal oposto
+        (só o minuendo diverge) não entra: é também o que produz um item só do
+        trimestre reclassificado depois, com os dois filings no mesmo layout.
+      safra reapresentado: os mesmos dois documentos (mesma fonte/data de A e B) foram
+        marcados na safra original, e a linha diverge entre as versões por uma
+        diferença de Δ acima da tolerância (Δ = valor na outra versão − valor aqui;
+        só conta Δ de linha com o mesmo nome nas duas versões). Vale: o 4T23
+        reapresentado usa o DFP 2024 e o ITR 3T24, os mesmos documentos do 4T24.
+    Sem versão posterior do minuendo (ex.: 4T do último exercício) não há como saber.
   - 'componente_reapresentado' (info): minuendo ou subtraendo aparece num resumo
     'reapresentacao' da Camada 2 (consistency_flags layer 2)
   - 'sem_dfp': 3T sem DFP — só flag-resumo em consistency_flags (não há linha de 4T)
 3.99 (lucro por ação) e descendentes ficam fora: LPA não é aditivo.
 Flags-resumo por trimestre (cd_conta NULL) em consistency_flags para
-componente_reapresentado / sem_anterior / sem_3t / sem_dfp. Linhas anteriores do
+reclassificacao_entre_filings / componente_reapresentado / sem_anterior / sem_3t / sem_dfp. Linhas anteriores do
 mesmo (cnpj[, tipo_doc]) são apagadas nas duas tabelas antes de gravar.
 
 Roda no job semanal (scripts/update_weekly.sh) depois da Camada 5. À mão
@@ -52,13 +72,14 @@ import pandas as pd
 
 from check_text_stability import SIM_ALTO, SIM_BAIXO, match_filings
 from consistency_utils import (add_common_args, clear_flags, finish_run, get_db, latest_rows, new_run,
-                               parent_code, tolerancia, write_flags)
+                               normalize_text, parent_code, tolerancia, write_flags)
 
 LAYER = 6
 CHECK_TYPE = "derive_quarters"
 TIPOS = ["DRE", "DFC_MI", "DVA"]
 SAFRAS = {"original": "Último", "reapresentado": "Penúltimo"}
-SEVERITY = {"reapresentacao_intra_ano": "warn", "componente_reapresentado": "info", "linha_sem_par": "info",
+SEVERITY = {"reapresentacao_intra_ano": "warn", "reclassificacao_entre_filings": "warn",
+            "componente_reapresentado": "info", "linha_sem_par": "info",
             "par_ambiguo": "warn", "sem_anterior": "info", "sem_3t": "info", "sem_dfp": "info"}
 SKIP_PREFIX = "3.99"
 COLS = ["run_id", "cnpj_companhia", "tipo_doc", "safra", "exercicio_ini", "dt_ini_exerc", "dt_fim_exerc", "trimestre",
@@ -176,9 +197,49 @@ def _casar(a: dict, b: dict | None, sim_alto: float, sim_baixo: float) -> dict:
                          sim_alto, sim_baixo)
 
 
+def _documentos(a: dict, b: dict, cd: str) -> tuple:
+    """Chave do par de documentos (fonte/data, sem ordem: o mesmo documento traz as colunas
+    Último e Penúltimo) e da linha."""
+    return (a["fonte"], a["data"], b["fonte"], b["data"], cd)
+
+
+def _mesmo_nome(doc: dict, outro: dict | None, cd: str) -> bool:
+    """A linha `cd` tem o mesmo nome (normalizado) na outra versão do filing?"""
+    return (outro is not None and cd in outro["acum"]
+            and normalize_text(doc["acum"][cd][0]) == normalize_text(outro["acum"][cd][0]))
+
+
+def _layouts_distintos(safra, divergencias: dict, layouts: set, tipo_doc, a: dict, b: dict,
+                       a2: dict | None, b2: dict | None, cd: str, cd_b: str, der: float, tol_abs, tol_rel) -> bool:
+    """Minuendo (a) e subtraendo (b) em layouts diferentes para a linha? a2/b2 são as outras
+    versões dos dois (a outra safra). Ver o docstring do módulo. Na safra original, marca o
+    par de documentos em `layouts` para a safra reapresentado."""
+    da = divergencias.get(_chave(tipo_doc, a), {}).get(cd)
+    db = divergencias.get(_chave(tipo_doc, b), {}).get(cd_b)
+    if safra == "original":
+        if (a2 is not None and da is None and db is not None and db[1] == "reclassificacao"
+                and _mesmo_nome(b, b2, cd_b)):
+            layouts.add(_documentos(a, b, cd))
+            return True
+        return False
+    if _documentos(a, b, cd) not in layouts or (da is None and db is None):
+        return False
+    if (da is not None and not _mesmo_nome(a, a2, cd)) or (db is not None and not _mesmo_nome(b, b2, cd_b)):
+        return False
+    return abs((da[0] if da else 0.0) - (db[0] if db else 0.0)) > tolerancia(der, tol_abs, tol_rel)
+
+
 def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict, reapresentados: set,
-                       tol_abs, tol_rel, sim_alto, sim_baixo) -> tuple[list[dict], list[dict], dict]:
-    """qs = {n: doc} de um exercício. Retorna (linhas, flags, contagens por flag)."""
+                       tol_abs, tol_rel, sim_alto, sim_baixo, divergencias: dict | None = None,
+                       outra: dict | None = None,
+                       layouts: set | None = None) -> tuple[list[dict], list[dict], dict]:
+    """qs = {n: doc} de um exercício. Retorna (linhas, flags, contagens por flag).
+    outra = {(exercicio_ini, n): doc} da outra safra (as outras versões dos mesmos períodos);
+    layouts = pares de documentos marcados na safra original, compartilhado entre as duas
+    safras da mesma empresa e tipo_doc."""
+    divergencias = divergencias or {}
+    outra = outra or {}
+    layouts = layouts if layouts is not None else set()
     rows: list[dict] = []
     flags: list[dict] = []
     cont = {k: 0 for k in SEVERITY}
@@ -218,6 +279,13 @@ def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict
             if pub is not None and der is not None and abs(pub - der) > tolerancia(pub, tol_abs, tol_rel):
                 flag = "reapresentacao_intra_ano"
                 flags.append(_flag_linha(cnpj, tipo_doc, cd, ds, ini_q, fim_q, a, b, pub, der, detalhe))
+            elif (flag is None and pub is None and casamento == "estavel"
+                  and _layouts_distintos(safra, divergencias, layouts, tipo_doc, a, b,
+                                         outra.get((exercicio_ini, n)), outra.get((exercicio_ini, n - 1)),
+                                         cd, cd_b, der, tol_abs, tol_rel)):
+                # só 'estavel': renumerado/reformulacao já foram casados pelo nome, e ali a divergência
+                # por código da Camada 2 é a própria renumeração, não conteúdo mudando de linha
+                flag = "reclassificacao_entre_filings"
             elif flag is None and componente:
                 flag = "componente_reapresentado"
             linhas_q.append({**base, "cd_conta": cd, "ds_conta": ds, "cd_conta_b": cd_b, "casamento": casamento,
@@ -240,7 +308,7 @@ def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict
             if l["flag"]:
                 cont[l["flag"]] += 1
         # flags-resumo do trimestre
-        for classe in ("sem_anterior", "sem_3t", "componente_reapresentado"):
+        for classe in ("sem_anterior", "sem_3t", "reclassificacao_entre_filings", "componente_reapresentado"):
             k = sum(1 for l in linhas_q if l["flag"] == classe)
             if k:
                 flags.append({"layer": LAYER, "check_type": CHECK_TYPE, "classificacao": classe, "severity": SEVERITY[classe],
@@ -263,8 +331,10 @@ def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict
 
 def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 0.01,
                     reapresentados: set | None = None, sim_alto: float = SIM_ALTO,
-                    sim_baixo: float = SIM_BAIXO) -> tuple[list[dict], list[dict], dict]:
+                    sim_baixo: float = SIM_BAIXO,
+                    divergencias: dict | None = None) -> tuple[list[dict], list[dict], dict]:
     """df = saída de latest_rows (pode incluir BPA, usado só na checagem de caixa).
+    divergencias = saída de divergencias_camada2.
     Retorna (linhas de demonstrativos_trimestrais, flags, stats[tipo_doc])."""
     rows: list[dict] = []
     flags: list[dict] = []
@@ -279,8 +349,11 @@ def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 
                 continue
             st = stats.setdefault(tipo_doc, {"exercicios": 0, "trimestres": 0, "linhas": 0, "docs_irregulares": 0,
                                              **{k: 0 for k in SEVERITY}})
+            docs_safra = {safra: docs_acumulados(d[d["ordem_exercicio"] == ordem]) for safra, ordem in SAFRAS.items()}
+            layouts: set = set()  # preenchido na original (primeira em SAFRAS), lido na reapresentado
             for safra, ordem in SAFRAS.items():
-                docs, irregulares = docs_acumulados(d[d["ordem_exercicio"] == ordem])
+                docs, irregulares = docs_safra[safra]
+                outra = docs_safra["reapresentado" if safra == "original" else "original"][0]
                 st["docs_irregulares"] += irregulares
                 b = dfc[(dfc["tipo_doc"] == "BPA") & (dfc["ordem_exercicio"] == ordem) & (dfc["cd_conta"] == "1.01.01")]
                 bpa = {r.periodo_fim: _valor(r.vl_conta) for r in b.itertuples(index=False)}
@@ -290,7 +363,8 @@ def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 
                 for exercicio_ini in sorted(exercicios):
                     qs = exercicios[exercicio_ini]
                     r, f, cont = _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs, bpa, reapresentados,
-                                                    tol_abs, tol_rel, sim_alto, sim_baixo)
+                                                    tol_abs, tol_rel, sim_alto, sim_baixo, divergencias,
+                                                    outra, layouts)
                     st["exercicios"] += 1
                     st["trimestres"] += len(qs)
                     st["linhas"] += len(r)
@@ -312,6 +386,25 @@ def reapresentados_camada2(conn, cnpj: str) -> set:
         tipo, fr, dr, orr, fc, dc, oc, pi, pf = r
         out.add((tipo, fr, dr, orr, pi, pf))
         out.add((tipo, fc, dc, oc, pi, pf))
+    return out
+
+
+def divergencias_camada2(conn, cnpj: str) -> dict:
+    """{(tipo_doc, fonte, data, ordem, periodo_ini, periodo_fim): {cd_conta: (Δ, classificacao)}} das
+    flags de linha da Camada 2 ('reapresentacao' ou 'reclassificacao'). Δ = valor da linha na outra
+    versão − valor neste filing: diff_abs (cmp − ref) do lado ref, −diff_abs do lado cmp. Em
+    DRE/DFC/DVA cada período acumulado aparece em dois filings (Último e o Penúltimo do exercício
+    seguinte), então cada filing tem um único Δ por linha."""
+    out: dict = {}
+    for r in conn.execute("""SELECT tipo_doc, fonte_ref, data_ref, ordem_ref, fonte_cmp, data_cmp, ordem_cmp,
+                                    periodo_ini, periodo_fim, cd_conta, diff_abs, classificacao
+                             FROM consistency_flags WHERE layer = 2 AND cd_conta IS NOT NULL
+                               AND cnpj_companhia = ?""", (cnpj,)):
+        tipo, fr, dr, orr, fc, dc, oc, pi, pf, cd, diff, classe = r
+        if diff is None:
+            continue
+        out.setdefault((tipo, fr, dr, orr, pi, pf), {})[cd] = (diff, classe)
+        out.setdefault((tipo, fc, dc, oc, pi, pf), {})[cd] = (-diff, classe)
     return out
 
 
@@ -366,6 +459,11 @@ def main(argv=None) -> str:
         parser.error("informe --cnpj ou confirme a base inteira com --full")
 
     conn = get_db()
+    ddl = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'demonstrativos_trimestrais'").fetchone()
+    if ddl and "reclassificacao_entre_filings" not in ddl[0]:
+        # antes de apagar qualquer linha: o INSERT falharia no CHECK depois do DELETE da empresa
+        raise SystemExit("demonstrativos_trimestrais não aceita a flag 'reclassificacao_entre_filings': aplique "
+                         "scripts/migrations/2026-09-30_trimestrais_reclassificacao.sql (instruções no cabeçalho)")
     if args.cnpj:
         cnpjs = [args.cnpj]
     else:
@@ -381,7 +479,7 @@ def main(argv=None) -> str:
         if args.tipo_doc:
             df = df[df["tipo_doc"].isin([args.tipo_doc, "BPA"])]
         rows, flags, stats = derive_quarters(df, args.tol_abs, args.tol_rel, reapresentados_camada2(conn, cnpj),
-                                             args.sim_alto, args.sim_baixo)
+                                             args.sim_alto, args.sim_baixo, divergencias_camada2(conn, cnpj))
         clear_trimestrais(conn, cnpj, args.tipo_doc)
         clear_flags(conn, LAYER, CHECK_TYPE, cnpj, args.tipo_doc)
         n = write_trimestrais(conn, run_id, rows)

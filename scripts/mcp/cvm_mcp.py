@@ -94,7 +94,8 @@ def query(sql: str) -> list[dict]:
     recompra_programas, fre_capital_social, fre_posicao_acionaria,
     fre_remuneracao_orgao, demonstrativos_contabeis, notas_explicativas,
     consistency_runs, consistency_flags, cd_conta_ds_timeline, demonstrativos_trimestrais.
-    Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco,
+    Views: vw_dre (trimestre isolado no ITR), vw_dre_acumulada, vw_balanco — só plano padrão, NULL em banco e
+    seguradora (coluna plano_contas); vw_dre_financeiro (bancos), vw_dre_seguradora, vw_plano_contas,
     vw_acionistas_diretos (acionistas diretos no FRE mais recente). Full-text: ipe_docs_fts, notas_explicativas_fts.
     fre_posicao_acionaria mistura acionistas diretos e a cadeia de controle das holdings:
     id_acionista_relacionado NULL = direto; preenchido = percentual sobre o capital da holding, não da companhia.
@@ -107,7 +108,8 @@ def query(sql: str) -> list[dict]:
     nova/removida com cd_conta_anterior (estavel não é gravada).
     demonstrativos_trimestrais: valor de cada trimestre da DRE/DFC_MI/DVA por conta e safra ('original' = colunas
     Último, 'reapresentado' = Penúltimo do exercício seguinte); use vl_final e origem; 4T = DFP − acum 3T; flag
-    reapresentacao_intra_ano quando publicado ≠ derivado (layer=6 em consistency_flags).
+    reapresentacao_intra_ano quando publicado ≠ derivado (layer=6 em consistency_flags);
+    reclassificacao_entre_filings quando os dois filings da subtração estão em layouts diferentes para a linha.
     Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
     Limites: 500 linhas, 20 s por consulta e 60.000 caracteres por célula — texto maior volta cortado com
     o marcador "…[truncado: N chars]" (texto_extraido passa de 12 milhões de caracteres). Para textos longos

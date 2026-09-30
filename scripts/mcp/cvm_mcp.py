@@ -32,6 +32,7 @@ import os
 import re
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
@@ -40,22 +41,32 @@ from mcp.server.fastmcp import FastMCP
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 DB_PATH = Path(os.environ.get("CVM_DB_PATH", PROJECT_DIR / "cvm_research.db"))
 MAX_ROWS = 500
+MAX_CELL_CHARS = 60_000  # ipe_docs.texto_extraido chega a 12 milhões de caracteres
+QUERY_TIMEOUT_S = 20.0
 
-parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-parser.add_argument("--http", action="store_true", help="usa transporte streamable-http em vez de stdio")
-parser.add_argument("--host", default="127.0.0.1")
-parser.add_argument("--port", type=int, default=8765)
-args = parser.parse_args()
-
-if not DB_PATH.exists():
-    print(f"ERRO: banco não encontrado em {DB_PATH}", file=sys.stderr)
-    print("Rode: bash setup.sh  (e os ingestores em scripts/ingest/)", file=sys.stderr)
-    sys.exit(1)
-
-mcp = FastMCP("cvm-research", stateless_http=True, host=args.host, port=args.port)
+mcp = FastMCP("cvm-research", stateless_http=True)
 
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_FORBIDDEN = re.compile(r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|ATTACH|DETACH|VACUUM|PRAGMA)\b", re.I)
+# Literais, identificadores entre aspas e comentários saem antes do filtro de palavras:
+# MATCH 'update' e LIKE '%create%' são SELECTs válidos. replace() é função, só REPLACE INTO é bloqueado.
+_LITERAIS = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|`[^`]*`|\[[^\]]*\]|--[^\n]*|/\*.*?(?:\*/|$)", re.S)
+_FORBIDDEN = re.compile(
+    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|ATTACH|DETACH|VACUUM|PRAGMA|REINDEX|ANALYZE)\b"
+    r"|\bREPLACE\s+INTO\b",
+    re.I,
+)
+
+# A guarda de verdade: o SQLite pergunta ao authorizer por cada operação ao compilar o
+# statement. Só leitura passa; ATTACH (que abriria outro arquivo), PRAGMA e escrita são negados.
+# Exceção: PRAGMA data_version, que o FTS5 roda por dentro a cada MATCH (só lê um contador).
+_PERMITIDAS = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION,
+               getattr(sqlite3, "SQLITE_RECURSIVE", 33)}
+
+
+def _authorizer(action, arg1, arg2, dbname, source):
+    if action in _PERMITIDAS or (action == sqlite3.SQLITE_PRAGMA and arg1 == "data_version" and arg2 is None):
+        return sqlite3.SQLITE_OK
+    return sqlite3.SQLITE_DENY
 
 
 def get_db() -> sqlite3.Connection:
@@ -64,6 +75,13 @@ def get_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=10000")
     return conn
+
+
+def _cortar(v):
+    if isinstance(v, str) and len(v) > MAX_CELL_CHARS:
+        return (v[:MAX_CELL_CHARS]
+                + f"…[truncado: {len(v)} chars; use substr(col, inicio, tamanho) ou snippet() do FTS]")
+    return v
 
 
 # ---------- Tools ----------
@@ -91,15 +109,32 @@ def query(sql: str) -> list[dict]:
     Último, 'reapresentado' = Penúltimo do exercício seguinte); use vl_final e origem; 4T = DFP − acum 3T; flag
     reapresentacao_intra_ano quando publicado ≠ derivado (layer=6 em consistency_flags).
     Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
+    Limites: 500 linhas, 20 s por consulta e 60.000 caracteres por célula — texto maior volta cortado com
+    o marcador "…[truncado: N chars]" (texto_extraido passa de 12 milhões de caracteres). Para textos longos
+    leia em pedaços com substr(texto_extraido, inicio, tamanho), ou use o FTS:
+    SELECT snippet(ipe_docs_fts, -1, '[', ']', '…', 40) FROM ipe_docs_fts WHERE ipe_docs_fts MATCH '...'.
     """
     s = sql.strip().rstrip(";")
-    if not re.match(r"^(SELECT|WITH)\b", s, re.I) or _FORBIDDEN.search(s):
+    if not re.match(r"^(SELECT|WITH)\b", s, re.I) or _FORBIDDEN.search(_LITERAIS.sub(" ", s)):
         raise ValueError("Apenas SELECT (ou WITH ... SELECT) é permitido.")
     conn = get_db()
+    conn.set_authorizer(_authorizer)
+    prazo = time.monotonic() + QUERY_TIMEOUT_S
+    conn.set_progress_handler(lambda: time.monotonic() > prazo, 10_000)
     try:
-        cur = conn.execute(s)
-        rows = cur.fetchmany(MAX_ROWS + 1)
-        out = [dict(r) for r in rows[:MAX_ROWS]]
+        try:
+            cur = conn.execute(s)
+            rows = cur.fetchmany(MAX_ROWS + 1)
+        except sqlite3.DatabaseError as e:
+            if time.monotonic() > prazo:
+                raise ValueError(
+                    f"Consulta abortada após {QUERY_TIMEOUT_S:g} s. Restrinja por cnpj_companhia/data, "
+                    "use LIMIT, ou busque texto pelo FTS (ipe_docs_fts MATCH) em vez de LIKE '%...%'."
+                ) from None
+            if "not authorized" in str(e) or "authorization denied" in str(e):
+                raise ValueError(f"Operação não permitida (somente leitura): {e}") from None
+            raise
+        out = [{k: _cortar(r[k]) for k in r.keys()} for r in rows[:MAX_ROWS]]
         if len(rows) > MAX_ROWS:
             out.append({"_aviso": f"resultado truncado em {MAX_ROWS} linhas — use LIMIT/filtros"})
         return out
@@ -146,9 +181,25 @@ def describe_table(table: str) -> list[dict]:
 
 # ---------- Entry ----------
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--http", action="store_true", help="usa transporte streamable-http em vez de stdio")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    args = parser.parse_args()
+
+    if not DB_PATH.exists():
+        print(f"ERRO: banco não encontrado em {DB_PATH}", file=sys.stderr)
+        print("Rode: bash setup.sh  (e os ingestores em scripts/ingest/)", file=sys.stderr)
+        sys.exit(1)
+
     if args.http:
+        mcp.settings.host, mcp.settings.port = args.host, args.port
         print(f"CVM MCP Server em http://{args.host}:{args.port}/mcp — banco: {DB_PATH}", file=sys.stderr)
         mcp.run(transport="streamable-http")
     else:
         mcp.run()  # stdio
+
+
+if __name__ == "__main__":
+    main()

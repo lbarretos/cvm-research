@@ -22,7 +22,7 @@ import time
 from datetime import datetime, timezone
 import httpx
 import pdfplumber
-from utils import get_db, watchlist_cnpjs
+from utils import get_db, repair_pdf_text, watchlist_cnpjs
 
 # categoria → tipos aceitos (None = todos os tipos da categoria).
 # Não existe categoria "Resultado": o release de resultados é 'Dados Econômico-Financeiros'
@@ -60,7 +60,7 @@ def fetch_pdf_text(url: str) -> str | None:
             return None
         with pdfplumber.open(io.BytesIO(r.content)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]
-        texto = "\n\n".join(p for p in pages if p.strip())
+        texto = repair_pdf_text("\n\n".join(p for p in pages if p.strip()))
         # Remove NUL bytes — SQLite rejeita strings com NUL
         return texto.replace("\x00", "")
     except Exception as e:

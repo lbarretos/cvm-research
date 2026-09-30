@@ -33,7 +33,7 @@ from datetime import date, datetime, timezone
 import pandas as pd
 import pdfplumber
 
-from utils import _http_get, fetch_doc_metadata, get_db, watchlist_cnpjs
+from utils import _http_get, fetch_doc_metadata, get_db, repair_pdf_text, watchlist_cnpjs
 
 DOWNLOAD_URL = (
     "https://www.rad.cvm.gov.br/ENETCONSULTA/frmDownloadDocumento.aspx"
@@ -94,7 +94,7 @@ def fetch_notas_texto(numero_sequencial: int) -> str | None:
             return None
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]
-        texto = "\n\n".join(p for p in pages if p.strip())
+        texto = repair_pdf_text("\n\n".join(p for p in pages if p.strip()))
         return texto.replace("\x00", "")
     except Exception as e:
         print(f"    ERRO fetch (doc {numero_sequencial}): {e}")

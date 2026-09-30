@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -298,3 +299,97 @@ def fetch_doc_metadata(year: int, fonte: str) -> pd.DataFrame:
         with z.open(fname) as f:
             df = pd.read_csv(f, sep=";", encoding="latin-1", dtype=str)
     return df[["CNPJ_CIA", "DT_REFER", "VERSAO", "ID_DOC"]]
+
+
+# ── Reparo de texto extraído de PDF ──────────────────────────────────────────
+# Dois defeitos do pdfminer (via pdfplumber) em PDFs da CVM, medidos no banco:
+#
+# 1. "(cid:N)": o glifo não tem mapeamento para Unicode. Em fontes simples com
+#    WinAnsi, N é o próprio byte (231 → ç). Mas na maioria dos documentos com
+#    "(cid:" a fonte é Identity-H e N é índice de glifo ("(cid:68)" não é "D"),
+#    irrecuperável sem a fonte. Só dá para reparar quando todos os códigos ≥ 32 do
+#    documento caem em posições que a StandardEncoding não define — é o único
+#    jeito de uma fonte simples WinAnsi produzir "(cid:N)".
+# 2. Fonte WinAnsi decodificada como Adobe StandardEncoding: o byte 0xE3 (ã) vira
+#    o glifo "ordfeminine" (ª), 0xEA (ê) vira "OE" (Œ), 0xF5 (õ) vira "dotlessi" (ı).
+#    "Relaçıes", "SuperintendŒncia", "COMISSˆO". Só corrigido quando o documento
+#    tem a assinatura, para não tocar ª/Ø legítimos.
+
+# Posições 0x80–0xFF sem glifo na StandardEncoding (pdfminer.latin_enc), exceto as
+# que a cp1252 também não define. Um "(cid:N)" fora deste conjunto é índice de glifo.
+_CID_LATIN1_OK: frozenset = frozenset(
+    list(range(0x80, 0xA1)) + [0xB0, 0xB5, 0xBE, 0xC0, 0xC9, 0xCC]
+    + list(range(0xD1, 0xE1)) + [0xE2, 0xE4, 0xE5, 0xE6, 0xE7, 0xEC, 0xED, 0xEE, 0xEF,
+                                 0xF0, 0xF2, 0xF3, 0xF4, 0xF6, 0xF7, 0xFC, 0xFD, 0xFE, 0xFF]
+) - {0x81, 0x8D, 0x8F, 0x90, 0x9D}
+# Dos que classificam o documento, os que viram caractere. 0x80–0x9F só € … ‘ ’ “ ” • – —:
+# os outros ((cid:131), (cid:132)) são marcadores de lista em fonte de símbolos, e ƒ/„ no
+# lugar seria lixo trocado por lixo.
+_CID_SUBSTITUI: frozenset = _CID_LATIN1_OK - (set(range(0x80, 0xA0)) - {0x80, 0x85, *range(0x91, 0x98)})
+
+# Glifo da StandardEncoding → caractere Latin-1 do mesmo byte, só onde o destino é
+# letra. Fora: 0xD0 (— → Ð) e 0xEB (º → ë), em que o glifo é comum em texto legítimo.
+# “ (0xAA → ª) e ” (0xBA → º) são aspas legítimas também: tratadas por contexto abaixo.
+_STD_MOJIBAKE: dict[str, str] = {
+    "`": "Á", "´": "Â", "ˆ": "Ã", "˜": "Ä", "¯": "Å", "˘": "Æ", "˙": "Ç", "¨": "È",
+    "˚": "Ê", "¸": "Ë", "˝": "Í", "˛": "Î", "ˇ": "Ï",
+    "Æ": "á", "ª": "ã", "Ł": "è", "Ø": "é", "Œ": "ê", "æ": "ñ", "ı": "õ",
+    "ł": "ø", "ø": "ù", "œ": "ú", "ß": "û",
+}
+# Assinatura: o glifo no contexto em que só a troca de encoding o produz. Minúscula para
+# os de letra minúscula (sintØtico, SuperintendŒncia, necessÆrias, Pœblico), ı antes de
+# "e" (Relaçıes, dispıe — o turco "Yatırım" fica de fora), acento solto entre maiúsculas
+# (COMISSˆO, MANUTEN˙ˆO) e "ªo"/"ªes" (Sªo, çªo; "V. Sªs." fica de fora). JØRGEN, WIDERØE,
+# "Company´s" e "D´Or" existem na base e não contam; ´ e ` nunca contam.
+_LETRA = r"A-Za-zÀ-ÖØ-öø-ÿ" + re.escape("".join(_STD_MOJIBAKE))
+_MINUSC = r"a-zß-öø-ÿ" + re.escape("ÆŒØıœª")
+_MAIUSC = r"A-ZÀ-ÖØ-Þ"
+_ACENTO_SOLTO = re.escape("ˆ˜¸˚˝˙")
+_RE_CID = re.compile(r"\(cid:(\d+)\)")
+_RE_ASSINATURA = re.compile(
+    "|".join([
+        rf"(?<=[{_MINUSC}])[ŒØÆœ](?=[a-zß-ÿ])",
+        rf"(?<=[{_LETRA}])ı(?=e)",
+        rf"(?<=[{_MAIUSC}])[{_ACENTO_SOLTO}](?=[{_MAIUSC}{_ACENTO_SOLTO}])",
+        rf"(?<=[{_ACENTO_SOLTO}])[{_ACENTO_SOLTO}](?=[{_MAIUSC}])",
+        rf"(?<=[{_LETRA}])ª(?=o\b|es\b)",
+    ])
+)
+_RE_MOJIBAKE = re.compile(
+    "|".join([
+        r"(?<![0-9])ª",                                  # 1ª continua ª; çªo vira ção
+        r"(?<=[0-9nN])”",                                # n” / 1” → nº / 1º
+        r"(?<=[0-9])“",                                  # 1“ → 1ª
+        # ` e ´ só viram Á/Â em caixa alta: MOBILI`RIOS, J` — nunca "D´Or" ou "company´s"
+        rf"(?<![a-zß-ÿ])[`´](?=[{_MAIUSC}](?:[^a-zß-ÿ]|$))",
+        rf"(?<=[{_MAIUSC}])[`´](?![A-Za-zÀ-ÿ])",
+        "[" + re.escape("".join(k for k in _STD_MOJIBAKE if k not in "ª`´")) + "]",
+    ])
+)
+_MIN_ASSINATURA = 2
+
+
+def _cid_char(n: int) -> str:
+    return " " if n == 0xA0 else bytes([n]).decode("cp1252")
+
+
+def repair_pdf_text(s: str | None) -> str | None:
+    """Conserta "(cid:N)" de fonte WinAnsi e texto WinAnsi lido como StandardEncoding.
+
+    Pura e idempotente. Texto sem os defeitos volta idêntico; "(cid:N)" de fontes
+    Identity-H (índice de glifo) fica como está.
+    """
+    if not s:
+        return s
+    # Códigos < 32 aparecem soltos (cid:9, cid:13) até em documento WinAnsi e não decidem nada.
+    codigos = {int(n) for n in _RE_CID.findall(s)} - set(range(32))
+    if codigos and codigos <= _CID_LATIN1_OK:
+        s = _RE_CID.sub(
+            lambda m: _cid_char(n) if (n := int(m.group(1))) in _CID_SUBSTITUI else m.group(0), s
+        )
+    if len(_RE_ASSINATURA.findall(s)) >= _MIN_ASSINATURA:
+        def troca(m: re.Match) -> str:
+            c = m.group(0)
+            return {"ª": "ã", "”": "º", "“": "ª"}.get(c) or _STD_MOJIBAKE[c]
+        s = _RE_MOJIBAKE.sub(troca, s)
+    return s

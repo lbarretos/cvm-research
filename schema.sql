@@ -94,8 +94,11 @@ CREATE TABLE IF NOT EXISTS vlmo_posicao (
 CREATE INDEX IF NOT EXISTS idx_vlmo_pos_cnpj ON vlmo_posicao (cnpj_companhia, data_referencia DESC);
 
 -- ── 4. vlmo_movimentacoes ─────────────────────────────────────────────────────
--- NULLS NOT DISTINCT omitted (not supported in SQLite).
--- Idempotency guaranteed by Python-level dedup in _upsert_sqlite before each batch.
+-- A UNIQUE é um índice de expressão (IFNULL em cada coluna anulável) porque
+-- data_movimentacao é NULL em 'Saldo Inicial' e NULLs são distintos entre si numa
+-- UNIQUE comum: cada recarga do VLMO inseria os saldos de novo. O alvo do
+-- ON CONFLICT em utils._INDEX_COLUMNS repete estas expressões.
+-- Migração: scripts/migrations/2026-09-30_vlmo_mov_uniq_nulls.sql
 
 CREATE TABLE IF NOT EXISTS vlmo_movimentacoes (
     id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -124,9 +127,9 @@ CREATE INDEX IF NOT EXISTS idx_vlmo_mov_cargo ON vlmo_movimentacoes (tipo_cargo)
 CREATE INDEX IF NOT EXISTS idx_vlmo_mov_tipo  ON vlmo_movimentacoes (tipo_movimentacao);
 
 CREATE UNIQUE INDEX IF NOT EXISTS vlmo_mov_uniq ON vlmo_movimentacoes (
-    cnpj_companhia, data_referencia, versao, empresa,
-    tipo_cargo, tipo_movimentacao, tipo_ativo, caracteristica,
-    data_movimentacao, quantidade
+    cnpj_companhia, IFNULL(data_referencia, ''), IFNULL(versao, ''), IFNULL(empresa, ''),
+    IFNULL(tipo_cargo, ''), IFNULL(tipo_movimentacao, ''), IFNULL(tipo_ativo, ''),
+    IFNULL(caracteristica, ''), IFNULL(data_movimentacao, ''), IFNULL(quantidade, '')
 );
 
 -- ── 5. recompra ───────────────────────────────────────────────────────────────
@@ -267,7 +270,7 @@ CREATE TABLE IF NOT EXISTS demonstrativos_contabeis (
     dt_fim_exerc    TEXT,
     cd_conta        TEXT NOT NULL,
     ds_conta        TEXT,
-    vl_conta        REAL,
+    vl_conta        REAL,                 -- R$ (MIL×1000); 3.99 (lucro por ação) em R$/ação, sem escala
     st_conta_fixa   TEXT CHECK (st_conta_fixa IN ('S', 'N')),  -- S = conta padrão CVM, N = criada pela empresa; NULL = linha anterior à migração 2026-09-17
     created_at      TEXT DEFAULT (datetime('now'))
 );

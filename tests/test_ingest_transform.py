@@ -21,18 +21,14 @@ import pytest
 # Adiciona scripts/ingest ao path para importar utils sem instalar o pacote
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 
-from utils import _date, _float, _http_get, _int, _sanitize, _upsert_sqlite, upsert, get_db, fetch_doc_metadata
+from utils import _date, _float, _http_get, _int, _sanitize, _upsert_sqlite, upsert, get_db, fetch_doc_metadata, vl_escalado
 
-# Constante local que replica a lógica dos ingestores DFP/ITR
-SCALE = {"MIL": 1000, "UNIDADE": 1}
+SCHEMA = os.path.join(os.path.dirname(__file__), "..", "schema.sql")
 
 
-def normalize_vl(vl_str: str, escala: str):
-    """Replica a normalização de VL_CONTA dos ingestores ingest_dfp / ingest_itr."""
-    if escala not in SCALE:
-        raise ValueError(f"Escala desconhecida: {escala!r}")
-    vl_raw = _float(vl_str)
-    return None if vl_raw is None else vl_raw * SCALE[escala]
+def normalize_vl(vl_str: str, escala: str, cd_conta: str = "3.01"):
+    """Normalização de VL_CONTA usada por ingest_dfp / ingest_itr."""
+    return vl_escalado(vl_str, escala, cd_conta)
 
 
 # ── ESCALA_MOEDA normalization ────────────────────────────────────────────────
@@ -62,6 +58,17 @@ def test_normalizacao_vl_vazio_retorna_none():
 def test_normalizacao_vl_nan_retorna_none():
     """pandas pode produzir 'nan' como string para células NaN com dtype=str."""
     assert normalize_vl("nan", "MIL") is None
+
+def test_normalizacao_lucro_por_acao_nao_escala():
+    """3.99 (LPA) vem em R$/ação mesmo com ESCALA_MOEDA = 'MIL' (Petrobras DFP 2025: 8,54)."""
+    assert normalize_vl("8.54", "MIL", "3.99.01.01") == 8.54
+    assert normalize_vl("1.2", "MIL", "3.99") == 1.2
+    assert normalize_vl("8.54", "UNIDADE", "3.99.01.01") == 8.54
+    assert normalize_vl("", "MIL", "3.99.01.01") is None
+
+def test_normalizacao_escala_desconhecida_vale_para_lpa():
+    with pytest.raises(ValueError, match="Escala desconhecida"):
+        normalize_vl("8.54", "MILHAR", "3.99.01.01")
 
 
 # ── _date helper ─────────────────────────────────────────────────────────────
@@ -278,19 +285,10 @@ def test_upsert_sqlite_conflict_multiplas_colunas():
 
 
 def test_upsert_sqlite_named_index_vlmo_mov_uniq():
-    """Índice nomeado 'vlmo_mov_uniq' deve ser resolvido para lista de colunas via _INDEX_COLUMNS."""
+    """Índice nomeado 'vlmo_mov_uniq' deve ser resolvido para o alvo de _INDEX_COLUMNS (índice de schema.sql)."""
     conn = sqlite3.connect(':memory:')
-    conn.execute(
-        "CREATE TABLE vlmo_movimentacoes ("
-        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "  cnpj_companhia TEXT, data_referencia TEXT, versao INTEGER, empresa TEXT,"
-        "  tipo_cargo TEXT, tipo_movimentacao TEXT, tipo_ativo TEXT, caracteristica TEXT,"
-        "  data_movimentacao TEXT, quantidade INTEGER,"
-        "  UNIQUE(cnpj_companhia,data_referencia,versao,empresa,"
-        "         tipo_cargo,tipo_movimentacao,tipo_ativo,caracteristica,"
-        "         data_movimentacao,quantidade)"
-        ")"
-    )
+    with open(SCHEMA, encoding="utf-8") as f:
+        conn.executescript(f.read())
     row = {
         "cnpj_companhia": "00.000.000/0001-00",
         "data_referencia": "2024-01-01", "versao": 1, "empresa": "Test",

@@ -45,11 +45,14 @@ EXCLUDED_FROM_UPDATE: frozenset = frozenset({'id', 'created_at'})
 
 _INDEX_COLUMNS: dict[str, str] = {
     # nome_index -> alvo do ON CONFLICT (col1,col2,... ou expressões do índice único)
-    # NULLS NOT DISTINCT está na definição do índice (migration 009), não aqui.
+    # vlmo_mov_uniq em schema.sql — índice de expressão porque data_movimentacao é
+    # NULL em 'Saldo Inicial' (e tipo_cargo/caracteristica às vezes): numa UNIQUE
+    # comum cada recarga duplicava essas linhas. O alvo tem que repetir as
+    # expressões do índice exatamente como estão lá.
     "vlmo_mov_uniq": (
-        "cnpj_companhia,data_referencia,versao,empresa,"
-        "tipo_cargo,tipo_movimentacao,tipo_ativo,caracteristica,"
-        "data_movimentacao,quantidade"
+        "cnpj_companhia,IFNULL(data_referencia,''),IFNULL(versao,''),IFNULL(empresa,''),"
+        "IFNULL(tipo_cargo,''),IFNULL(tipo_movimentacao,''),IFNULL(tipo_ativo,''),"
+        "IFNULL(caracteristica,''),IFNULL(data_movimentacao,''),IFNULL(quantidade,'')"
     ),
     # ux_dem_periodo em schema.sql — índice de expressão porque dt_ini_exerc é
     # NULL em BPA/BPP e NULLs não conflitam entre si numa UNIQUE comum.
@@ -62,6 +65,11 @@ _INDEX_COLUMNS: dict[str, str] = {
 # Quando o alvo do conflito tem expressões, a deduplicação em Python precisa
 # das colunas puras (None == None já trata o NULL como igual).
 _DEDUP_COLUMNS: dict[str, str] = {
+    "vlmo_mov_uniq": (
+        "cnpj_companhia,data_referencia,versao,empresa,"
+        "tipo_cargo,tipo_movimentacao,tipo_ativo,caracteristica,"
+        "data_movimentacao,quantidade"
+    ),
     "dem_contabeis_uniq": (
         "cnpj_companhia,fonte,tipo_doc,data_referencia,versao,cd_conta,ordem_exercicio,dt_ini_exerc"
     ),
@@ -134,6 +142,26 @@ def _sanitize(rows: list[dict]) -> list[dict]:
             return None
         return val
     return [{k: clean(v) for k, v in row.items()} for row in rows]
+
+# ── Escala de DFP/ITR ────────────────────────────────────────────────────────
+
+SCALE = {"MIL": 1000, "UNIDADE": 1}
+
+# Lucro por ação (DRE 3.99 e descendentes) é publicado em R$/ação qualquer que
+# seja ESCALA_MOEDA do documento: multiplicar por 1000 dá LPA de 8.540 na Petrobras.
+_SEM_ESCALA_PREFIX = "3.99"
+
+
+def vl_escalado(vl_conta, escala: str, cd_conta: str):
+    """VL_CONTA do CSV da CVM → R$. None se vazio; ValueError se a escala for desconhecida."""
+    if escala not in SCALE:
+        raise ValueError(f"Escala desconhecida: {escala!r}")
+    vl = _float(vl_conta)
+    if vl is None:
+        return None
+    if str(cd_conta or "").startswith(_SEM_ESCALA_PREFIX):
+        return vl
+    return vl * SCALE[escala]
 
 # ── Upsert ───────────────────────────────────────────────────────────────────
 

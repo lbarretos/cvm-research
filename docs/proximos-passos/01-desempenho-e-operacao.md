@@ -1,5 +1,7 @@
 # Etapa 1: Desempenho e operação
 
+**Implementada em 2026-10-05** (branch `etapa-1-desempenho`). Ver "Implementação" no fim.
+
 ## Avaliação atual
 
 | Consulta (uma empresa, banco vivo) | Tempo | Limite do MCP |
@@ -77,3 +79,37 @@ efeito delas se mede com a Etapa 2.
 
 - `pytest` verde, incluindo um teste novo de equivalência entre as views antigas e as novas numa fixture.
 - Na Etapa 2, nenhuma consulta de demonstrativo acima de 1 s. WAL abaixo de 100 MB depois do job semanal.
+
+## Implementação
+
+| Item | Onde |
+|---|---|
+| 1.1 `filings` | `schema.sql`, `scripts/ingest/filings.py` (`rebuild_filings`), chamada no fim de `ingest_dfp.py`/`ingest_itr.py` e no início de `run_all.py` |
+| 1.2 views | `schema.sql`; migração `scripts/migrations/2026-10-05_filings_views.sql` (cria e preenche `filings`, troca as seis views) |
+| 1.3 checkpoint | `checkpoint_wal` em `scripts/update_weekly.sh` e passo "WAL" em `bootstrap.sh`; aviso no log se o `-wal` passar de `WAL_ALERTA_MB` (1024) |
+| 1.4 índices | `schema.sql`; migração `scripts/migrations/2026-10-05_ipe_indices.sql` |
+| 1.5 MCP | `scripts/mcp/cvm_mcp.py`: `list_tables` devolve `rows = null` nas views; as três ferramentas têm prazo de 20 s |
+| 1.6 compactação | `scripts/compactar_banco.sh` (confere espaço e leitores; só mostra o plano sem `--executar`). **Não foi executado**: o banco vivo continua com `page_size` 4096 e sem VACUUM |
+
+`plano_contas` em `filings` é NULL (não `'padrao'`) quando o filing não tem DRE ou 3.01: `vw_plano_contas` continua sem listá-lo,
+como antes, e as demais views o tratam como padrão.
+
+**Stress test refeito, agora sobre a base real** (cópia de `demonstrativos_contabeis` e `companies`, views antigas da migração
+2026-09-30 contra as novas, `EXCEPT` nos dois sentidos):
+
+| View | Linhas | Só na antiga | Só na nova |
+|---|---|---|---|
+| `vw_plano_contas` | 7.174 | 0 | 0 |
+| `vw_dre` | 7.174 | 0 | 0 |
+| `vw_dre_acumulada` | 7.174 | 0 | 0 |
+| `vw_dre_financeiro` | 150 | 0 | 0 |
+| `vw_dre_seguradora` | 94 | 0 | 0 |
+| `vw_balanco` | 7.174 | 0 | 0 |
+
+Latência por empresa nas 146 (cópia, sem WAL): `vw_balanco` p50 5,0 ms, p95 8,1 ms, máx. 12,2 ms; `vw_dre` p50 11,8 ms, p95 16,2 ms,
+máx. 24,4 ms; screen de todas as empresas (DFP 2024) 630 ms. `filings` tem 35.804 linhas. No banco vivo, depois de migrar,
+`vw_balanco` da WEG (DFP, 3 anos) responde em 0,45 s com a abertura do banco inclusa (eram 24,8 s), e a contagem de Press-releases
+por `data_entrega` caiu de 5,2 s para 20 ms. As seis views são testadas em `tests/test_filings.py` contra as definições antigas.
+
+**Ainda aberto:** o `VACUUM` (1.6) e a medição do WAL ao fim de um job semanal completo. Os critérios de pronto que dependem da Etapa 2
+(nenhuma consulta de demonstrativo acima de 1 s no conjunto de perguntas) ficam para ela.

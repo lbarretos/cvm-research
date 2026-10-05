@@ -80,3 +80,23 @@ def test_timeout_aborta_consulta_lenta(db, monkeypatch):
     with pytest.raises(ValueError, match="abortada"):
         cvm_mcp.query("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) "
                       "SELECT max(i) FROM n")
+
+
+def test_list_tables_nao_conta_views(db):
+    """Contar uma view roda a consulta dela inteira (minutos em vw_balanco): rows vem null."""
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE VIEW vw_assuntos AS SELECT assunto FROM ipe_docs")
+    conn.commit()
+    conn.close()
+    por_nome = {t["name"]: t for t in cvm_mcp.list_tables()}
+    assert por_nome["ipe_docs"] == {"name": "ipe_docs", "type": "table", "rows": 2}
+    assert por_nome["vw_assuntos"] == {"name": "vw_assuntos", "type": "view", "rows": None}
+
+
+def test_describe_table_tem_prazo(db, monkeypatch):
+    prazos = []
+    original = cvm_mcp._com_prazo
+    monkeypatch.setattr(cvm_mcp, "_com_prazo", lambda c: prazos.append(1) or original(c))
+    assert [c["name"] for c in cvm_mcp.describe_table("ipe_docs")] == ["protocolo_entrega", "assunto", "texto_extraido"]
+    cvm_mcp.list_tables()
+    assert len(prazos) == 2   # list_tables e describe_table, não só query(), param no prazo

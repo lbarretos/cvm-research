@@ -99,7 +99,7 @@ URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rod
 ## Acesso ao banco (MCP `cvm-research`)
 
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
-Ferramentas: `query(sql)` (SELECT, até 500 linhas), `list_tables()`, `describe_table(nome)`.
+Ferramentas: `query(sql)` (SELECT, até 500 linhas), `list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. Todas abortam em 20 s.
 Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linhas tem a tabela ipe_docs?"* deve responder um número acima de 160.000.
 
 ## Como identificar uma empresa
@@ -240,6 +240,15 @@ plano padrão. Nesta base: `banco` = ITUB4, BBAS3, BBDC4, BPAC11; `seguradora` =
 
 Diagnóstico: `SELECT DISTINCT c.ticker, p.plano_contas FROM vw_plano_contas p JOIN companies c ON c.cnpj = p.cnpj_companhia WHERE p.plano_contas <> 'padrao'`.
 Banco anterior a estas views: `sqlite3 cvm_research.db < scripts/migrations/2026-09-30_vw_plano_contas.sql` (só views).
+
+**`filings`** — versão vigente e plano de contas de cada documento: `(cnpj_companhia, fonte, tipo_doc, data_referencia) → versao,
+plano_contas, dt_ini_min, dt_ini_max, n_linhas`. As views de DRE e balanço leem dela (por isso respondem em milissegundos, não
+em 25 s). É reconstruída no fim de `ingest_dfp`/`ingest_itr` e no início de `run_all.py` (`python scripts/ingest/filings.py`
+faz à mão): **depois de gravar em `demonstrativos_contabeis` por fora dos ingestores, reconstrua-a**, senão as views mostram
+a versão antiga. Banco anterior à tabela: `sqlite3 cvm_research.db < scripts/migrations/2026-10-05_filings_views.sql`
+(cria e preenche `filings` e troca as views, ~10 s) e, para as consultas do IPE por `data_entrega`,
+`sqlite3 cvm_research.db < scripts/migrations/2026-10-05_ipe_indices.sql`. Compactação e `page_size`:
+`bash scripts/compactar_banco.sh` (só mostra o plano sem `--executar`).
 
 ### `notas_explicativas` — texto completo do ITR/DFP (com notas explicativas)
 `cnpj_companhia, fonte ('ITR'/'DFP'), data_referencia, versao,`

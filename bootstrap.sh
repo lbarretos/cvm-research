@@ -238,6 +238,12 @@ if [ "$FAZER_PDF" = 1 ]; then
   sqlite3 "$DB" "INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild');"
 fi
 
+# ── WAL ──────────────────────────────────────────────────────────────────────
+# A carga deixa um WAL de vários GB; esvaziá-lo mantém as consultas rápidas (ver update_weekly.sh).
+passo "esvaziando o WAL"
+WAL_R=$(sqlite3 "$DB" "PRAGMA busy_timeout=60000; PRAGMA wal_checkpoint(TRUNCATE);" 2>&1 | tail -1)
+[ "${WAL_R%%|*}" = "0" ] || log "aviso: checkpoint do WAL não completou (${WAL_R:-sem resposta}); há um leitor com o banco aberto (lsof $DB)"
+
 # ── Resumo ───────────────────────────────────────────────────────────────────
 ELAPSED=$(( $(date +%s) - START ))
 log "===== concluído em $((ELAPSED / 60)) min ====="

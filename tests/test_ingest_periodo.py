@@ -14,6 +14,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 
+from filings import rebuild_filings
 from utils import _upsert_sqlite
 import ingest_itr
 import ingest_dfp
@@ -87,6 +88,7 @@ def test_itr_upsert_ponta_a_ponta_nao_mistura_periodos():
     _upsert_sqlite(conn, "demonstrativos_contabeis", rows, ingest_itr.CONFLICT)
     n = conn.execute("SELECT COUNT(*) FROM demonstrativos_contabeis").fetchone()[0]
     assert n == 4
+    rebuild_filings(conn)   # as views leem `filings`, que os ingestores reconstroem no fim
     tri = conn.execute("SELECT receita_liquida FROM vw_dre").fetchone()[0]
     acu = conn.execute("SELECT receita_liquida FROM vw_dre_acumulada").fetchone()[0]
     assert (tri, acu) == (9_274_426_000.0, 17_307_730_000.0)
@@ -213,6 +215,7 @@ def test_ingestao_multi_tipo_doc_bpa_bpp_dre_convivem_nas_views():
 
     n = conn.execute("SELECT COUNT(*) FROM demonstrativos_contabeis").fetchone()[0]
     assert n == 4
+    rebuild_filings(conn)   # as views leem `filings`, que os ingestores reconstroem no fim
 
     balanco = conn.execute(
         "SELECT ativo_total, patrimonio_liquido FROM vw_balanco "
@@ -234,6 +237,10 @@ MIGRACAO_EBT = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrati
                             "2026-09-29_vw_dre_ebt_3_07.sql")
 MIGRACAO_PLANO = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations",
                               "2026-09-30_vw_plano_contas.sql")
+
+
+MIGRACAO_FILINGS = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations",
+                                "2026-10-05_filings_views.sql")
 
 
 def _dre_weg_2t26():
@@ -263,30 +270,37 @@ def test_vw_dre_ebt_e_resultado_antes_dos_tributos():
     """Regressão: ebt lia 3.08 (IR/CS) — no 2T26 da WEG a view devolvia -335.648.000."""
     conn = _db()
     _upsert_sqlite(conn, "demonstrativos_contabeis", _dre_weg_2t26(), "dem_contabeis_uniq")
+    rebuild_filings(conn)
     _assert_ebt_antes_dos_tributos(conn)
 
 
 def test_migracao_ebt_corrige_banco_existente_e_espelha_schema():
     with open(SCHEMA, encoding="utf-8") as f:
         schema = f.read()
-    antigo = schema.replace("cd_conta = '3.07' THEN vl_conta END) AS ebt",
-                            "cd_conta = '3.08' THEN vl_conta END) AS ebt")
-    assert antigo != schema
-    conn = sqlite3.connect(":memory:")
-    conn.executescript(antigo)
-    _upsert_sqlite(conn, "demonstrativos_contabeis", _dre_weg_2t26(), "dem_contabeis_uniq")
-    assert conn.execute("SELECT ebt FROM vw_dre").fetchone()[0] == -335_648_000.0  # o bug
-
     with open(MIGRACAO_EBT, encoding="utf-8") as f:
         # dot-commands (.bail on) são do cliente sqlite3, não SQL
         migracao = "".join(l for l in f if not l.startswith("."))
+    # banco de antes da migração: as views da migração com o bug (ebt lia 3.08), sem `filings`
+    antigo_sql = migracao.replace("cd_conta = '3.07' THEN vl_conta END) AS ebt",
+                                  "cd_conta = '3.08' THEN vl_conta END) AS ebt")
+    assert antigo_sql != migracao
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(schema)
+    conn.execute("DROP TABLE filings")
+    for v in ("vw_balanco", "vw_dre_seguradora", "vw_dre_financeiro", "vw_dre_acumulada", "vw_dre", "vw_plano_contas"):
+        conn.execute(f"DROP VIEW {v}")
+    conn.executescript(antigo_sql)
+    _upsert_sqlite(conn, "demonstrativos_contabeis", _dre_weg_2t26(), "dem_contabeis_uniq")
+    assert conn.execute("SELECT ebt FROM vw_dre").fetchone()[0] == -335_648_000.0  # o bug
+
     for _ in range(2):  # idempotente
         conn.executescript(migracao)
     _assert_ebt_antes_dos_tributos(conn)
 
     # as migrações seguintes, em ordem, levam as views ao schema atual
-    with open(MIGRACAO_PLANO, encoding="utf-8") as f:
-        conn.executescript("".join(l for l in f if not l.startswith(".")))
+    for caminho in (MIGRACAO_PLANO, MIGRACAO_FILINGS):
+        with open(caminho, encoding="utf-8") as f:
+            conn.executescript("".join(l for l in f if not l.startswith(".")))
     _assert_ebt_antes_dos_tributos(conn)
     novo = _db()
     views = "SELECT name, sql FROM sqlite_master WHERE type = 'view' ORDER BY name"

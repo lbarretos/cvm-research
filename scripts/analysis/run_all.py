@@ -19,6 +19,8 @@ import check_granularity
 import check_hierarchy_sums
 import check_text_stability
 import derive_quarters
+from consistency_utils import get_db
+from filings import rebuild_filings  # consistency_utils põe scripts/ingest no sys.path
 
 LAYERS = {
     1: check_hierarchy_sums.main,
@@ -39,6 +41,10 @@ def main(argv=None) -> list[str]:
     desconhecidas = [l for l in layers if l not in LAYERS]
     if desconhecidas:
         parser.error(f"camada(s) não implementada(s): {desconhecidas}")
+    # as views de DRE/balanço leem `filings`; reconstruir aqui cobre dados ingeridos por fora dos ingestores
+    conn = get_db()
+    print(f"filings: {rebuild_filings(conn)} linhas")
+    conn.close()
     run_ids = []
     for layer in layers:
         print(f"\n═══ Camada {layer} ═══")

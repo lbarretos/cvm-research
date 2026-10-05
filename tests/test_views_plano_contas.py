@@ -6,11 +6,16 @@ Fixtures com os nomes e valores dos DFP 2025 (R$ mi) de ITUB4, BBAS3, IRBR3 e B3
 """
 import os
 import sqlite3
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
+from filings import rebuild_filings  # noqa: E402
 
 SCHEMA = os.path.join(os.path.dirname(__file__), "..", "schema.sql")
 MIGRACOES = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations")
 MIGRACAO = os.path.join(MIGRACOES, "2026-09-30_vw_plano_contas.sql")
 MIGRACAO_EBT = os.path.join(MIGRACOES, "2026-09-29_vw_dre_ebt_3_07.sql")
+MIGRACAO_FILINGS = os.path.join(MIGRACOES, "2026-10-05_filings_views.sql")
 
 ITUB = "60.872.504/0001-23"
 BBAS = "00.000.000/0001-91"
@@ -99,7 +104,7 @@ def _balanco(conn, cnpj, contas, fonte="DFP", data="2025-12-31"):
                       for (tipo, cd), (ds, vl) in contas.items()])
 
 
-def _carregar(conn):
+def _carregar(conn, filings=True):
     _dre(conn, ITUB, DRE_ITUB)
     _dre(conn, BBAS, DRE_BBAS)
     _dre(conn, IRBR, DRE_IRBR)
@@ -107,6 +112,8 @@ def _carregar(conn):
     _balanco(conn, ITUB, BAL_ITUB)
     _balanco(conn, IRBR, BAL_IRBR)
     _balanco(conn, B3SA, BAL_B3SA)
+    if filings:
+        rebuild_filings(conn)   # as views leem `filings`
     return conn
 
 
@@ -125,6 +132,7 @@ def test_plano_contas_pelo_nome_da_conta_3_01():
          data="2022-12-31", ini="2022-01-01")
     # filing sem 3.01 não é classificado (as views o tratam como padrão)
     _dre(conn, B3SA, {"3.11": ("Lucro", 1)}, data="2024-12-31", ini="2024-01-01")
+    rebuild_filings(conn)
     got = conn.execute("SELECT cnpj_companhia, data_referencia, plano_contas FROM vw_plano_contas ORDER BY 1, 2").fetchall()
     assert got == [(BBAS, "2025-12-31", "banco"), (B3SA, "2025-12-31", "padrao"),
                    (IRBR, "2022-12-31", "seguradora"), (IRBR, "2025-12-31", "seguradora"),
@@ -165,6 +173,7 @@ def test_vw_dre_financeiro_trimestre_isolado_no_itr():
     acu = {"3.01": ("Receitas da Intermediação Financeira", 290), "3.09": ("Lucro/Prejuízo Consolidado do Período", 33.0)}
     _dre(conn, ITUB, tri, fonte="ITR", data="2025-09-30", ini="2025-07-01", mult=1e9)
     _dre(conn, ITUB, acu, fonte="ITR", data="2025-09-30", ini="2025-01-01", mult=1e9)
+    rebuild_filings(conn)
     r = _um(conn, "SELECT * FROM vw_dre_financeiro WHERE cnpj_companhia = ?", ITUB)
     assert (r["dt_ini_exerc"], r["receita_intermediacao"], r["lucro_liquido"]) == ("2025-07-01", 100e9, 11.6e9)
 
@@ -197,14 +206,17 @@ def test_migracao_plano_contas_corrige_banco_existente_e_espelha_schema():
     conn = _db()
     with open(SCHEMA, encoding="utf-8") as f:
         schema = f.read()
+    conn.execute("DROP TABLE filings")
     for v in ("vw_balanco", "vw_dre_seguradora", "vw_dre_financeiro", "vw_dre_acumulada", "vw_dre", "vw_plano_contas"):
         conn.execute(f"DROP VIEW {v}")
     conn.executescript(_migracao(MIGRACAO_EBT))
-    _carregar(conn)
+    _carregar(conn, filings=False)   # banco anterior à Etapa 1: ainda não existe `filings`
     assert conn.execute("SELECT receita_liquida FROM vw_dre WHERE cnpj_companhia = ?", (ITUB,)).fetchone() == (387118e6,)  # o bug
     for _ in range(2):  # idempotente
         conn.executescript(_migracao(MIGRACAO))
     assert conn.execute("SELECT receita_liquida, plano_contas FROM vw_dre WHERE cnpj_companhia = ?", (ITUB,)).fetchone() == \
         (None, "banco")
     assert conn.execute("SELECT lucro_liquido FROM vw_dre_financeiro WHERE cnpj_companhia = ?", (ITUB,)).fetchone() == (45849e6,)
+    # a migração da Etapa 1 leva o banco ao estado do schema.sql atual (views leem `filings`)
+    conn.executescript(_migracao(MIGRACAO_FILINGS))
     assert conn.execute(views).fetchall() == _db(schema).execute(views).fetchall()

@@ -21,6 +21,7 @@
 #   MAX_TENTATIVAS=3     no modo --se-vencido, tentativas com falha por semana
 #   ESPERA_REDE_SEG=300  quanto esperar a rede/DNS subir antes de desistir
 #   UPDATE_LOG_DIR       pasta de logs e marcadores (default: logs/)
+#   WAL_ALERTA_MB=1024   avisa no log se o cvm_research.db-wal passar disso após o checkpoint
 #   NOW_EPOCH            "agora" em segundos Unix (só para testes)
 
 set -u
@@ -213,8 +214,29 @@ if [ "$RETRY_FAILED" = "1" ]; then
   run_step "extract_pdf_retry" extract_pdf.py --retry-failed --limite "$EXTRACT_LIMIT"
 fi
 
+# Esvazia o WAL no banco principal. Um leitor pendurado (outra sessão, o MCP) impede o
+# checkpoint e o -wal cresce sem limite: em 30/09/2026 chegou a 12,5 GB e as views
+# passaram de 20 s. TRUNCATE devolve "busy|log|checkpointed"; busy=1 = não conseguiu.
+WAL_ALERTA_MB="${WAL_ALERTA_MB:-1024}"
+checkpoint_wal() {
+  local db="$1" r busy wal_mb
+  command -v sqlite3 >/dev/null || return 0
+  r=$(sqlite3 "$db" "PRAGMA busy_timeout=60000; PRAGMA wal_checkpoint(TRUNCATE);" 2>&1 | tail -1)
+  busy=${r%%|*}
+  wal_mb=$(( $(stat -f%z "$db-wal" 2>/dev/null || stat -c%s "$db-wal" 2>/dev/null || echo 0) / 1048576 ))
+  if [ "$busy" = "0" ]; then
+    log "WAL esvaziado (checkpoint TRUNCATE): $wal_mb MB restantes"
+  else
+    log "WARNING: checkpoint do WAL não completou (${r:-sem resposta}); $wal_mb MB pendentes — há um leitor com transação aberta (lsof $db)."
+  fi
+  if [ "$wal_mb" -gt "$WAL_ALERTA_MB" ]; then
+    log "WARNING: $db-wal tem $wal_mb MB (limite $WAL_ALERTA_MB): as consultas ficam lentas até o WAL ser esvaziado. Feche as sessões que mantêm o banco aberto e rode: sqlite3 $db 'PRAGMA wal_checkpoint(TRUNCATE)'"
+  fi
+}
+
 # Resumo do banco após a atualização
 DB="$PROJECT_DIR/cvm_research.db"
+checkpoint_wal "$DB"
 if command -v sqlite3 >/dev/null; then
   log "Resumo: $(sqlite3 "$DB" "SELECT 'ipe_docs='||COUNT(*)||' com_texto='||SUM(texto_extraido IS NOT NULL)||' max_entrega='||MAX(data_entrega) FROM ipe_docs")"
   # A CVM publica o IPE toda semana: documento mais novo com mais de 9 dias quer

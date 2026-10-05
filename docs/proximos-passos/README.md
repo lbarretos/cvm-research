@@ -12,7 +12,7 @@ A numeração é a ordem recomendada. Cada etapa só depende das anteriores.
 
 | # | Etapa | Camada | Depende de | Veredito do stress test | Esforço |
 |---|---|---|---|---|---|
-| 1 | [Desempenho e operação](01-desempenho-e-operacao.md) | infraestrutura | — | **Implementada em 2026-10-05.** Views idênticas nas 7.174 linhas reais e de 25 s para milissegundos; `VACUUM` ainda pendente | XS–S |
+| 1 | [Desempenho e operação](01-desempenho-e-operacao.md) | infraestrutura | — | **Implementada em 2026-10-05, PR #29.** Views idênticas nas 7.174 linhas reais e de 25 s para milissegundos; `VACUUM` ainda pendente | XS–S |
 | 2 | [Avaliação contínua](02-avaliacao.md) | transversal | 1 | Conjunto v0 gerado ([28 perguntas](avaliacao/golden_v0.json)); falta o executor | S |
 | 3 | [MCP, skill e contexto](03-mcp-skill-e-contexto.md) | interface com o LLM | 1, 2 | Parcial: a saída tabular corta 43–46% dos caracteres; o resto só se mede com a Etapa 2 | S–M |
 | 4 | [Texto e busca (RAG)](04-texto-e-busca.md) | documentos | 2 | **Aprovada com ajuste**: deduplicação vira requisito (19,7% dos chunks são repetidos) | M |

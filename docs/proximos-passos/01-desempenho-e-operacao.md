@@ -1,6 +1,6 @@
 # Etapa 1: Desempenho e operação
 
-**Implementada em 2026-10-05** (branch `etapa-1-desempenho`). Ver "Implementação" no fim.
+**Implementada em 2026-10-05**, [PR #29](https://github.com/lbarretos/cvm-research/pull/29). Ver "Implementação" no fim.
 
 ## Avaliação atual
 

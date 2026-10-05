@@ -1,11 +1,11 @@
-"""Stress test da Etapa 2: limpeza + chunks + FTS por trecho, contra o FTS por documento de hoje.
+"""Stress test da Etapa 4: limpeza + chunks + FTS por trecho, contra o FTS por documento de hoje.
 
 Copia uma amostra da camada "quente" (FR, CM, AVI, Assembleia, RCA e press-release de um ano)
 para um banco de rascunho e roda um teste de recuperação de item conhecido (known-item):
 sorteia uma frase de um documento, monta a consulta com 4 termos dela e mede se o documento
 volta no topo e quantos caracteres o LLM teria que ler para chegar ao trecho.
 
-    python st2_chunks_fts.py /caminho/cvm_research.db /caminho/rascunho.db [ano]
+    python st4_chunks_fts.py /caminho/cvm_research.db /caminho/rascunho.db [ano]
 """
 import random
 import re

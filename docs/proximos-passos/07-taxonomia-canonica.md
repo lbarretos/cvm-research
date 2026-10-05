@@ -1,4 +1,4 @@
-# Etapa 6: Taxonomia canônica entre empresas (camada L2)
+# Etapa 7: Taxonomia canônica entre empresas (camada L2)
 
 ## Avaliação atual
 
@@ -20,7 +20,7 @@ próprias.
 ## Proposta
 
 1. **Conceitos.** São 80–120, organizados em árvore e ancorados nos pais `S`. Os primeiros 30: DRE e
-   balanço resumido (vêm direto de contas `S` pelo `plano_cvm` da Etapa 4) mais os 11 da DFC testados abaixo.
+   balanço resumido (vêm direto de contas `S` pelo `plano_cvm` da Etapa 5) mais os 11 da DFC testados abaixo.
 2. **Classificação das contas N em três passos:**
    - (a) **regras** (regex sobre o nome normalizado + prefixo do pai + exclusões + sinal esperado);
    - (b) **modelo supervisionado** (TF-IDF de n-gramas de caracteres + pai + sinal, regressão logística)
@@ -28,7 +28,7 @@ próprias.
    - (c) **revisão humana** das discordâncias entre (a) e (b), com prioridade para confiança alta e
      materialidade alta.
 
-   A decisão é gravada por **linha econômica** (Etapa 5), não por filing.
+   A decisão é gravada por **linha econômica** (Etapa 6), não por filing.
 3. **Publicação só com checagem.** Tabela `fato_padronizado(cnpj, fonte, periodo, safra, conceito, valor,
    n_linhas, metodo ('S'|'regra'|'modelo'|'humano'), confianca, checagem)`. Um conceito só é publicado
    se passar pelas identidades:
@@ -47,7 +47,7 @@ próprias.
 
 ## Stress test
 
-Script: [`stress/st5_taxonomia.py`](stress/st5_taxonomia.py). São 1.755 DFPs do plano padrão, com 80.009
+Script: [`stress/st7_taxonomia.py`](stress/st7_taxonomia.py). São 1.755 DFPs do plano padrão, com 80.009
 linhas N da DFC.
 
 **(a–c) Cobertura, dupla contagem e sinal, por conceito:**
@@ -109,7 +109,7 @@ As discordâncias apontam erros nos dois sentidos:
 | **Erro do modelo** (herdado da regra) | "[6.01.01.04] juros" → juros_pagos: é provisão, e o modelo aprendeu o erro da regra de juros |
 
 **(g) Estabilidade da série**: um conceito presente em Y−1 e Y+1 mas ausente em Y aparece em 28 de 10.403
-casos (0,3%). Isso confirma que agregar por conceito resolve a fragmentação que a Etapa 5 mediu na DFC.
+casos (0,3%). Isso confirma que agregar por conceito resolve a fragmentação que a Etapa 6 mediu na DFC.
 
 **Veredito: viável, com três correções antes de publicar:**
 1. Corrigir a regra de juros pagos pelo pai (só fluxo de caixa, não o ajuste de `6.01.01`).

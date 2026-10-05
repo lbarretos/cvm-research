@@ -1,10 +1,10 @@
-# Etapa 7: Avaliação contínua
+# Etapa 2: Avaliação contínua
 
 ## Avaliação atual
 
 Não existe medida de qualidade das respostas do LLM. A suíte `pytest` valida o banco e as camadas, mas não
 se o Claude, pela skill e pelo MCP, chega ao número certo, com quantas chamadas e com quantos tokens.
-Sem essa medida, não há como provar que as etapas 1–3 e 6 melhoraram alguma coisa.
+Sem essa medida, não há como provar que as etapas 1, 3, 4 e 7 melhoraram alguma coisa.
 
 ## Proposta
 
@@ -24,7 +24,7 @@ Sem essa medida, não há como provar que as etapas 1–3 e 6 melhoraram alguma 
 
 ## O que já existe
 
-Script: [`stress/st6_golden.py`](stress/st6_golden.py), que gera [`avaliacao/golden_v0.json`](avaliacao/golden_v0.json)
+Script: [`stress/st2_golden.py`](stress/st2_golden.py), que gera [`avaliacao/golden_v0.json`](avaliacao/golden_v0.json)
 com 28 perguntas:
 
 | Tipo | n | Armadilha testada |
@@ -52,9 +52,9 @@ O conjunto foi conferido antes de servir de régua:
   seguradoras e exercício fora do calendário; entram na v1.
 
 **Veredito:** o conjunto v0 está pronto como linha de base. **O executor ainda não existe** e é o
-próximo passo desta etapa, antes das etapas 2 e 3.
+próximo passo desta etapa, antes das etapas 3 e 4.
 
 ## Critério de pronto
 
 - Executor rodando o v0 em menos de 30 minutos e gravando um relatório comparável entre execuções.
-- Linha de base registrada **antes** de qualquer mudança das etapas 1–3.
+- Linha de base registrada **antes** de qualquer mudança das etapas 3 e 4 (a Etapa 1 só muda a velocidade: o stress test provou que o resultado das views é idêntico).

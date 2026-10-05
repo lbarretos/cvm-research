@@ -7,6 +7,7 @@ reapresentados (ver CLAUDE.md, "A CVM não arquiva versões anteriores").
     python st6_golden.py /caminho/cvm_research.db docs/proximos-passos/avaliacao/golden_v0.json
 """
 import json
+import os
 import random
 import sqlite3
 import sys
@@ -102,7 +103,7 @@ add("sem_dado", "Qual foi o fato relevante mais recente da PETR4 publicado ontem
     "resposta correta: informar a data do último dado na base (MAX(data_entrega)) e apontar o RAD", 
     "SELECT MAX(data_entrega) FROM ipe_docs", "defasagem semanal do IPE: ausência de dado não é ausência de evento")
 
-json.dump({"gerado_em": date.today().isoformat(), "banco": sys.argv[1], "n": len(out), "perguntas": out},
+json.dump({"gerado_em": date.today().isoformat(), "banco": os.path.relpath(sys.argv[1]), "n": len(out), "perguntas": out},
           open(sys.argv[2], "w"), ensure_ascii=False, indent=1)
 print(f"{len(out)} perguntas → {sys.argv[2]}")
 from collections import Counter

@@ -2,6 +2,9 @@
 
 Backlog do projeto. O que já foi feito está no `git log` e na seção "Histórico" do README.
 
+**Roadmap atual:** [`docs/proximos-passos/README.md`](docs/proximos-passos/README.md), com as etapas de leitura
+por LLM e padronização dos demonstrativos. Cada etapa tem avaliação, proposta, stress test e critério de pronto.
+
 ## Dados
 
 - [ ] **PDFs com falha de extração** — 5.586 docs em `ipe_docs` com `extracao_falhou=1` (a maioria digitalizados sem camada de texto). Avaliar OCR (`ocrmypdf`/`tesseract`) para os prioritários (Fato Relevante, Assembleia) ou aceitar o gap. `EXTRACT_LIMIT=2000 RETRY_FAILED=1 bash scripts/update_weekly.sh` re-tenta os transitórios.

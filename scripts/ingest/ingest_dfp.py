@@ -17,6 +17,7 @@ from datetime import date
 
 import pandas as pd
 
+from filings import rebuild_filings
 from utils import SCALE, _date, _int, download_year, get_db, upsert, vl_escalado, watchlist_cnpjs
 
 FONTE = "DFP"
@@ -127,6 +128,9 @@ def main():
                     print(f"  demonstrativos_contabeis [{tipo}]: 0 rows (watchlist sem dados)")
             except Exception as e:
                 print(f"  ERRO {tipo}: {e}")
+
+    # as views de DRE/balanço leem a versão vigente e o plano de contas de `filings`
+    print(f"\nfilings: {rebuild_filings(conn)} linhas")
 
 
 if __name__ == "__main__":

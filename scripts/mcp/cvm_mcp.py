@@ -23,7 +23,7 @@ Banco: por padrão <raiz do projeto>/cvm_research.db. Sobrescreva com CVM_DB_PAT
 
 Ferramentas:
     query(sql)            → SELECT ad-hoc (somente leitura, limite de linhas)
-    list_tables()         → tabelas e views do banco
+    list_tables()         → tabelas (com contagem de linhas) e views
     describe_table(name)  → colunas e tipos de uma tabela/view
 """
 
@@ -77,6 +77,13 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
+def _com_prazo(conn: sqlite3.Connection) -> float:
+    """Aborta qualquer statement da conexão depois de QUERY_TIMEOUT_S; devolve o instante-limite."""
+    prazo = time.monotonic() + QUERY_TIMEOUT_S
+    conn.set_progress_handler(lambda: time.monotonic() > prazo, 10_000)
+    return prazo
+
+
 def _cortar(v):
     if isinstance(v, str) and len(v) > MAX_CELL_CHARS:
         return (v[:MAX_CELL_CHARS]
@@ -121,8 +128,7 @@ def query(sql: str) -> list[dict]:
         raise ValueError("Apenas SELECT (ou WITH ... SELECT) é permitido.")
     conn = get_db()
     conn.set_authorizer(_authorizer)
-    prazo = time.monotonic() + QUERY_TIMEOUT_S
-    conn.set_progress_handler(lambda: time.monotonic() > prazo, 10_000)
+    prazo = _com_prazo(conn)
     try:
         try:
             cur = conn.execute(s)
@@ -146,9 +152,11 @@ def query(sql: str) -> list[dict]:
 
 @mcp.tool()
 def list_tables() -> list[dict]:
-    """Lista tabelas e views do banco com a contagem de linhas."""
+    """Lista tabelas e views do banco. `rows` é a contagem de linhas das tabelas; nas views vem null
+    (contar uma view executa a consulta inteira, o que levava minutos)."""
     conn = get_db()
     try:
+        _com_prazo(conn)
         names = conn.execute(
             "SELECT name, type FROM sqlite_master "
             "WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' "
@@ -156,10 +164,12 @@ def list_tables() -> list[dict]:
         ).fetchall()
         out = []
         for name, typ in names:
-            try:
-                n = conn.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
-            except sqlite3.Error:
-                n = None
+            n = None
+            if typ == "table":
+                try:
+                    n = conn.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0]
+                except sqlite3.Error:   # inclui o prazo estourado: a tabela fica sem contagem
+                    pass
             out.append({"name": name, "type": typ, "rows": n})
         return out
     finally:
@@ -173,6 +183,7 @@ def describe_table(table: str) -> list[dict]:
         raise ValueError("Nome de tabela inválido.")
     conn = get_db()
     try:
+        _com_prazo(conn)
         cols = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
         if not cols:
             raise ValueError(f"Tabela '{table}' não existe.")

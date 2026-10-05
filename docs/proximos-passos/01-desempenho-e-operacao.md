@@ -71,9 +71,9 @@ independentes e vale fazer as duas.
 `filings(fonte, data_referencia)`.
 
 **Não testado:** 1.3 (exige o banco vivo sem o leitor pendurado), 1.4 e 1.5. São mudanças pequenas, e o
-efeito delas se mede com a Etapa 7.
+efeito delas se mede com a Etapa 2.
 
 ## Critério de pronto
 
 - `pytest` verde, incluindo um teste novo de equivalência entre as views antigas e as novas numa fixture.
-- Na Etapa 7, nenhuma consulta de demonstrativo acima de 1 s. WAL abaixo de 100 MB depois do job semanal.
+- Na Etapa 2, nenhuma consulta de demonstrativo acima de 1 s. WAL abaixo de 100 MB depois do job semanal.

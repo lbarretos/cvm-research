@@ -1,4 +1,4 @@
-# Etapa 4: Versões do template da CVM (camada L0 dos demonstrativos)
+# Etapa 5: Versões do template da CVM (camada L0 dos demonstrativos)
 
 ## Avaliação atual
 
@@ -37,15 +37,15 @@ Onde isso pesa:
 
 | # | Ação |
 |---|---|
-| 4.1 | Tabela `plano_cvm(plano, tipo_doc, versao_template, cd_conta, ds_conta_norm, conceito_id)`, com uma linha por conta `S` de cada versão |
-| 4.2 | `filings.versao_template` (a coluna nova da Etapa 1), detectada **filing a filing** pela impressão digital das contas `S` e nunca pela data |
-| 4.3 | Crosswalk `plano_cvm_de_para(versao_a, cd_a, versao_b, cd_b)`, escrito à mão (são 18 códigos no plano padrão) |
-| 4.4 | Camada 5: considerar o código `S` confiável **só quando a `versao_template` dos dois filings é a mesma**; entre versões, usar o crosswalk |
-| 4.5 | Camadas 2 e 3: comparar pares de versões diferentes pelo crosswalk, não pelo código literal. Depois, rodar de novo as Camadas 2, 3 e 5 com `--full` |
+| 5.1 | Tabela `plano_cvm(plano, tipo_doc, versao_template, cd_conta, ds_conta_norm, conceito_id)`, com uma linha por conta `S` de cada versão |
+| 5.2 | `filings.versao_template` (a coluna nova da Etapa 1), detectada **filing a filing** pela impressão digital das contas `S` e nunca pela data |
+| 5.3 | Crosswalk `plano_cvm_de_para(versao_a, cd_a, versao_b, cd_b)`, escrito à mão (são 18 códigos no plano padrão) |
+| 5.4 | Camada 5: considerar o código `S` confiável **só quando a `versao_template` dos dois filings é a mesma**; entre versões, usar o crosswalk |
+| 5.5 | Camadas 2 e 3: comparar pares de versões diferentes pelo crosswalk, não pelo código literal. Depois, rodar de novo as Camadas 2, 3 e 5 com `--full` |
 
 ## Stress test
 
-Script: [`stress/st3_template_versao.py`](stress/st3_template_versao.py). Agrupa os filings por impressão
+Script: [`stress/st5_template_versao.py`](stress/st5_template_versao.py). Agrupa os filings por impressão
 digital das contas `S`: dois filings ficam na mesma versão se nenhum código tem nome diferente entre eles.
 Depois verifica monotonicidade, ambiguidade e o que a Camada 5 gravou.
 
@@ -70,7 +70,7 @@ Depois verifica monotonicidade, ambiguidade e o que a Camada 5 gravou.
 Verificação manual: 50 empresas migram no ITR de 2T18, **voltam ao layout antigo no ITR de 1T19** e
 migram de novo no 2T ou 3T19. Exemplo: `00.864.214/0001-06`, com antigo até 1T18, novo em 2T18–3T18,
 antigo em 1T19–2T19 e novo desde 3T19. Por isso **uma regra por data erraria**, e a detecção precisa ser
-filing a filing (4.2).
+filing a filing (5.2).
 
 **3) Ambiguidade**: filings compatíveis com mais de uma versão porque omitem justamente as contas que as
 distinguem.
@@ -86,7 +86,7 @@ consecutivos, **5.585 ficaram como `estavel`** (não gravados) e 8 como `nova`.
 
 **Veredito: aprovada com ajustes.**
 - No plano padrão e nas seguradoras, a impressão digital funciona: poucas versões, sem ambiguidade.
-- A versão tem de ser detectada por filing (4.2). A data não serve (item 2).
+- A versão tem de ser detectada por filing (5.2). A data não serve (item 2).
 - **Nos bancos, a impressão digital estrita falha** (19 "versões" de DRE e 42% dos filings ambíguos):
   os bancos renomeiam contas `S` à vontade. Para eles, a versão sai de poucas **contas-âncora** com voto
   da maioria (por exemplo, o nome de `3.01.02` e `1.02`, que marcam as re-letragens de 2017, 2018 e 2020).

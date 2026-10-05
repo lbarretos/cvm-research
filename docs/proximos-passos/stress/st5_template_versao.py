@@ -1,10 +1,10 @@
-"""Stress test da Etapa 3: detectar a versão do template da CVM de cada filing pela
+"""Stress test da Etapa 5: detectar a versão do template da CVM de cada filing pela
 "impressão digital" das contas fixas (st_conta_fixa='S').
 
 Hipótese a testar: (1) poucas impressões digitais explicam todos os filings; (2) cada empresa
 migra uma vez e não volta; (3) a Camada 5 hoje classifica essas trocas como 'estavel'.
 
-    python st3_template_versao.py /caminho/cvm_research.db
+    python st5_template_versao.py /caminho/cvm_research.db
 """
 import sqlite3
 import sys

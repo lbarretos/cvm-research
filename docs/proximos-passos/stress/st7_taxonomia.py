@@ -1,4 +1,4 @@
-"""Stress test da Etapa 5: conceitos canônicos da DFC por regras + modelo supervisionado.
+"""Stress test da Etapa 7: conceitos canônicos da DFC por regras + modelo supervisionado.
 
 Testes: (a) cobertura; (b) dupla contagem (linha em 2 conceitos); (c) sinal esperado;
 (d) conceito maior que o pai; (e) gabarito externo D&A × DVA 7.04.01 com diagnóstico das falhas;
@@ -7,7 +7,7 @@ que as regras perderam; (g) quebras de série (conceito some e volta).
 
 Requer scikit-learn (não está na .venv do projeto):
     python -m venv /tmp/v && /tmp/v/bin/pip install -r requirements.txt scikit-learn
-    /tmp/v/bin/python st5_taxonomia.py /caminho/cvm_research.db
+    /tmp/v/bin/python st7_taxonomia.py /caminho/cvm_research.db
 Rodar da raiz do projeto (importa scripts/analysis/consistency_utils).
 """
 import re

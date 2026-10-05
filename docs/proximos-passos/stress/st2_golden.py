@@ -1,10 +1,10 @@
-"""Etapa 6: gera o conjunto de avaliação v0 (perguntas com resposta conhecida) a partir do banco.
+"""Etapa 2: gera o conjunto de avaliação v0 (perguntas com resposta conhecida) a partir do banco.
 
 Cada pergunta traz a resposta, a consulta que a produz e a armadilha que ela testa. A resposta
 é o que o banco diz na data da geração: regenerar depois de uma recarga pode mudar números
 reapresentados (ver CLAUDE.md, "A CVM não arquiva versões anteriores").
 
-    python st6_golden.py /caminho/cvm_research.db docs/proximos-passos/avaliacao/golden_v0.json
+    python st2_golden.py /caminho/cvm_research.db docs/proximos-passos/avaliacao/golden_v0.json
 """
 import json
 import os

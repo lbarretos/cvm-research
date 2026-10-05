@@ -26,9 +26,9 @@ Numa sessão de pesquisa a informação vem em dobro; numa sessão de desenvolvi
 | # | Ferramenta nova | Faz | Devolve |
 |---|---|---|---|
 | 3.1 | `resolve_company(texto)` | ticker, nome parcial ou CNPJ → empresa; avisa quando não está na base | até 5 candidatos |
-| 3.2 | `search_docs(consulta, ticker?, categorias?, desde?, ate?, k=10)` | busca por trecho (Etapa 2), já deduplicada e só nas versões mais recentes | trecho + protocolo + data + categoria + link |
+| 3.2 | `search_docs(consulta, ticker?, categorias?, desde?, ate?, k=10)` | busca por trecho (Etapa 4), já deduplicada e só nas versões mais recentes | trecho + protocolo + data + categoria + link |
 | 3.3 | `read_doc(protocolo, chunk?, max_chars=20000)` | lê em volta de um trecho ou por offset | texto + posição |
-| 3.4 | `get_financials(ticker, conceitos, fonte, periodos, safra='original')` | lê `fato_padronizado` (Etapa 6), escolhe a view pelo plano de contas e mostra origem e flags | tabela período × conceito |
+| 3.4 | `get_financials(ticker, conceitos, fonte, periodos, safra='original')` | lê `fato_padronizado` (Etapa 7), escolhe a view pelo plano de contas e mostra origem e flags | tabela período × conceito |
 | 3.5 | `query(sql)` continua | para o que as ferramentas não cobrem | igual |
 
 Regras transversais:
@@ -39,6 +39,13 @@ Regras transversais:
   ao desenvolvimento (arquitetura, camadas, manutenção). A skill passa a apontar primeiro para as
   ferramentas 3.1–3.4 e só depois para o SQL livre.
 
+**O que entra agora e o que fica para depois.** Nesta etapa entram a 3.1, a 3.5 e as regras
+transversais, que não dependem de nada novo. As outras ficam para quando a base delas existir:
+- `search_docs` e `read_doc` (3.2 e 3.3) ao fim da Etapa 4, que cria os trechos;
+- `get_financials` (3.4) ao fim da Etapa 7, que cria `fato_padronizado`.
+
+Cada uma delas é medida contra a Etapa 2 quando entrar.
+
 ## Stress test
 
 Não há protótipo destas ferramentas ainda. O que foi medido:
@@ -47,11 +54,11 @@ Não há protótipo destas ferramentas ainda. O que foi medido:
 |---|---|
 | Saída em dicts vs. tabular (JSON) | `vw_dre` da WEGE3, 8 linhas × 13 colunas: 3.131 → 1.679 chars (**−46%**). DFC do DFP em `demonstrativos_contabeis`, 500 linhas × 5 colunas: 78.640 → 44.733 chars (**−43%**) |
 | `CLAUDE.md` → skill | ~10 mil tokens a menos por sessão neste diretório (medido pelo tamanho do arquivo) |
-| `get_financials` | Depende da Etapa 6; as views da Etapa 1 já respondem em 3 ms, então a latência não é problema |
-| `search_docs` | Os números são os da Etapa 2 (1.937 chars lidos contra 146.970) |
+| `get_financials` | Depende da Etapa 7; as views da Etapa 1 já respondem em 3 ms, então a latência não é problema |
+| `search_docs` | Os números são os da Etapa 4 (1.937 chars lidos contra 146.970) |
 
-**Veredito: só o formato de saída foi testado (−43% a −46% de caracteres, com o mesmo conteúdo).** O ganho real só aparece na Etapa 7, comparando a mesma bateria de
-perguntas antes e depois (acerto, chamadas por pergunta, tokens e SQL com erro). É por isso que a Etapa 7
+**Veredito: só o formato de saída foi testado (−43% a −46% de caracteres, com o mesmo conteúdo).** O ganho real só aparece na Etapa 2, comparando a mesma bateria de
+perguntas antes e depois (acerto, chamadas por pergunta, tokens e SQL com erro). É por isso que a Etapa 2
 roda **antes** desta.
 
 **Riscos a observar:**
@@ -61,4 +68,4 @@ roda **antes** desta.
 
 ## Critério de pronto
 
-- Na Etapa 7: acerto igual ou maior, 30% menos tokens por pergunta e zero consultas abortadas por timeout.
+- Na Etapa 2: acerto igual ou maior, 30% menos tokens por pergunta e zero consultas abortadas por timeout.

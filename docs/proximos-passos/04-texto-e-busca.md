@@ -1,4 +1,4 @@
-# Etapa 2: Texto e busca (RAG)
+# Etapa 4: Texto e busca (RAG)
 
 ## Avaliação atual
 
@@ -38,18 +38,18 @@ documentos têm menos de 10 mil caracteres, mas respondem por só 6% do volume. 
 
 | # | Ação |
 |---|---|
-| 2.1 | Separar o texto: `ipe_texto(protocolo_entrega PK, texto)`. `ipe_docs` fica com os metadados (~100 MB) |
-| 2.2 | Limpeza antes de dividir em trechos: juntar a hifenização (`(\w)-\n(\w)`), remover linhas curtas que se repetem 3+ vezes no documento (cabeçalho e rodapé) e colapsar espaços |
-| 2.3 | **Deduplicação** (entrou por causa do stress test): `hash` do trecho normalizado. Trecho repetido de outro documento da mesma empresa é gravado uma vez, com a lista de protocolos em que aparece |
-| 2.4 | `ipe_chunks(chunk_id, protocolo, ordem, texto)` com ~2 mil caracteres, corte em parágrafo e sobreposição de 200. Metadados desnormalizados (cnpj, ticker, categoria, tipo, espécie, data_entrega, `is_latest`). FTS5 sobre os trechos, com os metadados como colunas `UNINDEXED` |
-| 2.5 | Curadoria em camadas. **Quente**: FR, CM, AVI, RCA, Assembleia (ata, proposta, sumário, edital) e press-release. **Fria**: DFs completas, relatórios de agente fiduciário, escrituras e prospectos (FTS, sem embedding). **Fora do índice**: VLMO em PDF e DFs em inglês |
-| 2.6 | Busca híbrida só na camada quente: embeddings em `sqlite-vec`, fundidos ao BM25 por RRF (reciprocal rank fusion) |
-| 2.7 | `is_latest_version`/`substituido_por` em `ipe_docs`. A busca devolve a versão mais recente por padrão |
+| 4.1 | Separar o texto: `ipe_texto(protocolo_entrega PK, texto)`. `ipe_docs` fica com os metadados (~100 MB) |
+| 4.2 | Limpeza antes de dividir em trechos: juntar a hifenização (`(\w)-\n(\w)`), remover linhas curtas que se repetem 3+ vezes no documento (cabeçalho e rodapé) e colapsar espaços |
+| 4.3 | **Deduplicação** (entrou por causa do stress test): `hash` do trecho normalizado. Trecho repetido de outro documento da mesma empresa é gravado uma vez, com a lista de protocolos em que aparece |
+| 4.4 | `ipe_chunks(chunk_id, protocolo, ordem, texto)` com ~2 mil caracteres, corte em parágrafo e sobreposição de 200. Metadados desnormalizados (cnpj, ticker, categoria, tipo, espécie, data_entrega, `is_latest`). FTS5 sobre os trechos, com os metadados como colunas `UNINDEXED` |
+| 4.5 | Curadoria em camadas. **Quente**: FR, CM, AVI, RCA, Assembleia (ata, proposta, sumário, edital) e press-release. **Fria**: DFs completas, relatórios de agente fiduciário, escrituras e prospectos (FTS, sem embedding). **Fora do índice**: VLMO em PDF e DFs em inglês |
+| 4.6 | Busca híbrida só na camada quente: embeddings em `sqlite-vec`, fundidos ao BM25 por RRF (reciprocal rank fusion) |
+| 4.7 | `is_latest_version`/`substituido_por` em `ipe_docs`. A busca devolve a versão mais recente por padrão |
 
 ## Stress test
 
-Script: [`stress/st2_chunks_fts.py`](stress/st2_chunks_fts.py). Copia a camada quente de 2025 (10.101
-documentos, 310 mi de caracteres) para um banco de rascunho, aplica 2.2 e 2.4 e compara o FTS por
+Script: [`stress/st4_chunks_fts.py`](stress/st4_chunks_fts.py). Copia a camada quente de 2025 (10.101
+documentos, 310 mi de caracteres) para um banco de rascunho, aplica 4.2 e 4.4 e compara o FTS por
 documento (hoje) com o FTS por trecho.
 
 **Teste de item conhecido.** Para 391 trechos sorteados, a consulta tem 4 termos raros do próprio trecho,
@@ -75,8 +75,8 @@ sem filtro de empresa. O teste mede se o documento de origem volta e quanto o LL
 | Empresas diferentes (texto-padrão) | 299 |
 
 Parte do hit@1 de 57% não é erro: é empate com a cópia do mesmo texto em outro documento da mesma
-empresa. Sem a deduplicação (2.3), os 10 resultados de uma busca trariam o mesmo parágrafo várias vezes e
-gastariam o orçamento de contexto do LLM. Por isso a 2.3 passou a ser requisito.
+empresa. Sem a deduplicação (4.3), os 10 resultados de uma busca trariam o mesmo parágrafo várias vezes e
+gastariam o orçamento de contexto do LLM. Por isso a 4.3 passou a ser requisito.
 
 **Hifenização:** nas 60 palavras que mais quebram no fim da linha, juntar as partes acrescentou 988
 documentos encontrados (+1,0%). O ganho é real, mas pequeno. Fica na etapa por ser barato, não por ser
@@ -91,13 +91,13 @@ moderado; o ganho grande está no custo, que cai 76× em caracteres lidos por re
 
 **Limites do teste:**
 - É sintético, com consultas tiradas do próprio texto; não mede perguntas conceituais, que são justamente o
-  alvo dos embeddings (2.6).
+  alvo dos embeddings (4.6).
 - As consultas vêm do texto limpo, o que favorece um pouco os trechos (o efeito da hifenização é de ~1%).
 - A busca semântica não foi prototipada.
 
 ## Critério de pronto
 
-- Na Etapa 7, as perguntas do tipo "documento" são respondidas com menos de 10 mil chars de texto
+- Na Etapa 2, as perguntas do tipo "documento" são respondidas com menos de 10 mil chars de texto
   lido por pergunta.
 - Nenhum resultado repete um trecho idêntico dentro do top-10.
 - Busca por trecho com p95 abaixo de 50 ms na base inteira.

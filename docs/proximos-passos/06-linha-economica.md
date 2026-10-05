@@ -1,4 +1,4 @@
-# Etapa 5: Linha econômica por empresa (camada L1)
+# Etapa 6: Linha econômica por empresa (camada L1)
 
 ## Avaliação atual
 
@@ -28,14 +28,14 @@ na DFC erra em metade dos casos.
 
 | # | Ação |
 |---|---|
-| 5.1 | Tabela `linha_empresa(cnpj, tipo_doc, linha_id, fonte, data_referencia, cd_conta, casamento, score)`, gravada pelo tratamento com o mesmo `encadear` do visualizador. Isso inclui reatar pelo par (código, nome) depois de buraco na série, e **não** encadear par `ambiguo` |
-| 5.2 | `linha_id` estável entre execuções (hash de cnpj + tipo_doc + primeira aparição), para as decisões humanas da fila `par_ambiguo` ficarem presas a ele |
-| 5.3 | Tabela de decisões `linha_decisao(cnpj, tipo_doc, cd_a, data_a, cd_b, data_b, decisao, autor, em)`, lida pelo encadeamento. Resolve o item do `TODOS.md` sobre a fila `par_ambiguo` |
-| 5.4 | O visualizador passa a ler `linha_empresa` em vez de calcular |
+| 6.1 | Tabela `linha_empresa(cnpj, tipo_doc, linha_id, fonte, data_referencia, cd_conta, casamento, score)`, gravada pelo tratamento com o mesmo `encadear` do visualizador. Isso inclui reatar pelo par (código, nome) depois de buraco na série, e **não** encadear par `ambiguo` |
+| 6.2 | `linha_id` estável entre execuções (hash de cnpj + tipo_doc + primeira aparição), para as decisões humanas da fila `par_ambiguo` ficarem presas a ele |
+| 6.3 | Tabela de decisões `linha_decisao(cnpj, tipo_doc, cd_a, data_a, cd_b, data_b, decisao, autor, em)`, lida pelo encadeamento. Resolve o item do `TODOS.md` sobre a fila `par_ambiguo` |
+| 6.4 | O visualizador passa a ler `linha_empresa` em vez de calcular |
 
 ## Stress test
 
-Script: [`stress/st4_linha_economica.py`](stress/st4_linha_economica.py). Roda o `match_filings` na base
+Script: [`stress/st6_linha_economica.py`](stress/st6_linha_economica.py). Roda o `match_filings` na base
 inteira (plano padrão, 140 empresas) para três tipos de par: ITR 3T → DFP, DFP(Y−1) → DFP(Y) e a sequência
 completa ITR/DFP de cada empresa. Nesse último caso também conta quantas linhas econômicas cada empresa
 acumula.
@@ -74,9 +74,9 @@ esforço.
 - Em DRE e BPP a fragmentação é baixa (~2): a linha econômica resolve quase tudo.
 
 **Veredito: aprovada para DRE, BPA e BPP; insuficiente sozinha na DFC.** Na DFC, a série comparável no
-tempo e entre empresas vem do **conceito** (Etapa 6), que agrega várias linhas econômicas ("Captação BNDES",
+tempo e entre empresas vem do **conceito** (Etapa 7), que agrega várias linhas econômicas ("Captação BNDES",
 "Captação debêntures 5ª emissão" → `capt_divida`). A L1 continua útil na DFC como trilha de auditoria (qual
-linha virou qual) e como unidade de rotulagem da Etapa 6: rotular uma linha econômica rotula todos os
+linha virou qual) e como unidade de rotulagem da Etapa 7: rotular uma linha econômica rotula todos os
 filings dela.
 
 **Ajuste que o teste sugeriu:** reatar linhas também pelo nome normalizado com o mesmo pai (não só pelo

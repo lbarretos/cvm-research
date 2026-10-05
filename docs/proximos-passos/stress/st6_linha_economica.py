@@ -1,11 +1,11 @@
-"""Stress test da Etapa 4: persistir a linha econômica (encadeamento por empresa) com o
+"""Stress test da Etapa 6: persistir a linha econômica (encadeamento por empresa) com o
 match_filings que a Camada 6 e o visualizador já usam.
 
 Mede, para DFC (o pior caso) e DRE/BPP: quanto das linhas N casa entre filings, com que
 classe, quanto cai em 'ambiguo', quantas linhas econômicas uma empresa acumula no histórico
 (explosão de IDs = casamento falhando) e quanto custa rodar a base inteira.
 
-    python st4_linha_economica.py /caminho/cvm_research.db
+    python st6_linha_economica.py /caminho/cvm_research.db
 """
 import sqlite3
 import sys

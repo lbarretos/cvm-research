@@ -8,6 +8,11 @@ Montar do zero: `bash bootstrap.sh --universo ibov`. Manter: `bash scripts/updat
 ou job launchd toda segunda 9h, com recuperação no login e a cada 4 h se a segunda foi perdida
 (`scripts/install_weekly_launchd.sh`).
 
+**Roadmap de desenvolvimento:** `docs/proximos-passos/README.md`. São sete etapas numeradas na ordem de
+execução (desempenho → avaliação → MCP → texto/RAG → template CVM → linha econômica → taxonomia), cada uma
+com avaliação, proposta, stress test e critério de pronto. Ao trabalhar numa etapa, leia o arquivo dela e
+atualize o veredito no README ao terminar.
+
 ## Montar a base do zero (quando o banco está vazio ou é um clone novo)
 
 Quando o usuário pedir para **montar, construir, replicar ou recriar a base**, ou quando uma

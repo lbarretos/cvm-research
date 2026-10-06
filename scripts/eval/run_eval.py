@@ -55,7 +55,7 @@ def claude(prompt: str, mcp: str | None, modelo: str | None, timeout: int) -> li
            "--no-session-persistence", "--permission-mode", "dontAsk"]
     if mcp:
         cmd += ["--strict-mcp-config", "--mcp-config", mcp,
-                "--allowedTools", "mcp__cvm-research__query", "mcp__cvm-research__list_tables",
+                "--allowedTools", "mcp__cvm-research__query", "mcp__cvm-research__list_tables", "mcp__cvm-research__resolve_company",
                 "mcp__cvm-research__describe_table"]
     else:
         cmd += ["--tools", ""]

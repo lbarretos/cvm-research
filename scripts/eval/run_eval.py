@@ -17,7 +17,9 @@ O relatório vai para docs/proximos-passos/avaliacao/runs/<data>_<rotulo>.json.
 """
 import argparse
 import json
+import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -55,16 +57,23 @@ def claude(prompt: str, mcp: str | None, modelo: str | None, timeout: int) -> li
            "--no-session-persistence", "--permission-mode", "dontAsk"]
     if mcp:
         cmd += ["--strict-mcp-config", "--mcp-config", mcp,
-                "--allowedTools", "mcp__cvm-research__query", "mcp__cvm-research__list_tables", "mcp__cvm-research__resolve_company",
+                "--allowedTools", "mcp__cvm-research__query", "mcp__cvm-research__list_tables", "mcp__cvm-research__resolve_company", "mcp__cvm-research__search_docs", "mcp__cvm-research__read_doc",
                 "mcp__cvm-research__describe_table"]
     else:
         cmd += ["--tools", ""]
     if modelo:
         cmd += ["--model", modelo]
-    p = subprocess.run(cmd, cwd=RAIZ if mcp else tempfile.gettempdir(), capture_output=True,
-                       text=True, timeout=timeout)
+    # grupo de processos próprio: no timeout, mata também o servidor MCP filho, que senão segura o pipe
+    p = subprocess.Popen(cmd, cwd=RAIZ if mcp else tempfile.gettempdir(), stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, text=True, start_new_session=True)
+    try:
+        saida, _ = p.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        raise
     eventos = []
-    for linha in p.stdout.splitlines():
+    for linha in saida.splitlines():
         try:
             eventos.append(json.loads(linha))
         except json.JSONDecodeError:
@@ -73,7 +82,7 @@ def claude(prompt: str, mcp: str | None, modelo: str | None, timeout: int) -> li
 
 
 def resumir(eventos: list[dict]) -> dict:
-    chamadas, erros_sql, abortadas, resposta = 0, 0, 0, ""
+    chamadas, erros_sql, abortadas, resposta, chars_res = 0, 0, 0, "", 0
     r = {}
     for e in eventos:
         msg = e.get("message") or {}
@@ -81,6 +90,8 @@ def resumir(eventos: list[dict]) -> dict:
         for c in conteudo:
             if e.get("type") == "assistant" and c.get("type") == "tool_use":
                 chamadas += 1
+            if e.get("type") == "user" and c.get("type") == "tool_result":
+                chars_res += len(json.dumps(c.get("content"), ensure_ascii=False))
             if e.get("type") == "user" and c.get("type") == "tool_result" and c.get("is_error"):
                 txt = json.dumps(c.get("content"), ensure_ascii=False).lower()
                 erros_sql += 1
@@ -95,6 +106,7 @@ def resumir(eventos: list[dict]) -> dict:
         "chamadas_ferramenta": chamadas,
         "erros_ferramenta": erros_sql,
         "consultas_abortadas": abortadas,
+        "chars_resultados": chars_res,
         "turnos": r.get("num_turns"),
         "tokens_entrada": (u.get("input_tokens") or 0) + (u.get("cache_read_input_tokens") or 0)
                           + (u.get("cache_creation_input_tokens") or 0),
@@ -187,6 +199,7 @@ def relatorio(resultados: list[dict]) -> dict:
                 "tokens_por_pergunta": round((soma("tokens_entrada") + soma("tokens_saida")) / n),
                 "erros_ferramenta": soma("erros_ferramenta"),
                 "consultas_abortadas": soma("consultas_abortadas"),
+                "chars_lidos_por_pergunta": round(soma("chars_resultados") / n),
                 "duracao_media_s": round(soma("duracao_s") / n, 1),
                 "custo_usd": round(soma("custo_usd"), 3)}
     tipos = sorted({r["tipo"] for r in resultados})

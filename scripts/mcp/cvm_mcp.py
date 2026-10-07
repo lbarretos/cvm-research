@@ -23,6 +23,8 @@ Banco: por padrão <raiz do projeto>/cvm_research.db. Sobrescreva com CVM_DB_PAT
 
 Ferramentas:
     resolve_company(texto) → ticker, nome parcial ou CNPJ → até 5 empresas (ou aviso de que não está na base)
+    search_docs(consulta…) → busca por trecho (FR, CM, AVI, RCA, assembleias, press-release), deduplicada
+    read_doc(protocolo…)   → lê um documento por trechos, a partir de uma posição
     query(sql)             → SELECT ad-hoc (somente leitura); saída tabular {colunas, linhas}
     list_tables()          → tabelas (com contagem de linhas) e views
     describe_table(name)   → colunas e tipos de uma tabela/view
@@ -237,6 +239,145 @@ def resolve_company(texto: str) -> dict:
         return out
     finally:
         conn.close()
+
+
+_FTS_OPERADORES = re.compile(r'["()]|\b(AND|OR|NOT|NEAR)\b|\w:')
+
+
+def _consulta_fts(consulta: str) -> str:
+    """Texto livre vira AND de termos (prefixo com * é mantido); sintaxe FTS5 explícita passa direto."""
+    c = consulta.strip()
+    if _FTS_OPERADORES.search(c):
+        return c
+    termos = re.findall(r"\w+\*?", c)
+    return " AND ".join(f'"{t[:-1]}"*' if t.endswith("*") else f'"{t}"' for t in termos)
+
+
+@mcp.tool()
+def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] | None = None,
+                desde: str | None = None, ate: str | None = None, k: int = 10,
+                versoes_antigas: bool = False) -> dict:
+    """Busca por trecho (~2 mil caracteres) nos documentos da camada quente do IPE: Fato Relevante, Comunicado ao
+    Mercado, Aviso aos Acionistas, Reunião da Administração, Assembleia (ata, proposta, sumário, edital) e
+    press-release. Devolve os k melhores trechos (BM25), sem repetir texto idêntico, só de versões vigentes
+    (versoes_antigas=True inclui as substituídas), com o protocolo para ler em volta com read_doc.
+    consulta: termos (AND implícito; acento e caixa não importam; `dividend*` para prefixo) ou sintaxe FTS5
+    ("frase exata", OR, NEAR(a b, 10)). ticker: filtra a empresa (ticker, nome ou CNPJ). categorias: lista de
+    ipe_docs.categoria. desde/ate: data_entrega 'YYYY-MM-DD'.
+    Não cobre DFs completas, prospectos nem relatórios de agente fiduciário (camada fria): para esses use o FTS
+    por documento (ipe_docs_fts) via query. Se o último dado é recente, lembre da defasagem do IPE (ver a skill)."""
+    q = _consulta_fts(consulta)
+    if not q:
+        raise ValueError("Consulta vazia.")
+    k = max(1, min(int(k), 30))
+    conn = get_db()
+    try:
+        prazo = _com_prazo(conn)
+        match = f"texto : ({q})"
+        aviso = None
+        if ticker:
+            r = resolve_company(ticker)
+            if not r["candidatos"]:
+                return {"colunas": [], "linhas": [], "aviso": r["aviso"]}
+            if len(r["candidatos"]) > 1:
+                return {"colunas": [], "linhas": [], "aviso": "ticker ambíguo: "
+                        + "; ".join(f"{c['ticker']} {c['nome_cvm']}" for c in r["candidatos"])}
+            match += f' AND cnpj_tok : "{re.sub(r"\D", "", r["candidatos"][0]["cnpj"])}"'
+        where, args = ["ipe_chunks_fts MATCH ?"], [match]
+        if not versoes_antigas:
+            where.append("c.is_latest = 1")
+        if categorias:
+            where.append(f"c.categoria IN ({','.join('?' * len(categorias))})")
+            args += categorias
+        if desde:
+            where.append("c.data_entrega >= ?")
+            args.append(desde)
+        if ate:
+            where.append("c.data_entrega <= ?")
+            args.append(ate)
+        sql = ("SELECT c.hash, c.rep_protocolo, c.rep_ordem, c.data_entrega, c.categoria, c.tipo, c.assunto, "
+               "snippet(ipe_chunks_fts, 0, '[', ']', ' … ', 48), i.link_download "
+               "FROM ipe_chunks_fts JOIN ipe_chunks c ON c.chunk_id = ipe_chunks_fts.rowid "
+               "LEFT JOIN ipe_docs i ON i.protocolo_entrega = c.rep_protocolo "
+               f"WHERE {' AND '.join(where)} ORDER BY ipe_chunks_fts.rank LIMIT ?")
+        try:
+            rows = conn.execute(sql, args + [k * 5]).fetchall()
+        except sqlite3.OperationalError as e:
+            if time.monotonic() > prazo:
+                raise ValueError("Busca abortada por tempo: restrinja por ticker, categorias ou datas.") from None
+            if "no such table" in str(e):
+                raise ValueError("Índice de trechos ausente: rode a migração 2026-10-06_ipe_chunks.sql e "
+                                 "scripts/ingest/build_chunks.py.") from None
+            raise ValueError(f"Consulta FTS inválida ({e}). Use termos simples ou aspas.") from None
+        vistos, linhas = set(), []
+        for h, proto, ordem, data, cat, tipo, assunto, trecho, link in rows:
+            # mesmo hash = texto idêntico; mesmo trecho destacado = boilerplate repetido entre documentos
+            chave = (h, re.sub(r"\W+", "", trecho.lower()))
+            if h in vistos or chave[1] in vistos:
+                continue
+            vistos.update(chave)
+            linhas.append([proto, ordem, data, cat, tipo, assunto, trecho, link])
+            if len(linhas) == k:
+                break
+        if not linhas:
+            aviso = ("nenhum trecho; a busca cobre só a camada quente e versões vigentes. Tente menos termos, "
+                     "prefixo (termo*) ou versoes_antigas=True")
+        return _tabular(["protocolo", "ordem", "data_entrega", "categoria", "tipo", "assunto", "trecho", "link"],
+                        linhas, aviso)
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def read_doc(protocolo: str, ordem: int = 0, offset: int = 0, max_chars: int = 20_000) -> dict:
+    """Lê um documento a partir de um trecho. Use o `protocolo` e a `ordem` devolvidos por search_docs: o texto
+    vem limpo (hifenização e cabeçalhos tratados), do trecho `ordem` em diante, até max_chars (máx. 28.000).
+    A resposta traz `proximo_ordem` para continuar e `total_trechos`. Documentos fora da camada quente não têm
+    trechos: nesse caso o texto bruto vem por posição (`offset` em caracteres)."""
+    max_chars = max(500, min(int(max_chars), 28_000))
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        doc = conn.execute("SELECT categoria, tipo, assunto, data_entrega, link_download, chars_extraidos "
+                           "FROM ipe_docs WHERE protocolo_entrega = ?", (protocolo,)).fetchone()
+        if doc is None:
+            raise ValueError(f"Protocolo '{protocolo}' não existe em ipe_docs.")
+        meta = {"protocolo": protocolo, "categoria": doc[0], "tipo": doc[1], "assunto": doc[2],
+                "data_entrega": doc[3], "link": doc[4]}
+        chunks = conn.execute(
+            "SELECT d.ordem, c.texto FROM ipe_chunk_docs d JOIN ipe_chunks c USING (chunk_id) "
+            "WHERE d.protocolo_entrega = ? AND d.ordem >= ? ORDER BY d.ordem", (protocolo, max(0, ordem))).fetchall()
+        total = conn.execute("SELECT COUNT(*) FROM ipe_chunk_docs WHERE protocolo_entrega = ?", (protocolo,)).fetchone()[0]
+        if total:
+            texto, ultimo = "", None
+            for o, t in chunks:
+                novo = _sem_sobreposicao(texto, t)
+                if texto and len(texto) + len(novo) > max_chars:
+                    break
+                texto += novo
+                ultimo = o
+            prox = ultimo + 1 if ultimo is not None and ultimo + 1 < total else None
+            return {**meta, "texto": texto[:max_chars], "ordem_inicio": chunks[0][0] if chunks else None,
+                    "ordem_fim": ultimo, "total_trechos": total, "proximo_ordem": prox}
+        (txt,) = conn.execute("SELECT substr(texto_extraido, ?, ?) FROM ipe_docs WHERE protocolo_entrega = ?",
+                              (max(0, offset) + 1, max_chars, protocolo)).fetchone() or (None,)
+        if not txt:
+            return {**meta, "texto": None, "aviso": "sem texto extraído (ver link) ou offset além do fim"}
+        fim = max(0, offset) + len(txt)
+        return {**meta, "texto": txt, "offset": offset, "chars_total": doc[5], "proximo_offset": fim,
+                "aviso": "documento fora da camada quente: texto bruto, sem limpeza, por posição"}
+    finally:
+        conn.close()
+
+
+def _sem_sobreposicao(anterior: str, t: str) -> str:
+    """Junta trechos consecutivos tirando a sobreposição de até 250 caracteres entre eles."""
+    if not anterior:
+        return t
+    for n in range(min(250, len(anterior), len(t)), 20, -1):
+        if anterior.endswith(t[:n]):
+            return t[n:]
+    return "\n" + t
 
 
 def _sem_acento(s: str) -> str:

@@ -14,7 +14,11 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
   1. `resolve_company(texto)` para achar a empresa (ticker, nome ou CNPJ → CNPJ; avisa se não está na base);
   2. as views prontas (`vw_dre`, `vw_balanco`, `demonstrativos_trimestrais`…) e as receitas de
      `references/receitas-sql.md` por `query(sql)`;
-  3. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
+  3. **Conteúdo de documentos**: `search_docs(consulta, ticker?, categorias?, desde?, ate?)` devolve os melhores
+     trechos (FR, CM, AVI, RCA, assembleias, press-release; versões vigentes, sem repetição) e `read_doc(protocolo,
+     ordem)` lê a partir do trecho, em até 28 mil caracteres, com `proximo_ordem` para continuar. Prefira-as ao FTS
+     por documento (seção 5) e a `substr(texto_extraido…)`;
+  4. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
   A saída é tabular `{colunas, linhas, aviso?}`; cada resposta cabe em 30 mil caracteres e o `aviso`
   diz quando foi cortada. Se as ferramentas não aparecerem, carregue com `ToolSearch`
   (`select:mcp__cvm-research__query,...`); se o servidor não existir, aponte o `INSTALL.md` do projeto.
@@ -130,7 +134,12 @@ busca FTS vier vazia num tema que deveria existir, tente `assunto LIKE` antes de
 
 ### 5. Análise do conteúdo
 
-**Busca por tema — FTS5.** O índice ignora acento e caixa (`aquisição` = `aquisicao`), aceita
+**Busca por tema.** Use `search_docs` (trechos de ~2 mil caracteres, só camada quente, só versões vigentes) e
+`read_doc` para ler em volta. O que não está na camada quente (DFs completas, prospectos, agente fiduciário) e
+os documentos substituídos só saem do FTS por documento abaixo; `search_docs(versoes_antigas=True)` inclui as
+substituídas. Sem trecho encontrado, tente menos termos ou prefixo (`aquisi*`) antes de concluir que não há.
+
+**Busca por documento — FTS5.** O índice ignora acento e caixa (`aquisição` = `aquisicao`), aceita
 prefixo (`dividend*`), frase (`"juros sobre capital"`), `AND`/`OR`/`NOT`, `NEAR(a b, 10)` e
 filtro de coluna (`assunto: incorporacao`). `snippet()` devolve o trecho onde o termo aparece.
 

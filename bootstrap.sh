@@ -236,6 +236,8 @@ if [ "$FAZER_PDF" = 1 ]; then
   done
   passo "reconstruindo o índice full-text"
   sqlite3 "$DB" "INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild');"
+  passo "trechos da camada quente (busca por trecho, Etapa 4)"
+  "$PY" build_chunks.py
 fi
 
 # ── WAL ──────────────────────────────────────────────────────────────────────

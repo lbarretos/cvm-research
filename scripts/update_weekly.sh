@@ -213,6 +213,9 @@ run_step "extract_pdf" extract_pdf.py --limite "$EXTRACT_LIMIT"
 if [ "$RETRY_FAILED" = "1" ]; then
   run_step "extract_pdf_retry" extract_pdf.py --retry-failed --limite "$EXTRACT_LIMIT"
 fi
+# Trechos da camada quente (Etapa 4): incremental, só os documentos que acabaram de ganhar texto,
+# e recalcula versões vigentes. Falhar aqui não derruba o resto (a busca por documento segue valendo).
+run_step "build_chunks" build_chunks.py
 
 # Esvazia o WAL no banco principal. Um leitor pendurado (outra sessão, o MCP) impede o
 # checkpoint e o -wal cresce sem limite: em 30/09/2026 chegou a 12,5 GB e as views

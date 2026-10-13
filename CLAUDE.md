@@ -343,6 +343,18 @@ Exclusivas cujo pai também é exclusivo não geram flag (só `detalhe.filhos_de
 
 Para rodar: `cd scripts/analysis && python run_all.py --layer 2,3 --cnpj <CNPJ>` (ou `--full` para a base).
 
+### `linha_empresa` — a mesma linha econômica ao longo dos filings (Etapa 6)
+`cnpj_companhia, tipo_doc, fonte, data_referencia, cd_conta, linha_id, ds_conta, st_conta_fixa, casamento, score, cd_conta_anterior`
+
+Cada conta de cada filing (ITR e DFP juntos, em ordem de data) recebe um `linha_id` que a acompanha mesmo quando a empresa
+renumera: **para séries por conta criada pela empresa (`N`), junte por `linha_id`, não por `cd_conta`** (na DFC o mesmo
+código vira outra linha em metade dos pares ITR 3T → DFP). `casamento`: `primeira`, `estavel`, `renumerado`, `reformulacao`,
+`reatado`/`reatado_pai` (voltou depois de um buraco), `decisao` (decidido por humano), `nova`, `ambiguo` (não encadeou; o
+candidato está em `cd_conta_anterior`, `score` entre 0,55 e 0,75: é a fila de revisão). Decisões: tabela `linha_decisao`,
+`python scripts/analysis/linha_economica.py --listar-ambiguos --cnpj X` e `--decidir`. Reconstruída por empresa no job semanal
+(`--full`, ~1,5 min). DFC fragmenta mais (mediana 2,6 linhas por linha de um filing): uma série comparável pede o conceito
+(Etapa 7). Banco anterior: `sqlite3 cvm_research.db < scripts/migrations/2026-10-15_linha_economica.sql` e `python linha_economica.py --full`.
+
 ### `cd_conta_ds_timeline` — trilha temporal de cada linha (pai + nome) entre filings (Camada 5)
 `run_id, cnpj_companhia, tipo_doc, fonte, data_referencia (filing atual), cd_conta, ds_conta, st_conta_fixa, cd_conta_pai,`
 `ds_conta_norm, data_referencia_anterior, cd_conta_anterior, ds_conta_anterior, similarity_score, classificacao`

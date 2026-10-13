@@ -88,3 +88,46 @@ medir quanto isso reduz o 6,0.
 - `linha_empresa` gravada na base inteira em menos de 2 minutos.
 - O visualizador mostra o mesmo resultado lendo da tabela e calculando na hora (teste de equivalência).
 - Fragmentação da DRE com p90 abaixo de 3.
+
+## Resultado (2026-10-15)
+
+**Entrou** (`scripts/analysis/linha_economica.py`; migração `2026-10-15_linha_economica.sql`; roda no `update_weekly.sh`
+depois da Camada 6 e no `bootstrap.sh`):
+- **6.1** `linha_empresa`: 2,2 mi de linhas na base inteira (623 mil N e 1,6 mi S). Uma sequência por (empresa, tipo_doc) com
+  ITR e DFP em ordem de data, ligada pela escada da Camada 5. Par `ambiguo` **não** encadeia: abre linha nova com o
+  candidato em `cd_conta_anterior` e `casamento = 'ambiguo'` (a fila de revisão: 3,9 mil linhas).
+- **6.2** `linha_id`: hash de (cnpj, tipo_doc, fonte, data e código da primeira aparição); estável quando chega filing novo
+  (teste).
+- **6.3** `linha_decisao` e a CLI `--listar-ambiguos` / `--decidir` (`mesma` liga, `diferente` bloqueia, inclusive no
+  reatamento por nome). Resolve o item da fila `par_ambiguo` do `TODOS.md` para o encadeamento da linha econômica; a
+  fila da Camada 6 (`demonstrativos_trimestrais`) segue lendo só o que ela mesma calcula.
+- **Ajuste do stress test**: reatar pelo (pai, nome normalizado) depois de um buraco. Mediu-se em
+  `stress/st6_fragmentacao.py`.
+- O visualizador passou a importar o mesmo `encadear` (uma só implementação).
+
+**Critérios de pronto:**
+
+| Critério | Resultado |
+|---|---|
+| `linha_empresa` na base inteira em menos de 2 min | **84 s** |
+| Fragmentação da DRE com p90 abaixo de 3 | **2,9** (era 3,0 sem o reatamento por pai) |
+| Visualizador lê da tabela, com teste de equivalência | **Não feito** (ver abaixo) |
+
+**Fragmentação das linhas N** (p50 / p90 / máx.), sem e com o reatamento por pai:
+
+| | sem | com |
+|---|---|---|
+| DRE | 1,8 / 3,0 / 6,5 | 1,7 / 2,9 / 5,9 |
+| BPP | 2,3 / 3,8 / 7,1 | 2,3 / 3,5 / 6,9 |
+| DFC | 2,9 / 4,4 / 7,7 | 2,6 / 3,8 / 6,5 |
+
+O 6,0 que o stress test deu para a DFC era do `encadear` como estava; com o reatamento por (código, nome) que ele já
+tinha mais o por pai, a mediana é 2,6. A DFC continua a mais fragmentada, e o veredito dela (precisa do conceito da
+Etapa 7 para uma série comparável) não muda.
+
+**6.4 (visualizador lendo a tabela) ficou de fora, de propósito.** A tabela encadeia ITR e DFP juntos (é o que o LLM precisa:
+o par ITR 3T → DFP da DFC); o visualizador encadeia cada fonte à parte. Trocar a fonte do visualizador muda as linhas que
+ele mostra, então a "equivalência" pedida no critério não existe sem decidir qual das duas está certa. Dividem agora só o
+código do `encadear`.
+
+**Veredito: implementada; critério do visualizador não cumprido (6.4 adiada).**

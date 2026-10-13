@@ -25,7 +25,6 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "analysis"))
-from check_text_stability import match_filings  # noqa: E402
 from consistency_utils import normalize_text  # noqa: E402
 
 DB = ROOT / "cvm_research.db"
@@ -55,39 +54,8 @@ def companies():
 
 # ── Encadeamento ─────────────────────────────────────────────────────────────
 
-def encadear(colunas, ligacoes=None):
-    """colunas = lista, em ordem cronológica, de {cd: (ds, st)} — as linhas de cada coluna.
-    ligacoes[i] = {cd nesta coluna: cd na anterior} tem precedência sobre o casamento
-    calculado (é o vínculo que a Camada 6 já gravou e usou na conta).
-    Devolve lista de séries; cada série é {índice da coluna: cd}."""
-    series = []
-    dono = {}
-    visto = {}   # (cd, nome normalizado) -> série, para reatar buracos no meio da janela
-    for i, atual in enumerate(colunas):
-        pronto = (ligacoes or {}).get(i) or {}
-        calculado = {}
-        if i and len(pronto) < len(atual):
-            calculado = match_filings(colunas[i - 1], atual)
-        for cd, (ds, _st) in atual.items():
-            anterior = pronto.get(cd)
-            if anterior is None:
-                par = calculado.get(cd)
-                # 'ambiguo' não encadeia, pelo mesmo motivo que não deriva na Camada 6
-                if par and par[1] != "ambiguo":
-                    anterior = par[0]
-            s = dono.get((i - 1, anterior)) if anterior is not None else None
-            # Conta ausente na coluna anterior (a empresa não abriu a linha naquele
-            # trimestre) não tem par, e sem isto viraria uma segunda linha na tabela.
-            # Reata só com código E nome idênticos, que é certeza de ser a mesma linha.
-            if s is None:
-                s = visto.get((cd, normalize_text(ds)))
-            if s is None:
-                s = len(series)
-                series.append({})
-            series[s][i] = cd
-            dono[(i, cd)] = s
-            visto[(cd, normalize_text(ds))] = s
-    return series
+# Fonte única do encadeamento (Etapa 6): o mesmo código grava `linha_empresa` e alimenta a tela.
+from linha_economica import encadear  # noqa: E402,F401
 
 
 def montar(series, colunas, valores, extras=None):

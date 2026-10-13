@@ -208,6 +208,8 @@ else
   run_step "consistency_l3" ../analysis/run_all.py --layer 3 --full
   run_step "consistency_l5" ../analysis/run_all.py --layer 5 --full
   run_step "consistency_l6" ../analysis/run_all.py --layer 6 --full
+  # Linha econômica (Etapa 6): linha_empresa, lida pelo LLM e pelo visualizador; ~1,5 min na base inteira
+  run_step "linha_economica" ../analysis/linha_economica.py --full
 fi
 run_step "extract_pdf" extract_pdf.py --limite "$EXTRACT_LIMIT"
 if [ "$RETRY_FAILED" = "1" ]; then

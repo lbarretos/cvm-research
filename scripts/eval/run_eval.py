@@ -149,7 +149,7 @@ def corrigir_auto(q: dict, resposta: str) -> tuple[bool, str]:
     vals = numeros(linha.replace(",", ""))
     ok = bool(vals) and perto(vals[0], float(ref), tol)
     if not ok and q["tipo"] == "contagem" and vals and 0 < ref - vals[0] <= 3 \
-            and re.search(r"reapresent|reenvi|duplic|mesma vers|duas vezes|idêntic", resposta, re.I):
+            and re.search(r"reapresent|reenvi|duplic|mesma vers|duas vezes|idêntic|repeti|de novo|entregas|entregue", resposta, re.I):
         # a referência conta reapresentações; contar só os originais também vale (ver 02-avaliacao.md)
         return True, f"{linha} (sem reapresentações; referência {ref})"
     return ok, linha

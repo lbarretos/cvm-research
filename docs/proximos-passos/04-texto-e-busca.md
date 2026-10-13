@@ -101,3 +101,45 @@ moderado; o ganho grande está no custo, que cai 76× em caracteres lidos por re
   lido por pergunta.
 - Nenhum resultado repete um trecho idêntico dentro do top-10.
 - Busca por trecho com p95 abaixo de 50 ms na base inteira.
+
+## Resultado (2026-10-13)
+
+**Entrou:** 4.2 (limpeza), 4.3 (deduplicação), 4.4 (trechos + FTS), 4.5 (camada quente), 4.7 (versões vigentes) e as
+ferramentas `search_docs` e `read_doc` do MCP (3.2 e 3.3 da Etapa 3). Código em `scripts/ingest/build_chunks.py` e
+`scripts/mcp/cvm_mcp.py`; migração `2026-10-06_ipe_chunks.sql`; testes em `tests/test_chunks.py` (10). Roda no
+`update_weekly.sh` e no `bootstrap.sh`.
+
+**Não entrou, de propósito:**
+- **4.1 (separar o texto em `ipe_texto`)**: mexeria em `extract_pdf`, `repair_text_encoding`, nas notas explicativas e no FTS
+  por documento, e reescreve 6,7 GB. O ganho (um `ipe_docs` leve) não é necessário para a busca por trecho, que não lê
+  `ipe_docs.texto_extraido`. Fica como otimização separada.
+- **4.6 (embeddings, `sqlite-vec`)**: não foi prototipada na avaliação e exige escolher modelo e dependência. A busca é só BM25.
+- **Camada fria em trechos**: DFs completas, prospectos etc. seguem só no FTS por documento.
+
+**Carga no banco real:** 95.831 documentos da camada quente → ~1,3 mi de trechos únicos (212 mil repetições, 14%,
+deduplicadas por empresa); 8.698 documentos substituídos por versão mais nova. A carga inicial levou ~6 min e custou
+**+5,4 GB** (12,9 → 18,4 GB), mais do que a projeção do stress test.
+
+**Critérios de pronto:**
+
+| Critério | Resultado |
+|---|---|
+| Nenhum trecho repetido no top-10 | **0** em 300 consultas (`stress/st4_busca_real.py`). Foi preciso deduplicar também pelo trecho destacado: só pelo hash eram 192, boilerplate igual em documentos diferentes |
+| p95 abaixo de 50 ms na base inteira | **3 ms** (p50 1 ms); com ticker e categoria, p95 13 ms |
+| Perguntas de documento com < 10 mil chars lidos (Etapa 2) | **6,9 mil em média** (6,3 a 7,6 mil nas 4 perguntas, 100% de acerto) |
+
+hit@1 = 57,7% e hit@5 = 76,3% (o stress test de 2025 dava 57,3% e 92,6%): na base inteira há 9× mais documentos
+competindo, e a deduplicação colapsa cópias do mesmo texto em outros documentos, que o teste conta como erro. Não
+investiguei quanto da queda é só isso.
+
+**Etapa 2 (`runs/2026-10-13_etapa4.json`):** 28/28, zero erros de ferramenta e zero abortadas; ~302 mil tokens e 4,3 chamadas
+por pergunta (a Etapa 3 tinha 306 mil e 4,4). A q017 e a q019 (contagem de FR) vieram marcadas como erro porque o modelo
+deduplicou as reapresentações e disse isso com palavras ("repetição", "entregue de novo") que o corretor não reconhecia;
+ampliei o reconhecimento **depois** de ver o resultado. O ajuste é do corretor, não da resposta.
+
+**Dois defeitos achados ao rodar no job semanal** (corrigidos): o `UPDATE` de `is_latest` usava subconsulta correlacionada
+sem índice (O(N²), não terminava com 1,3 mi de trechos: a carga inicial nunca atualizou as versões, e 38.513 trechos
+estavam errados), e a seleção dos pendentes chamava `length(texto_extraido)`, que lê os 13 GB. O incremental leva agora
+~45 s, e há um teste de regressão com 30 mil trechos.
+
+**Veredito: implementada; critérios cumpridos.**

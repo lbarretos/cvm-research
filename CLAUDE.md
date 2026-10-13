@@ -100,6 +100,8 @@ URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rod
 
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
 Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 empresas), `query(sql)` (SELECT, até 500 linhas),
+`search_docs(consulta, ticker?, categorias?, desde?, ate?, k?)` (busca por trecho na camada quente do IPE, sem repetição,
+só versões vigentes), `read_doc(protocolo, ordem?)` (lê a partir de um trecho),
 `list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. A saída é tabular
 (`{colunas, linhas, aviso?}`), cada resposta cabe em 30 mil caracteres (o excesso é cortado com aviso) e todas abortam em 20 s.
 Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linhas tem a tabela ipe_docs?"* deve responder um número acima de 160.000.
@@ -143,6 +145,17 @@ invisível ao FTS; mostre o `link_download`. O `(cid:N)` de fonte WinAnsi e o te
   - `'Demonstrações Financeiras Intermediárias'` / `'Demonstrações Financeiras Anuais Completas'` — PDF
     do ITR/DFP com notas explicativas; antes de rodar `ingest_notas_explicativas.py`, veja se já está aqui
   - também `'Relatório de Agência de Rating'`, `'Relatório de Agente Fiduciário'`, `'Laudo de Avaliação'`
+
+### `ipe_chunks` / `ipe_chunk_docs` / `ipe_versoes` — busca por trecho (Etapa 4)
+Camada quente (FR, CM, AVI, RCA, assembleia ata/proposta/sumário/edital, press-release) dividida em trechos de ~2 mil
+caracteres, **deduplicada por empresa** (`UNIQUE (cnpj_companhia, hash)`): `ipe_chunk_docs (chunk_id, protocolo_entrega, ordem)`
+lista os documentos em que cada trecho aparece e `ipe_chunks.rep_protocolo` é o mais recente. `ipe_chunks_fts` indexa
+`texto` e `cnpj_tok` (CNPJ só com dígitos, filtra empresa sem join). `ipe_versoes (protocolo_entrega, is_latest,
+substituido_por)`: dos documentos com a mesma chave (empresa, categoria, tipo, espécie, data_referencia, assunto), só o de
+maior `data_entrega` é vigente. Mantidas por `scripts/ingest/build_chunks.py` (incremental; roda no `update_weekly.sh` e no
+`bootstrap.sh`; `--rebuild` depois de `repair_text_encoding.py`). Banco anterior:
+`sqlite3 cvm_research.db < scripts/migrations/2026-10-06_ipe_chunks.sql` e `python build_chunks.py` (~6 min).
+A camada fria (DFs completas, prospectos…) continua só em `ipe_docs_fts`. Custo em disco: +5,4 GB.
 
 ### `vlmo_movimentacoes` — movimentações de valores mobiliários por insiders
 `cnpj_companhia, data_referencia, tipo_cargo, tipo_movimentacao,`

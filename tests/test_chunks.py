@@ -146,3 +146,18 @@ def test_read_doc_camada_fria_le_texto_bruto_por_offset(db, monkeypatch):
     assert r["proximo_offset"] == 510 and "camada quente" in r["aviso"]
     with pytest.raises(ValueError, match="não existe"):
         cvm_mcp.read_doc("NAOEXISTE")
+
+
+def test_atualizar_versoes_escala_linearmente(db):
+    """Regressão: o UPDATE de is_latest com subconsulta correlacionada sem índice era O(N²) e não terminava
+    com 1,3 mi de trechos. Com 30 mil trechos o laço quadrático leva dezenas de segundos."""
+    import time
+    c = sqlite3.connect(db)
+    c.executemany("INSERT INTO ipe_chunks (cnpj_companhia, cnpj_tok, hash, texto, rep_protocolo, rep_ordem, is_latest)"
+                  " VALUES ('c','1',?,'t','P2',0,0)", [(str(i),) for i in range(30_000)])
+    c.execute("INSERT INTO ipe_chunk_docs SELECT chunk_id, 'P2', chunk_id FROM ipe_chunks")
+    c.commit()
+    t = time.time()
+    mudou = bc.atualizar_versoes(c)
+    assert mudou == 30_000 and time.time() - t < 5
+    assert c.execute("SELECT COUNT(*) FROM ipe_chunks WHERE is_latest = 0").fetchone()[0] == 0

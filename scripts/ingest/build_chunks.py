@@ -77,16 +77,20 @@ def atualizar_versoes(conn) -> int:
                                     COALESCE(especie,''), COALESCE(data_referencia,''), COALESCE(assunto,'')
                        ORDER BY data_entrega DESC, protocolo_entrega DESC)
         )""")
+    conn.execute("DROP TABLE IF EXISTS temp.novo_latest")
     conn.execute("""
-        CREATE TEMP TABLE novo_latest AS
-        SELECT d.chunk_id, MAX(v.is_latest) AS l
+        CREATE TEMP TABLE novo_latest (chunk_id INTEGER PRIMARY KEY, l INTEGER NOT NULL)""")
+    conn.execute("""
+        INSERT INTO novo_latest
+        SELECT d.chunk_id, MAX(v.is_latest)
         FROM ipe_chunk_docs d JOIN ipe_versoes v USING (protocolo_entrega)
         GROUP BY d.chunk_id""")
+    # só o que mudou (reescrever 1,3 mi de linhas de ~2 KB seria 2,6 GB de WAL à toa)
     cur = conn.execute("""
-        UPDATE ipe_chunks SET is_latest = (SELECT l FROM novo_latest n WHERE n.chunk_id = ipe_chunks.chunk_id)
-        WHERE chunk_id IN (SELECT chunk_id FROM novo_latest)
-          AND is_latest <> (SELECT l FROM novo_latest n WHERE n.chunk_id = ipe_chunks.chunk_id)""")
-    conn.execute("DROP TABLE novo_latest")
+        UPDATE ipe_chunks SET is_latest = n.l
+        FROM novo_latest n
+        WHERE n.chunk_id = ipe_chunks.chunk_id AND ipe_chunks.is_latest <> n.l""")
+    conn.execute("DROP TABLE temp.novo_latest")
     conn.commit()
     return cur.rowcount
 
@@ -136,7 +140,7 @@ def main() -> None:
                            "INSERT INTO ipe_chunks_fts(ipe_chunks_fts) VALUES ('delete-all');")
     if not a.versoes:
         sql = f"""SELECT protocolo_entrega, cnpj_companhia, categoria, tipo, especie, assunto, data_entrega
-                  FROM ipe_docs WHERE texto_extraido IS NOT NULL AND length(texto_extraido) > 0 AND {QUENTE}
+                  FROM ipe_docs WHERE texto_extraido IS NOT NULL AND COALESCE(chars_extraidos, 1) > 0 AND {QUENTE}
                     AND protocolo_entrega NOT IN (SELECT DISTINCT protocolo_entrega FROM ipe_chunk_docs)
                   ORDER BY data_entrega"""
         if a.limite:

@@ -51,10 +51,50 @@ O conjunto foi conferido antes de servir de régua:
 - **Viés**: as empresas foram sorteadas com semente fixa só no plano padrão, mais 2 bancos. Faltam
   seguradoras e exercício fora do calendário; entram na v1.
 
-**Veredito:** o conjunto v0 está pronto como linha de base. **O executor ainda não existe** e é o
-próximo passo desta etapa, antes das etapas 3 e 4.
+**Veredito:** o conjunto v0 serviu de linha de base. O executor foi implementado.
+
+## Executor (implementado em 2026-10-05)
+
+[`scripts/eval/run_eval.py`](../../scripts/eval/run_eval.py): uma sessão nova de `claude -p` por pergunta,
+na raiz do projeto (carrega o `CLAUDE.md`), só com o MCP `cvm-research` (`--strict-mcp-config`, ferramentas
+`query`/`list_tables`/`describe_table`), em 4 sessões paralelas. Grava em `avaliacao/runs/AAAA-MM-DD_rotulo.json`
+a resposta, chamadas de ferramenta, erros, consultas abortadas, tokens, custo e tempo.
+
+```bash
+.venv/bin/python scripts/eval/run_eval.py --rotulo minha-mudanca     # v0 inteiro
+.venv/bin/python scripts/eval/run_eval.py --ids q011,q028 --rotulo x # só algumas
+.venv/bin/python scripts/eval/run_eval.py --comparar runs/a.json runs/b.json
+```
+
+- Número, contagem e par original/reapresentado: correção automática por uma linha final `RESPOSTA:`, que o
+  executor pede no prompt. Contagem aceita também o total sem as reapresentações (até 3 a menos), desde que a
+  resposta cite a reapresentação.
+- Documento, fato e sem dado: um segundo `claude -p` sem ferramentas julga contra a referência e a armadilha.
+  O juiz é estrito: no teste, reprovou uma resposta correta no corpo cujo título citava um fato com data de
+  ontem. Vale ler `nota_correcao` dos erros antes de concluir que algo regrediu.
+- Custo: cada execução do v0 gasta cerca de US$ 12,6 (a skill e o `CLAUDE.md` pesam ~295 mil tokens por pergunta,
+  quase tudo cache). Isso é, por si, a métrica que a Etapa 3 quer baixar.
+
+### Linha de base (2026-10-05, antes das etapas 3 e 4)
+
+| Medida | Valor |
+|---|---|
+| Acerto geral | 27 de 28 (96,4%) |
+| Chamadas de ferramenta por pergunta | 3,54 |
+| Tokens por pergunta | ~295 mil |
+| Erros de ferramenta / consultas abortadas | 5 / 0 |
+| Duração média por pergunta | 15 s |
+| Custo da execução | US$ 12,59 |
+
+O único erro é a **q011** (D&A da CSAN3): o modelo usou a linha de impairment da DFC e deu R$ 3,87 bi; o certo é a
+DVA 7.04.01, R$ 7,02 bi. O modelo percebeu a diferença, explicou-a, e mesmo assim escolheu o número errado:
+a regra "D&A está na DVA" não está clara o bastante no `CLAUDE.md`. Fica para a Etapa 3 (skill).
+
+O v0 não tem folga para medir melhora em acerto (96%). Quem mostra ganho na Etapa 3 são tokens, chamadas e
+custo; as perguntas difíceis (texto conceitual, documentos longos, padronização) entram na v1.
 
 ## Critério de pronto
 
-- Executor rodando o v0 em menos de 30 minutos e gravando um relatório comparável entre execuções.
-- Linha de base registrada **antes** de qualquer mudança das etapas 3 e 4 (a Etapa 1 só muda a velocidade: o stress test provou que o resultado das views é idêntico).
+- ✅ Executor rodando o v0 em menos de 30 minutos (a execução levou ~3 min) e gravando um relatório comparável entre execuções (`--comparar`).
+- ✅ Linha de base registrada **antes** de qualquer mudança das etapas 3 e 4: `avaliacao/runs/2026-10-05_baseline-pre-etapa3.json`.
+- Pendente: a v1 (~80 perguntas).

@@ -69,3 +69,30 @@ roda **antes** desta.
 ## Critério de pronto
 
 - Na Etapa 2: acerto igual ou maior, 30% menos tokens por pergunta e zero consultas abortadas por timeout.
+
+## Resultado (2026-10-06)
+
+Entrou: `resolve_company`, saída tabular, orçamento de 30 mil caracteres por resposta (célula de até 25 mil),
+timeout em todas as ferramentas, a skill versionada em [`skills/cvm-research/`](../../skills/cvm-research/)
+(com `references/receitas-sql.md` vinda do `CLAUDE.md`, que caiu de 56 para 39 KB) e a regra da D&A na skill.
+`search_docs`/`read_doc` e `get_financials` seguem para as etapas 4 e 7.
+
+Etapa 2 sobre o mesmo v0 (`avaliacao/runs/`):
+
+| Medida | Antes | Depois |
+|---|---|---|
+| Acerto | 27/28 | **28/28** (a q011, D&A da CSAN3, passou com a regra na skill) |
+| Consultas abortadas por timeout | 0 | 0 |
+| Erros de ferramenta | 5 | **0** |
+| Turnos por pergunta | 4,6 | 6,1 |
+| Chamadas de ferramenta | 3,5 | 4,4 |
+| Tokens por pergunta | 294 mil | 305 mil (+4%) |
+| Custo da execução | US$ 12,59 | US$ 12,49 |
+
+**Veredito: critério de pronto cumprido pela metade.** Acerto igual ou maior e zero abortadas: sim. **30% menos
+tokens: não.** Quase todos os ~300 mil tokens são o prefixo fixo da sessão (ferramentas, plugins e skills do
+usuário, ~60 mil por turno) relido a cada turno. O que as ferramentas economizam (tabular, orçamento, 4 mil tokens do
+`CLAUDE.md`) é pouco perto disso, e a skill nova fez a sessão dar **mais turnos** (+1,5), o que custa mais que o
+ganho. A alavanca de tokens é cortar turnos, não bytes: a próxima iteração é fazer a skill mandar `resolve_company` e a
+consulta de dados em paralelo, ou mandar a consulta direto pelo ticker nas views, e voltar a medir. A meta de 30% foi
+posta antes de se saber que o prefixo domina; revê-la para "turnos por pergunta" é mais honesto.

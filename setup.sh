@@ -44,3 +44,6 @@ echo "   python ingest_recompra.py && python ingest_fre.py && python ingest_dfp.
 echo ""
 echo "⚠️  texto_extraido (texto de PDFs) NÃO é re-ingerido automaticamente."
 echo "   Para popular o texto, rode: cd scripts/ingest && python extract_pdf.py"
+
+# Skill de pesquisa versionada: faz o Claude Code deste diretório carregá-la.
+mkdir -p .claude/skills && ln -sfn ../../skills/cvm-research .claude/skills/cvm-research

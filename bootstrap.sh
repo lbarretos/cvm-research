@@ -216,6 +216,8 @@ if [ "$FAZER_ANALISE" = 1 ]; then
   cd "$PROJECT_DIR/scripts/analysis"
   passo "consistência — Camadas 1, 2, 3, 5 e 6 (a 3 depende da 2; a 6, da 2 e da 5)"
   "$PY" run_all.py --layer 1,2,3,5,6 --full
+  passo "linha econômica por empresa (Etapa 6)"
+  "$PY" linha_economica.py --full
   cd "$PROJECT_DIR/scripts/ingest"
 fi
 

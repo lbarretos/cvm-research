@@ -100,6 +100,7 @@ URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rod
 
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
 Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 empresas), `query(sql)` (SELECT, até 500 linhas),
+`get_financials(ticker, conceitos?, fonte?, desde?, ate?)` (fatos padronizados com `metodo` e `checagem`; veja `fato_padronizado`),
 `search_docs(consulta, ticker?, categorias?, desde?, ate?, k?)` (busca por trecho na camada quente do IPE, sem repetição,
 só versões vigentes), `read_doc(protocolo, ordem?)` (lê a partir de um trecho),
 `list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. A saída é tabular
@@ -354,6 +355,19 @@ candidato está em `cd_conta_anterior`, `score` entre 0,55 e 0,75: é a fila de 
 `python scripts/analysis/linha_economica.py --listar-ambiguos --cnpj X` e `--decidir`. Reconstruída por empresa no job semanal
 (`--full`, ~1,5 min). DFC fragmenta mais (mediana 2,6 linhas por linha de um filing): uma série comparável pede o conceito
 (Etapa 7). Banco anterior: `sqlite3 cvm_research.db < scripts/migrations/2026-10-15_linha_economica.sql` e `python linha_economica.py --full`.
+
+### `fato_padronizado` / `conceito` / `linha_conceito` — conceitos canônicos entre empresas (Etapa 7)
+`fato_padronizado (cnpj_companhia, fonte, data_referencia, periodo_ini, periodo_fim, conceito, valor, n_linhas, metodo, confianca, checagem, publicado)`
+
+Conceitos comparáveis (D&A, capex, dividendos pagos, juros pagos, captação/amortização de dívida, arrendamento, recompra, IR pago,
+e contas fixas como receita, EBIT, CFO) calculados por regras sobre as linhas `N` da DFC, votados por linha econômica. **Para
+perguntas de DFC (D&A, capex, dividendos…) use `get_financials`** e cite `metodo` e `checagem`: `ok`, `ok_<definição>` (a DVA 7.04.01
+fecha com outra definição de D&A), `sem_gabarito`; `divergente`/`sinal_trocado`/`maior_que_pai` vêm com `publicado = 0`. `metodo`:
+`S` conta fixa, `regra`, `derivado` (`da_total`, `capex_total` = soma das partes). Ausência de conceito num período = a empresa
+não tem a linha (ou o sinal não bateu), não valor zero. Só plano padrão; só a coluna `Último`; ITR é acumulado do ano. **Precisão
+das regras não validada por analista** (~90% em revisão própria): `divida_liquida_fluxo`, `arrend_pago` e `recompra` merecem
+conferir a linha. Gerada por `scripts/analysis/taxonomia.py` (depende de `linha_empresa`; ~1 min na base inteira). Banco anterior:
+`sqlite3 cvm_research.db < scripts/migrations/2026-10-16_taxonomia.sql` e `python taxonomia.py --full`.
 
 ### `cd_conta_ds_timeline` — trilha temporal de cada linha (pai + nome) entre filings (Camada 5)
 `run_id, cnpj_companhia, tipo_doc, fonte, data_referencia (filing atual), cd_conta, ds_conta, st_conta_fixa, cd_conta_pai,`

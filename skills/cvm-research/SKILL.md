@@ -14,11 +14,15 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
   1. `resolve_company(texto)` para achar a empresa (ticker, nome ou CNPJ → CNPJ; avisa se não está na base);
   2. as views prontas (`vw_dre`, `vw_balanco`, `demonstrativos_trimestrais`…) e as receitas de
      `references/receitas-sql.md` por `query(sql)`;
-  3. **Conteúdo de documentos**: `search_docs(consulta, ticker?, categorias?, desde?, ate?)` devolve os melhores
+  3. **Demonstrações comparáveis entre empresas** (D&A, capex, dividendos pagos, juros, dívida, arrendamento, recompra,
+     IR pago, receita, EBIT, CFO): `get_financials(ticker, conceitos?)`. Devolve o valor com `metodo` e `checagem`;
+     mostre-os. D&A usa a DVA 7.04.01 como gabarito (`ok_<definição>` = fecha com outra definição). Só plano padrão;
+     se vier vazio, caia nas views e em `demonstrativos_trimestrais`;
+  4. **Conteúdo de documentos**: `search_docs(consulta, ticker?, categorias?, desde?, ate?)` devolve os melhores
      trechos (FR, CM, AVI, RCA, assembleias, press-release; versões vigentes, sem repetição) e `read_doc(protocolo,
      ordem)` lê a partir do trecho, em até 28 mil caracteres, com `proximo_ordem` para continuar. Prefira-as ao FTS
      por documento (seção 5) e a `substr(texto_extraido…)`;
-  4. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
+  5. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
   A saída é tabular `{colunas, linhas, aviso?}`; cada resposta cabe em 30 mil caracteres e o `aviso`
   diz quando foi cortada. Se as ferramentas não aparecerem, carregue com `ToolSearch`
   (`select:mcp__cvm-research__query,...`); se o servidor não existir, aponte o `INSTALL.md` do projeto.

@@ -25,6 +25,7 @@ Ferramentas:
     resolve_company(texto) → ticker, nome parcial ou CNPJ → até 5 empresas (ou aviso de que não está na base)
     search_docs(consulta…) → busca por trecho (FR, CM, AVI, RCA, assembleias, press-release), deduplicada
     read_doc(protocolo…)   → lê um documento por trechos, a partir de uma posição
+    get_financials(ticker, conceitos…) → fatos padronizados (D&A, capex, dividendos, juros, dívida…) com a checagem
     query(sql)             → SELECT ad-hoc (somente leitura); saída tabular {colunas, linhas}
     list_tables()          → tabelas (com contagem de linhas) e views
     describe_table(name)   → colunas e tipos de uma tabela/view
@@ -378,6 +379,57 @@ def _sem_sobreposicao(anterior: str, t: str) -> str:
         if anterior.endswith(t[:n]):
             return t[n:]
     return "\n" + t
+
+
+@mcp.tool()
+def get_financials(ticker: str, conceitos: list[str] | None = None, fonte: str = "DFP",
+                   desde: str | None = None, ate: str | None = None,
+                   incluir_nao_publicados: bool = False) -> dict:
+    """Fatos padronizados de uma empresa (tabela fato_padronizado, Etapa 7): conceitos comparáveis entre empresas
+    mesmo quando a DFC usa nomes e códigos próprios. Uma linha por (período, conceito) com o valor em R$, quantas
+    linhas da demonstração foram somadas (`n_linhas`), como foi obtido (`metodo`: S = conta fixa da CVM, regra,
+    derivado), `confianca` e a `checagem` (ok; ok_<definição alternativa da DVA>; sem_gabarito; divergente...).
+    Só plano padrão (bancos e seguradoras não têm esses conceitos). Conceitos DFC: da_total, da_ex_ppa,
+    da_direito_uso, da_ppa, capex_total, capex_imob, capex_intang, capex_conjunto, dividendos_pagos, juros_pagos,
+    capt_divida, amort_divida, divida_liquida_fluxo, arrend_pago, recompra, ir_pago; de contas fixas: receita_liquida,
+    resultado_bruto, ebit, lucro_liquido, cfo, cfi, cff, variacao_caixa, caixa_final, ativo_total, patrimonio_liquido.
+    Sem `conceitos`, devolve todos. fonte: DFP (anual) ou ITR (acumulado do ano). Fatos que falharam na checagem só
+    vêm com incluir_nao_publicados=True. Ausência de um conceito num período significa que a empresa não tem linha
+    dele naquela DFC (ou o sinal não bateu), não que o valor seja zero. Mostre sempre `metodo` e `checagem`."""
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        r = resolve_company(ticker)
+        if not r["candidatos"]:
+            return {"colunas": [], "linhas": [], "aviso": r["aviso"]}
+        if len(r["candidatos"]) > 1:
+            return {"colunas": [], "linhas": [], "aviso": "ticker ambíguo: "
+                    + "; ".join(f"{c['ticker']} {c['nome_cvm']}" for c in r["candidatos"])}
+        where, args = ["cnpj_companhia = ?", "fonte = ?"], [r["candidatos"][0]["cnpj"], fonte]
+        if conceitos:
+            where.append(f"conceito IN ({','.join('?' * len(conceitos))})")
+            args += conceitos
+        if desde:
+            where.append("data_referencia >= ?")
+            args.append(desde)
+        if ate:
+            where.append("data_referencia <= ?")
+            args.append(ate)
+        if not incluir_nao_publicados:
+            where.append("publicado = 1")
+        try:
+            rows = conn.execute(
+                "SELECT data_referencia, periodo_ini, periodo_fim, conceito, valor, n_linhas, metodo, confianca, "
+                f"checagem, publicado FROM fato_padronizado WHERE {' AND '.join(where)} "
+                "ORDER BY data_referencia DESC, conceito", args).fetchall()
+        except sqlite3.OperationalError:
+            raise ValueError("Tabela fato_padronizado ausente: rode a migração 2026-10-16_taxonomia.sql e "
+                             "scripts/analysis/taxonomia.py --full.") from None
+        aviso = None if rows else "nenhum fato (empresa fora do plano padrão, conceito inexistente ou filtros)"
+        return _tabular(["data_referencia", "periodo_ini", "periodo_fim", "conceito", "valor", "n_linhas", "metodo",
+                         "confianca", "checagem", "publicado"], [list(x) for x in rows], aviso)
+    finally:
+        conn.close()
 
 
 def _sem_acento(s: str) -> str:

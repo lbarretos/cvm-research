@@ -127,3 +127,53 @@ obrigatórios antes de publicar, não opcionais.
 - Nenhuma linha em dois conceitos.
 - Identidade externa (quando existe) passando em ≥ 90% a menos de 2%.
 - Precisão ≥ 98% numa amostra de 100 linhas estratificada por empresa, revisada à mão.
+
+## Resultado (2026-10-16)
+
+**Entrou** (`scripts/analysis/taxonomia.py`, migração `2026-10-16_taxonomia.sql`, 8 testes em `tests/test_taxonomia.py`):
+- **Conceitos** (`conceito`): 16 da DFC (D&A em três partes e `da_total`; capex imobilizado, intangível, conjunto e
+  `capex_total`; dividendos, juros, captação, amortização, dívida líquida em linha única, arrendamento, recompra, IR) e 11
+  de contas fixas (`receita_liquida`, `ebit`, `lucro_liquido`, `cfo`/`cfi`/`cff`, `caixa_final`, `ativo_total`…).
+- **Regras com as três correções do stress test**: juros pagos só em `6.01.02`, `6.01.03` e `6.03`, sem provisionados,
+  apropriados nem salários; conceitos `capex_total`, `divida_liquida_fluxo`, `da_total` e `da_ex_ppa`; "sale and
+  leaseback" e "a recolher/provisão" fora. Só linhas folha entram (um pai e seus filhos não se somam duas vezes).
+- **Voto por linha econômica (Etapa 6)**: o conceito majoritário da linha vale para todos os filings dela, mas só se
+  ao menos metade deles foi classificada pela regra (senão a Etapa 6 provavelmente ligou duas contas diferentes).
+- **`fato_padronizado`**: 138 mil fatos de 140 empresas, com `metodo`, `confianca`, `checagem` e `publicado`. A D&A é
+  conferida com a DVA 7.04.01 e aceita a definição alternativa da empresa (sem direito de uso, sem mais-valia).
+  Capex maior que as saídas de `6.02` e sinal trocado reprovam o fato.
+- **`get_financials`** no MCP (item 3.4 da Etapa 3), que devolve o fato com `metodo` e `checagem` (a regra 12 do
+  `CLAUDE.md` não se perde). Sexta ferramenta; passa do teto de cinco do doc da Etapa 3, a medir na avaliação.
+
+**Cobertura** (DFPs do plano padrão com DFC; "onde se aplica" não é conhecido, então 100% não é a meta de todos):
+
+| Conceito | DFPs | Cobertura | | Conceito | DFPs | Cobertura |
+|---|---|---|---|---|---|---|
+| da_total | 1.730 | 98,6% | | juros_pagos | 1.408 | 80,2% |
+| dividendos_pagos | 1.599 | 91,1% | | ir_pago | 1.352 | 77,0% |
+| capex_total | 1.534 | 87,4% | | amort_divida | 1.245 | 70,9% |
+| capt_divida | 1.052 | 59,9% | | recompra | 955 | 54,4% |
+| arrend_pago | 776 | 44,2% | | divida_liquida_fluxo | 46 | 2,6% |
+
+**Critérios de pronto, por conceito:**
+
+| Critério | Resultado |
+|---|---|
+| Cobertura ≥ 85% | **da_total, dividendos, capex_total**; os demais dependem de a empresa ter a linha (arrendamento, recompra, captação), sem denominador de "aplicável" |
+| Sinal trocado < 1% | **0% por construção**: linha de sinal contrário ao esperado sai do conceito (venda de tesouraria não é recompra). O custo é cobertura menor |
+| Nenhuma linha em dois conceitos | **Cumprido**: conflito vira "sem conceito" e a regra específica vence a geral |
+| Identidade D&A × DVA ≥ 90% a menos de 2% | **Não atingido**: 1.468 `ok` + 77 `ok_*` de 1.730 = **89,5%** com a definição alternativa (**84,9%** só com a total). A DVA 7.04.01 não tem definição única entre empresas |
+| Precisão ≥ 98% em amostra de 100 linhas | **Não atingido**: duas rodadas de revisão **minha** (não de um analista), 97 e 140 linhas, deram ~92% e ~88% **antes** das últimas correções. Os piores: `divida_liquida_fluxo` (nome ambíguo, 3 a 7 em 10 errados), e rótulos propagados pelo voto para linhas de nome diferente. Não revisei a amostra final |
+
+**Não implementado**, de propósito:
+- **Modelo supervisionado e fila de revisão humana (3.b e 3.c)**: o modelo herda os erros das regras (o stress test
+  mostrou) e exige scikit-learn na venv; a revisão humana é de um analista. As discordâncias regra × modelo seguem
+  disponíveis em `stress/st7_taxonomia.py`.
+- **DMPL** (dividendos declarados, recompras) e **demonstrações individuais**: não ingeridos.
+- **Bancos e seguradoras**: sem conceitos (plano diferente).
+- **Safra reapresentada**: só a coluna `Último` de cada filing; ITR entra como acumulado do ano.
+
+**Veredito: implementada e publicável com ressalvas.** Os fatos de `da_total`, `capex_total` e `dividendos_pagos` passam em
+cobertura, sinal e, no caso da D&A, na identidade com a DVA a ~85–90%. **A precisão de 98% não foi demonstrada**: antes de
+um analista usar `divida_liquida_fluxo`, `arrend_pago` ou `recompra` sem olhar a linha, falta a revisão estratificada que
+este doc pediu. O `get_financials` expõe `metodo` e `checagem` justamente para isso.

@@ -98,3 +98,50 @@ consecutivos, **5.585 ficaram como `estavel`** (não gravados) e 8 como `nova`.
 - Depois de rodar de novo, a contagem da Camada 2 no BPA em 2017 volta à faixa de ~250 `reclassificacao`, e
   a da Camada 3 à faixa de ~30 erros.
 - Teste de regressão com a empresa `00.864.214/0001-06` (antigo, novo, antigo, novo).
+
+## Resultado (2026-10-14)
+
+**Entrou** (`scripts/ingest/template_versions.py`, ligado ao `rebuild_filings`, que roda no início de todo `run_all.py`):
+- **5.1** `plano_cvm`: as contas S de cada (plano, tipo_doc, versão), pelo voto dos filings atribuídos sem ambiguidade.
+- **5.2** `filings.versao_template` (`v1`, `v2`…), detectada filing a filing pela impressão digital. NULL quando o filing
+  é compatível com mais de uma versão ou o plano tem versões demais para a regra ser confiável.
+- **5.3** `plano_cvm_de_para`: derivada por (pai, nome) entre versões, não escrita à mão. Para o BPA padrão v1 → v2 ela
+  reproduz a tabela deste documento (1.02.01.03 → .04 … .08 → .09, mais 1.02.01.02 → .03).
+- **5.4** Camada 5: o código S só é confiável quando os dois filings são da mesma versão; entre versões, o par casa pelo
+  nome (`renumerado`).
+- **5.5** Camadas 2 e 3: `iter_pairs` traduz os códigos S do filing comparado para os do baseline pelo de-para (e leva os
+  descendentes de uma conta deslocada junto). Camada 6 e visualizador não mudam.
+Testes: `tests/test_template_versions.py` (4), com o cenário antigo → novo → antigo → novo.
+
+**Feito na cópia do banco, não no banco vivo.** As Camadas 2, 3 e 5 foram recalculadas numa cópia (`--full`, sem erros) e
+comparadas com as contagens de antes (arquivos `avaliacao/flags_camadas235_{antes,depois}_etapa5.txt`). O banco vivo recebe
+a coluna e as versões no próximo `rebuild_filings` (job semanal ou `run_all.py`), e as camadas sozinhas passam a usá-las
+na rodada seguinte.
+
+**Versões detectadas (padrão):** BPA 5 (v1: 2.776 filings 2010–2019-09, 102 empresas; v2: 4.150 filings 2018-03 em
+diante, 140 empresas; v3–v5 são 1 a 2 filings de uma empresa cada), BPP 2, DRE 1, DVA 1, DFC 4. A empresa
+`00.864.214/0001-06` sai v1 (até 1T18), v2 (2T18–3T18), v1 (1T19–2T19), v2 (desde 3T19), como no stress test.
+
+**Critérios de pronto:**
+
+| Critério | Resultado |
+|---|---|
+| Todo filing com versão e nenhum ambíguo no plano padrão | **Quase**: 1 de 6.890 DFC_MI padrão sem versão. Fora do padrão: DRE de banco (150 de 150) e DFC de seguradora (69 de 69) ficam NULL por terem versões demais; BPA de banco 33 de 150 |
+| BPA 2017: ~250 `reclassificacao` e ~30 erros da Camada 3 | **Não atingido**: `reclassificacao` 3.244 → 2.069 (−36%) e `divergencia_nao_explicada` 1.615 → 338 (−79%) |
+| Teste de regressão da empresa antigo/novo/antigo/novo | Cumprido (sintético nos testes, real na cópia) |
+
+Sobre o segundo critério: o "~250" do stress test não é a faixa de um ano típico. Os anos vizinhos têm 884 (2016) e 1.219
+(2018) `reclassificacao` no BPA de 31/12. O que sobra em 2017 são v1 → v2 que **não são troca de template**: o mesmo
+período comparado entre o DFP original e a coluna Penúltimo de ITRs de 2018, quando muitas empresas reapresentaram o
+comparativo ao adotar IFRS 9/15 (flags `reapresentacao` e `reclassificacao` legítimas).
+
+**Limitações conhecidas:**
+- **Bancos**: DRE sem versão (a regra da impressão digital não vale; a proposta de contas-âncora ficou de fora).
+- **Nome repetido na versão antiga**: `1.02.01.09` e `1.02.01.10` são ambas "Outros ativos não circulantes" em filings
+  v1; o de-para não mapeia `.09` → `.10`. Uma regra por exclusão colidiu com filings que têm os dois códigos e piorou a
+  Camada 3 (338 → 1.312), então foi revertida. É a maior parte do que resta de falso positivo em `1.02.01.09.*`.
+- **Camada 5**: `renumerado` sobe de 849 para 1.162 e `ambiguo` de 10.562 para 10.879 (as trocas de template passam a
+  ser gravadas em vez de ficarem como `estavel`; o acréscimo da fila `ambiguo` é de revisão humana).
+
+**Veredito: implementada e funcional; o critério numérico da Camada 2/3 em 2017 não foi atingido (a meta estava
+calibrada errado) e os bancos ficam fora.**

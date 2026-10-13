@@ -257,7 +257,12 @@ Diagnóstico: `SELECT DISTINCT c.ticker, p.plano_contas FROM vw_plano_contas p J
 Banco anterior a estas views: `sqlite3 cvm_research.db < scripts/migrations/2026-09-30_vw_plano_contas.sql` (só views).
 
 **`filings`** — versão vigente e plano de contas de cada documento: `(cnpj_companhia, fonte, tipo_doc, data_referencia) → versao,
-plano_contas, dt_ini_min, dt_ini_max, n_linhas`. As views de DRE e balanço leem dela (por isso respondem em milissegundos, não
+plano_contas, dt_ini_min, dt_ini_max, n_linhas, versao_template`. `versao_template` (`v1`, `v2`…, por plano e tipo_doc; NULL
+= indeterminada) diz qual layout do plano de contas da CVM o filing usa: **o código `S` só tem o mesmo significado dentro da
+mesma versão** (o IFRS 9 deslocou 1.02.01.03 em diante em 2018, e algumas empresas voltam ao layout antigo no meio da
+série). `plano_cvm` guarda as contas de cada versão e `plano_cvm_de_para` os códigos que mudaram de lugar. Camadas 2, 3 e 5
+usam isso; para séries por `cd_conta` do ativo não circulante, cheque `versao_template` antes. Bancos: DRE sem versão.
+Banco anterior: `python scripts/ingest/template_versions.py` (cria coluna e tabelas). As views de DRE e balanço leem dela (por isso respondem em milissegundos, não
 em 25 s). É reconstruída no fim de `ingest_dfp`/`ingest_itr` e no início de `run_all.py` (`python scripts/ingest/filings.py`
 faz à mão): **depois de gravar em `demonstrativos_contabeis` por fora dos ingestores, reconstrua-a**, senão as views mostram
 a versão antiga. Banco anterior à tabela: `sqlite3 cvm_research.db < scripts/migrations/2026-10-05_filings_views.sql`

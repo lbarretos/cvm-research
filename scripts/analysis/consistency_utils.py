@@ -30,7 +30,7 @@ from utils import get_db  # noqa: E402  — reaproveita DATABASE_URL, WAL e fore
 
 __all__ = ["get_db", "tolerancia", "parent_code", "parse_hierarchy", "total_codes", "latest_rows",
            "normalize_text", "is_outros", "text_similarity", "polaridade", "polaridade_conflita", "OUTROS_RE",
-           "cnpjs_financeiros", "new_run", "finish_run", "write_flags", "clear_flags", "add_common_args",
+           "cnpjs_financeiros", "carregar_de_para", "new_run", "finish_run", "write_flags", "clear_flags", "add_common_args",
            "TIPOS_DOC", "FLAG_COLS", "EXCECOES_SOMA", "FORMULAS_NIVEL2", "SETOR_FINANCEIRO",
            "POLARIDADE_ENTRADA", "POLARIDADE_SAIDA"]
 
@@ -188,12 +188,16 @@ SELECT d.cnpj_companhia, d.fonte, d.tipo_doc, d.data_referencia, d.versao,
        d.ordem_exercicio,
        COALESCE(d.dt_ini_exerc, 'NA') AS periodo_ini,
        d.dt_fim_exerc                 AS periodo_fim,
-       d.cd_conta, d.ds_conta, d.vl_conta, d.st_conta_fixa
+       d.cd_conta, d.ds_conta, d.vl_conta, d.st_conta_fixa,
+       {versao_cols}
 FROM demonstrativos_contabeis d
 JOIN versao_max v
   ON  d.cnpj_companhia = v.cnpj_companhia AND d.fonte = v.fonte
   AND d.tipo_doc = v.tipo_doc AND d.data_referencia = v.data_referencia
   AND d.versao = v.versao
+LEFT JOIN filings f
+  ON  f.cnpj_companhia = d.cnpj_companhia AND f.fonte = d.fonte
+  AND f.tipo_doc = d.tipo_doc AND f.data_referencia = d.data_referencia
 ORDER BY d.cnpj_companhia, d.tipo_doc, d.data_referencia, d.fonte, d.ordem_exercicio, d.cd_conta
 """
 
@@ -215,8 +219,26 @@ def latest_rows(conn: sqlite3.Connection, cnpj=None, tipo_doc=None, fonte=None,
         filtros.append("AND data_referencia >= ?"); params.append(f"{desde}-01-01")
     if ate:
         filtros.append("AND data_referencia <= ?"); params.append(f"{ate}-12-31")
-    sql = _LATEST_SQL.format(filtros=" ".join(filtros))
+    # banco anterior à Etapa 5 (sem filings.versao_template): as camadas funcionam como antes
+    tem_versao = any(r[1] == "versao_template" for r in conn.execute("PRAGMA table_info(filings)"))
+    versao_cols = "f.versao_template, f.plano_contas" if tem_versao else "NULL AS versao_template, f.plano_contas"
+    sql = _LATEST_SQL.format(filtros=" ".join(filtros), versao_cols=versao_cols)
     return pd.read_sql_query(sql, conn, params=params)
+
+
+def carregar_de_para(conn: sqlite3.Connection) -> dict:
+    """{(plano, tipo_doc, versao_de, versao_para): {cd na versão de → cd na versão para}} a partir de
+    plano_cvm_de_para (Etapa 5). Vazio se a tabela ainda não existe."""
+    try:
+        rows = conn.execute("SELECT plano_contas, tipo_doc, versao_a, cd_a, versao_b, cd_b "
+                            "FROM plano_cvm_de_para").fetchall()
+    except sqlite3.OperationalError:
+        return {}
+    out: dict = {}
+    for pl, td, va, ca, vb, cb in rows:
+        out.setdefault((pl, td, va, vb), {})[ca] = cb
+        out.setdefault((pl, td, vb, va), {})[cb] = ca
+    return out
 
 
 def cnpjs_financeiros(conn: sqlite3.Connection) -> set[str]:

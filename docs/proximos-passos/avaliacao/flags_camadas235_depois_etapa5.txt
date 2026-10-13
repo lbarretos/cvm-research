@@ -1,0 +1,8 @@
+2|reclassificacao|105775
+2|reapresentacao|56823
+3|zero_padding|38687
+3|reclassificado_em_irmao|17558
+3|divergencia_nao_explicada|17456
+3|reclassificado_em_outros|2419
+3|renumerado|1162
+5|ambiguo|10879

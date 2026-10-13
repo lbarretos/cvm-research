@@ -36,7 +36,7 @@ Roda no job semanal (scripts/update_weekly.sh) depois da Camada 2. À mão
 import pandas as pd
 
 from check_cross_period import iter_pairs
-from consistency_utils import (add_common_args, clear_flags, finish_run, get_db, is_outros, latest_rows,
+from consistency_utils import (add_common_args, carregar_de_para, clear_flags, finish_run, get_db, is_outros, latest_rows,
                                new_run, normalize_text, parent_code, tolerancia, write_flags)
 
 LAYER = 3
@@ -188,14 +188,15 @@ def compare_granularity(ref: pd.DataFrame, cmp: pd.DataFrame,
     return flags, resumo
 
 
-def check_granularity(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 0.01) -> tuple[list[dict], dict]:
+def check_granularity(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 0.01,
+                      de_para: dict | None = None) -> tuple[list[dict], dict]:
     """df = saída de latest_rows (qualquer escopo). Retorna (flags, stats).
 
     stats[tipo_doc] = {"pares": n, "pares_com_exclusivos": m, <classe>: n_flags_de_linha}.
     """
     flags: list[dict] = []
     stats: dict = {}
-    for par, ref, cmp in iter_pairs(df):
+    for par, ref, cmp in iter_pairs(df, de_para):
         tipo_doc = par["tipo_doc"]
         st = stats.setdefault(tipo_doc, {"pares": 0, "pares_com_exclusivos": 0, **{c: 0 for c in SEVERITY}})
         st["pares"] += 1
@@ -239,6 +240,7 @@ def main(argv=None) -> str:
         cnpjs = [args.cnpj]
     else:
         cnpjs = [r[0] for r in conn.execute("SELECT cnpj FROM companies ORDER BY cnpj")]
+    de_para = carregar_de_para(conn)
     run_id = new_run(conn, LAYER, CHECK_TYPE, _escopo(args), vars(args))
     print(f"run {run_id}: {len(cnpjs)} empresa(s), tol_abs={args.tol_abs} tol_rel={args.tol_rel}")
 
@@ -246,7 +248,7 @@ def main(argv=None) -> str:
     stats_total: dict = {}
     for i, cnpj in enumerate(cnpjs, 1):
         df = latest_rows(conn, cnpj=cnpj, tipo_doc=args.tipo_doc, desde=args.desde, ate=args.ate)
-        flags, stats = check_granularity(df, args.tol_abs, args.tol_rel)
+        flags, stats = check_granularity(df, args.tol_abs, args.tol_rel, de_para)
         clear_flags(conn, LAYER, CHECK_TYPE, cnpj, args.tipo_doc)
         n = write_flags(conn, run_id, flags)
         pares = sum(s["pares"] for s in stats.values())

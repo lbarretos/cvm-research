@@ -505,10 +505,30 @@ CREATE TABLE IF NOT EXISTS filings (
     dt_ini_min      TEXT,
     dt_ini_max      TEXT,
     n_linhas        INTEGER,
+    versao_template TEXT,           -- Etapa 5: 'v1', 'v2'… por (plano_contas, tipo_doc); NULL = indeterminada
     PRIMARY KEY (cnpj_companhia, fonte, tipo_doc, data_referencia)
 ) WITHOUT ROWID;
 
 CREATE INDEX IF NOT EXISTS idx_filings_fonte_data ON filings (fonte, data_referencia);
+
+CREATE TABLE IF NOT EXISTS plano_cvm (
+    plano_contas   TEXT NOT NULL,
+    tipo_doc       TEXT NOT NULL,
+    versao_template TEXT NOT NULL,
+    cd_conta       TEXT NOT NULL,
+    ds_conta_norm  TEXT NOT NULL,
+    PRIMARY KEY (plano_contas, tipo_doc, versao_template, cd_conta)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS plano_cvm_de_para (
+    plano_contas TEXT NOT NULL,
+    tipo_doc     TEXT NOT NULL,
+    versao_a     TEXT NOT NULL,
+    cd_a         TEXT NOT NULL,
+    versao_b     TEXT NOT NULL,
+    cd_b         TEXT NOT NULL,
+    ds_conta_norm TEXT NOT NULL,
+    PRIMARY KEY (plano_contas, tipo_doc, versao_a, versao_b, cd_a)
+) WITHOUT ROWID;
 
 -- ── Views ─────────────────────────────────────────────────────────────────────
 

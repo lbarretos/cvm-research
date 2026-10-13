@@ -63,6 +63,14 @@ def _linhas(doc: pd.DataFrame) -> dict:
     return out
 
 
+def _versao(doc: pd.DataFrame):
+    """versao_template do filing (None = desconhecida, ou df sem a coluna)."""
+    if "versao_template" not in doc.columns or doc.empty:
+        return None
+    v = doc["versao_template"].iloc[0]
+    return None if pd.isna(v) else v
+
+
 def _row(cd: str, ds, st, classe: str, anterior=None, score=None) -> dict:
     return {"cd_conta": cd, "cd_conta_pai": parent_code(cd), "ds_conta": ds, "ds_conta_norm": normalize_text(ds),
             "st_conta_fixa": st, "cd_conta_anterior": anterior[0] if anterior else None,
@@ -224,7 +232,9 @@ def check_text_stability(df: pd.DataFrame, sim_alto: float = SIM_ALTO,
         st = stats.setdefault(tipo_doc, {"filings": 0, **{c: 0 for c in CLASSES}})
         anterior = None
         for data_ref in sorted(grupo["data_referencia"].unique()):
-            atual = _linhas(grupo[grupo["data_referencia"] == data_ref])
+            doc_atual = grupo[grupo["data_referencia"] == data_ref]
+            atual = _linhas(doc_atual)
+            versao_atual = _versao(doc_atual)
             st["filings"] += 1
             contexto = {"cnpj_companhia": cnpj, "tipo_doc": tipo_doc, "fonte": fonte, "data_referencia": data_ref}
             if anterior is None:
@@ -232,8 +242,11 @@ def check_text_stability(df: pd.DataFrame, sim_alto: float = SIM_ALTO,
                 rows += [{**contexto, "data_referencia_anterior": None, **r} for r in novas]
                 st["primeira_ocorrencia"] += len(novas)
             else:
-                data_ant, linhas_ant = anterior
-                novas, estaveis, _ = compare_filings(linhas_ant, atual, sim_alto, sim_baixo)
+                data_ant, linhas_ant, versao_ant = anterior
+                # Etapa 5: o código fixo só é confiável dentro da mesma versão do template; entre versões
+                # a CVM re-numerou contas (IFRS 9), então o par casa pelo nome como as contas 'N'
+                confiavel = not (versao_ant and versao_atual and versao_ant != versao_atual)
+                novas, estaveis, _ = compare_filings(linhas_ant, atual, sim_alto, sim_baixo, confiavel)
                 st["estavel"] += estaveis
                 for r in novas:
                     st[r["classificacao"]] += 1
@@ -248,7 +261,7 @@ def check_text_stability(df: pd.DataFrame, sim_alto: float = SIM_ALTO,
                             "detalhe": {"score": r["similarity_score"], "cd_conta_anterior": r["cd_conta_anterior"],
                                         "ds_conta_anterior": r["ds_conta_anterior"]},
                         })
-            anterior = (data_ref, atual)
+            anterior = (data_ref, atual, versao_atual)
     return rows, flags, stats
 
 

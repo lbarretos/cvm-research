@@ -34,7 +34,7 @@ ingest_dfp/ingest_itr, na base inteira. À mão (na pasta scripts/analysis, .ven
 """
 import pandas as pd
 
-from consistency_utils import (add_common_args, clear_flags, finish_run, get_db, latest_rows,
+from consistency_utils import (add_common_args, carregar_de_para, clear_flags, finish_run, get_db, latest_rows,
                                new_run, parent_code, tolerancia, total_codes, write_flags)
 
 LAYER = 2
@@ -102,7 +102,39 @@ def _doc_rows(grupo: pd.DataFrame, doc) -> pd.DataFrame:
     return grupo[mask]
 
 
-def iter_pairs(df: pd.DataFrame):
+def traduzir_para_ref(ref: pd.DataFrame, cmp: pd.DataFrame, de_para: dict) -> pd.DataFrame:
+    """Etapa 5: se o filing comparado é de outra versão do template que o baseline, troca em `cmp` os
+    códigos que mudaram de lugar pelos da versão do baseline (só os do plano_cvm_de_para: mesmo nome,
+    código diferente). Sem versão conhecida em algum dos lados, devolve `cmp` como veio."""
+    if not de_para or "versao_template" not in ref.columns or ref.empty or cmp.empty:
+        return cmp
+    v_ref, v_cmp = ref["versao_template"].iloc[0], cmp["versao_template"].iloc[0]
+    if not v_ref or not v_cmp or v_ref == v_cmp or pd.isna(v_ref) or pd.isna(v_cmp):
+        return cmp
+    mapa = de_para.get((ref["plano_contas"].iloc[0] or "padrao", ref["tipo_doc"].iloc[0], v_cmp, v_ref))
+    if not mapa:
+        return cmp
+    cmp = cmp.copy()
+    # só contas S: uma conta criada pela empresa com o mesmo código não é a conta fixa deslocada
+    eh_s = cmp["st_conta_fixa"] == "S"
+    cmp.loc[eh_s, "cd_conta"] = cmp.loc[eh_s, "cd_conta"].map(lambda c: _traduzir_codigo(c, mapa))
+    return cmp
+
+
+def _traduzir_codigo(cd: str, mapa: dict) -> str:
+    """Troca o código pelo da outra versão; se só um ancestral foi deslocado (1.02.01.08 → 1.02.01.09),
+    leva os descendentes junto (1.02.01.08.01 → 1.02.01.09.01)."""
+    if cd in mapa:
+        return mapa[cd]
+    partes = cd.split(".")
+    for n in range(len(partes) - 1, 0, -1):
+        pref = ".".join(partes[:n])
+        if pref in mapa:
+            return ".".join([mapa[pref]] + partes[n:])
+    return cd
+
+
+def iter_pairs(df: pd.DataFrame, de_para: dict | None = None):
     """Gera (par, ref, cmp) para cada período e cada filing posterior ao baseline.
 
     par = {cnpj_companhia, tipo_doc, periodo_ini, periodo_fim,
@@ -126,11 +158,11 @@ def iter_pairs(df: pd.DataFrame):
                 "fonte_ref": ref_doc.fonte, "data_ref": ref_doc.data_referencia, "ordem_ref": ref_doc.ordem_exercicio,
                 "fonte_cmp": cmp_doc.fonte, "data_cmp": cmp_doc.data_referencia, "ordem_cmp": cmp_doc.ordem_exercicio,
             }
-            yield par, ref, _doc_rows(grupo, cmp_doc)
+            yield par, ref, traduzir_para_ref(ref, _doc_rows(grupo, cmp_doc), de_para or {})
 
 
 def check_cross_period(df: pd.DataFrame, tol_abs: float = 1000.0,
-                       tol_rel: float = 0.01) -> tuple[list[dict], dict]:
+                       tol_rel: float = 0.01, de_para: dict | None = None) -> tuple[list[dict], dict]:
     """df = saída de latest_rows (qualquer escopo). Retorna (flags, stats).
 
     stats[tipo_doc] = {"pares": n, "pares_divergentes": m, "reapresentacao": k},
@@ -138,7 +170,7 @@ def check_cross_period(df: pd.DataFrame, tol_abs: float = 1000.0,
     """
     flags: list[dict] = []
     stats: dict = {}
-    for par, ref, cmp in iter_pairs(df):
+    for par, ref, cmp in iter_pairs(df, de_para):
         tipo_doc = par["tipo_doc"]
         st = stats.setdefault(tipo_doc, {"pares": 0, "pares_divergentes": 0, "reapresentacao": 0})
         st["pares"] += 1
@@ -186,6 +218,7 @@ def main(argv=None) -> str:
         cnpjs = [args.cnpj]
     else:
         cnpjs = [r[0] for r in conn.execute("SELECT cnpj FROM companies ORDER BY cnpj")]
+    de_para = carregar_de_para(conn)
     run_id = new_run(conn, LAYER, CHECK_TYPE, _escopo(args), vars(args))
     print(f"run {run_id}: {len(cnpjs)} empresa(s), tol_abs={args.tol_abs} tol_rel={args.tol_rel}")
 
@@ -193,7 +226,7 @@ def main(argv=None) -> str:
     stats_total: dict = {}
     for i, cnpj in enumerate(cnpjs, 1):
         df = latest_rows(conn, cnpj=cnpj, tipo_doc=args.tipo_doc, desde=args.desde, ate=args.ate)
-        flags, stats = check_cross_period(df, args.tol_abs, args.tol_rel)
+        flags, stats = check_cross_period(df, args.tol_abs, args.tol_rel, de_para)
         clear_flags(conn, LAYER, CHECK_TYPE, cnpj, args.tipo_doc)
         n = write_flags(conn, run_id, flags)
         pares = sum(s["pares"] for s in stats.values())

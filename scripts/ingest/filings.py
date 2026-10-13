@@ -55,6 +55,8 @@ def rebuild_filings(conn) -> int:
         conn.rollback()
         raise
     conn.commit()
+    from template_versions import atribuir_versoes   # Etapa 5: versão do template de cada filing
+    atribuir_versoes(conn)
     return conn.execute("SELECT COUNT(*) FROM filings").fetchone()[0]
 
 

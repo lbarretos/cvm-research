@@ -121,7 +121,9 @@ def test_migracao_filings_preenche_igual_ao_rebuild():
         conn.execute(f"DROP VIEW {v}")
     for _ in range(2):   # idempotente
         conn.executescript(_migracao(MIGRACAO_FILINGS))
-    q = "SELECT * FROM filings ORDER BY 1, 2, 3, 4"
+    # versao_template (Etapa 5) não faz parte da migração de 2026-10-05
+    q = ("SELECT cnpj_companhia, fonte, tipo_doc, data_referencia, versao, plano_contas, dt_ini_min, dt_ini_max, "
+         "n_linhas FROM filings ORDER BY 1, 2, 3, 4")
     assert conn.execute(q).fetchall() == esperado.execute(q).fetchall()
     v = "SELECT name, sql FROM sqlite_master WHERE type IN ('view', 'index') AND name LIKE 'vw_%' OR name LIKE 'idx_filings%' ORDER BY name"
     assert conn.execute(v).fetchall() == esperado.execute(v).fetchall()

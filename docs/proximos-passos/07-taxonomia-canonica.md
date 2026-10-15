@@ -177,3 +177,18 @@ obrigatórios antes de publicar, não opcionais.
 cobertura, sinal e, no caso da D&A, na identidade com a DVA a ~85–90%. **A precisão de 98% não foi demonstrada**: antes de
 um analista usar `divida_liquida_fluxo`, `arrend_pago` ou `recompra` sem olhar a linha, falta a revisão estratificada que
 este doc pediu. O `get_financials` expõe `metodo` e `checagem` justamente para isso.
+
+### Avaliação da Etapa 2 com as seis ferramentas (2026-10-15)
+
+`avaliacao/runs/2026-10-15_etapa7.json`: 27/28 certas (96,4%), zero erros de ferramenta, zero consultas abortadas,
+4,4 chamadas e ~319 mil tokens por pergunta (a execução da Etapa 4 tinha 100%, 4,3 e ~302 mil). Montado de duas rodadas:
+20 perguntas de 2026-10-13 e 8 refeitas em 2026-10-15, porque a primeira caiu no limite de uso da conta.
+
+- **O único erro é a q027** (BLAU3, lucro líquido 2024): o modelo investigou o PDF, concluiu que a "reapresentação" do DFP
+  2025 é um erro de sinal na própria fonte e respondeu original = reapresentado = R$ 213,5 mi. O gabarito pede os dois
+  valores publicados lado a lado (R$ 213,5 mi e R$ 245,9 mi). A análise dele é defensável, mas contraria a regra 3 da
+  skill ("nunca troque um pelo outro em silêncio"); fica como erro.
+- **Esta avaliação não exercita o `get_financials`**: o v0 não tem pergunta de DFC por conceito (D&A entra pela DVA, via
+  `query`), então o efeito da ferramenta em acerto e tokens **não foi medido**. A v1 (~80 perguntas, com "capex de X em
+  2023" e "dividendos pagos") é o que falta para isso. A diferença de +5% de tokens para a Etapa 4 está dentro do ruído de
+  uma execução (sessões diferentes, prefixo de contexto igual).

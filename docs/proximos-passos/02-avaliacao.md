@@ -98,3 +98,14 @@ custo; as perguntas difíceis (texto conceitual, documentos longos, padronizaç�
 - ✅ Executor rodando o v0 em menos de 30 minutos (a execução levou ~3 min) e gravando um relatório comparável entre execuções (`--comparar`).
 - ✅ Linha de base registrada **antes** de qualquer mudança das etapas 3 e 4: `avaliacao/runs/2026-10-05_baseline-pre-etapa3.json`.
 - Pendente: a v1 (~80 perguntas).
+
+### Execuções registradas (`avaliacao/runs/`)
+
+| Execução | Acerto | Chamadas | Tokens/pergunta | Erros de ferramenta | Observação |
+|---|---|---|---|---|---|
+| 2026-10-05 baseline (pré-Etapa 3) | 27/28 | 3,5 | 294 mil | 5 | q011 (D&A) errada |
+| 2026-10-06 Etapa 3 | 28/28 | 4,4 | 306 mil | 0 | `resolve_company`, saída tabular, skill |
+| 2026-10-13 Etapa 4 | 28/28 | 4,3 | 302 mil | 0 | `search_docs`/`read_doc`; ~3,9 mil chars lidos |
+| 2026-10-15 Etapa 7 | 27/28 | 4,4 | 319 mil | 0 | `get_financials` liberado; q027 errada (ver doc da Etapa 7) |
+
+Os tokens não caem entre execuções porque o prefixo de sessão domina (ver Etapa 3). A v1 do conjunto continua pendente.

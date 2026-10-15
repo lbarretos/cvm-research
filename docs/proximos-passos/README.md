@@ -13,7 +13,7 @@ A numeração é a ordem recomendada. Cada etapa só depende das anteriores.
 | # | Etapa | Camada | Depende de | Veredito do stress test | Esforço |
 |---|---|---|---|---|---|
 | 1 | [Desempenho e operação](01-desempenho-e-operacao.md) | infraestrutura | — | **Implementada em 2026-10-05, PR #29.** Views idênticas nas 7.174 linhas reais e de 25 s para milissegundos; `VACUUM` ainda pendente | XS–S |
-| 2 | [Avaliação contínua](02-avaliacao.md) | transversal | 1 | **Executor implementado em 2026-10-05**; linha de base: 27/28 certas, ~295 mil tokens e US$ 0,45 por pergunta; v1 pendente | S |
+| 2 | [Avaliação contínua](02-avaliacao.md) | transversal | 1 | **Executor implementado em 2026-10-05**; linha de base: 27/28 certas, ~295 mil tokens e US$ 0,45 por pergunta; **v1 (81 perguntas) montada em 2026-10-15**, baseline do v1 ainda por rodar | S |
 | 3 | [MCP, skill e contexto](03-mcp-skill-e-contexto.md) | interface com o LLM | 1, 2 | **Implementada em 2026-10-06 (3.1, 3.5 e regras transversais).** Acerto 28/28 e zero erros de ferramenta; **tokens não caíram** (+4%, mais turnos): o prefixo fixo da sessão domina, o próximo corte é em turnos | S–M |
 | 4 | [Texto e busca (RAG)](04-texto-e-busca.md) | documentos | 2 | **Implementada em 2026-10-13 (sem embeddings nem 4.1).** 1,3 mi de trechos, p95 3 ms, 0 repetidos no top-10, 6,9 mil chars lidos por pergunta de documento | M |
 | 5 | [Versões do template da CVM](05-template-cvm.md) | demonstrativos, L0 | 1 | **Implementada em 2026-10-14.** Versão por filing, crosswalk e Camadas 2/3/5 ajustadas; BPA 2017: `divergencia_nao_explicada` −79%, `reclassificacao` −36% (meta de ~250 estava mal calibrada); bancos ficam sem versão na DRE | S |

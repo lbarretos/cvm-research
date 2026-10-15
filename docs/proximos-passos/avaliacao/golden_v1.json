@@ -1,0 +1,834 @@
+{
+ "gerado_em": "2026-10-15",
+ "banco": "cvm_research.db",
+ "n": 81,
+ "versao": "v1",
+ "perguntas": [
+  {
+   "id": "q001",
+   "tipo": "numero",
+   "pergunta": "Qual a receita líquida consolidada de GGBR4 em 2024 (DFP), em R$?",
+   "resposta": 67026656000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='33.611.500/0001-19' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "resolver o CNPJ pelo ticker; usar DFP (anual), não somar ITRs"
+  },
+  {
+   "id": "q002",
+   "tipo": "numero",
+   "pergunta": "Qual o lucro líquido consolidado de GGBR4 em 2024 (DFP), em R$?",
+   "resposta": 4599062000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='33.611.500/0001-19' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "3.11 é o lucro consolidado (inclui não controladores)"
+  },
+  {
+   "id": "q003",
+   "tipo": "numero",
+   "pergunta": "Qual a receita líquida consolidada de YDUQ3 em 2024 (DFP), em R$?",
+   "resposta": 5351785000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='08.807.432/0001-10' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "resolver o CNPJ pelo ticker; usar DFP (anual), não somar ITRs"
+  },
+  {
+   "id": "q004",
+   "tipo": "numero",
+   "pergunta": "Qual o lucro líquido consolidado de YDUQ3 em 2024 (DFP), em R$?",
+   "resposta": 341208000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='08.807.432/0001-10' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "3.11 é o lucro consolidado (inclui não controladores)"
+  },
+  {
+   "id": "q005",
+   "tipo": "numero",
+   "pergunta": "Qual a receita líquida consolidada de IGTI11 em 2024 (DFP), em R$?",
+   "resposta": 1236345000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='60.543.816/0001-93' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "resolver o CNPJ pelo ticker; usar DFP (anual), não somar ITRs"
+  },
+  {
+   "id": "q006",
+   "tipo": "numero",
+   "pergunta": "Qual o lucro líquido consolidado de IGTI11 em 2024 (DFP), em R$?",
+   "resposta": 399876000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='60.543.816/0001-93' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "3.11 é o lucro consolidado (inclui não controladores)"
+  },
+  {
+   "id": "q007",
+   "tipo": "numero",
+   "pergunta": "Qual a receita líquida consolidada de MOTV3 em 2024 (DFP), em R$?",
+   "resposta": 21783791000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='02.846.056/0001-97' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "resolver o CNPJ pelo ticker; usar DFP (anual), não somar ITRs"
+  },
+  {
+   "id": "q008",
+   "tipo": "numero",
+   "pergunta": "Qual o lucro líquido consolidado de MOTV3 em 2024 (DFP), em R$?",
+   "resposta": 1311615000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida, lucro_liquido FROM vw_dre WHERE cnpj_companhia='02.846.056/0001-97' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "3.11 é o lucro consolidado (inclui não controladores)"
+  },
+  {
+   "id": "q009",
+   "tipo": "numero",
+   "pergunta": "Qual a receita líquida de MBRF3 no 4T24 (trimestre isolado, como divulgado na época)?",
+   "resposta": 42150257000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_final FROM demonstrativos_trimestrais WHERE cnpj_companhia='03.853.896/0001-40' AND tipo_doc='DRE' AND safra='original' AND cd_conta='3.01' AND dt_fim_exerc='2024-12-31' AND trimestre=4",
+   "armadilha": "o 4T não existe no ITR: é DFP − acumulado do 3T; usar safra original"
+  },
+  {
+   "id": "q010",
+   "tipo": "numero",
+   "pergunta": "Qual a receita líquida de PGMN3 no 4T24 (trimestre isolado, como divulgado na época)?",
+   "resposta": 3349190000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_final FROM demonstrativos_trimestrais WHERE cnpj_companhia='06.626.253/0001-51' AND tipo_doc='DRE' AND safra='original' AND cd_conta='3.01' AND dt_fim_exerc='2024-12-31' AND trimestre=4",
+   "armadilha": "o 4T não existe no ITR: é DFP − acumulado do 3T; usar safra original"
+  },
+  {
+   "id": "q011",
+   "tipo": "numero",
+   "pergunta": "Quanto CSAN3 registrou de depreciação, amortização e exaustão em 2024?",
+   "resposta": 7023983000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='50.746.577/0001-15' AND fonte='DFP' AND tipo_doc='DVA' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='7.04.01'",
+   "armadilha": "D&A está na DVA 7.04.01 (conta fixa); na DFC fica em linhas criadas pela empresa"
+  },
+  {
+   "id": "q012",
+   "tipo": "numero",
+   "pergunta": "Quanto ISAE4 registrou de depreciação, amortização e exaustão em 2024?",
+   "resposta": 37357000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='02.998.611/0001-04' AND fonte='DFP' AND tipo_doc='DVA' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='7.04.01'",
+   "armadilha": "D&A está na DVA 7.04.01 (conta fixa); na DFC fica em linhas criadas pela empresa"
+  },
+  {
+   "id": "q013",
+   "tipo": "numero",
+   "pergunta": "Qual o lucro líquido de BBAS3 em 2024 (DFP)?",
+   "resposta": 29171564000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT lucro_liquido FROM vw_dre_financeiro WHERE cnpj_companhia='00.000.000/0001-91' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "banco: vw_dre volta NULL; 3.11 do plano padrão não é o lucro de banco"
+  },
+  {
+   "id": "q014",
+   "tipo": "numero",
+   "pergunta": "Qual o lucro líquido de BPAC11 em 2024 (DFP)?",
+   "resposta": 11080445000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT lucro_liquido FROM vw_dre_financeiro WHERE cnpj_companhia='30.306.294/0001-45' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "banco: vw_dre volta NULL; 3.11 do plano padrão não é o lucro de banco"
+  },
+  {
+   "id": "q015",
+   "tipo": "contagem",
+   "pergunta": "Quantos fatos relevantes LREN3 divulgou em 2025?",
+   "resposta": 4,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='92.754.738/0001-62' AND categoria='Fato Relevante' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "filtrar por data_entrega, não data_referencia; contar reapresentações é discutível — resposta inclui todas"
+  },
+  {
+   "id": "q016",
+   "tipo": "documento",
+   "pergunta": "Qual foi o último fato relevante de LREN3 antes de setembro de 2026, e sobre o quê?",
+   "resposta": {
+    "data_entrega": "2026-08-10",
+    "assunto": "Contratação de Formador de Mercado"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_entrega, assunto FROM ipe_docs WHERE cnpj_companhia='92.754.738/0001-62' AND categoria='Fato Relevante' AND data_entrega < '2026-09-01' ORDER BY data_entrega DESC LIMIT 1",
+   "armadilha": "ordenar por data_entrega; ler o texto para dizer o tema"
+  },
+  {
+   "id": "q017",
+   "tipo": "contagem",
+   "pergunta": "Quantos fatos relevantes ONCO3 divulgou em 2025?",
+   "resposta": 25,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='12.104.241/0004-02' AND categoria='Fato Relevante' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "filtrar por data_entrega, não data_referencia; contar reapresentações é discutível — resposta inclui todas"
+  },
+  {
+   "id": "q018",
+   "tipo": "documento",
+   "pergunta": "Qual foi o último fato relevante de ONCO3 antes de setembro de 2026, e sobre o quê?",
+   "resposta": {
+    "data_entrega": "2026-08-27",
+    "assunto": "Informações adicionais - OPA"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_entrega, assunto FROM ipe_docs WHERE cnpj_companhia='12.104.241/0004-02' AND categoria='Fato Relevante' AND data_entrega < '2026-09-01' ORDER BY data_entrega DESC LIMIT 1",
+   "armadilha": "ordenar por data_entrega; ler o texto para dizer o tema"
+  },
+  {
+   "id": "q019",
+   "tipo": "contagem",
+   "pergunta": "Quantos fatos relevantes CPFE3 divulgou em 2025?",
+   "resposta": 8,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='02.429.144/0001-93' AND categoria='Fato Relevante' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "filtrar por data_entrega, não data_referencia; contar reapresentações é discutível — resposta inclui todas"
+  },
+  {
+   "id": "q020",
+   "tipo": "documento",
+   "pergunta": "Qual foi o último fato relevante de CPFE3 antes de setembro de 2026, e sobre o quê?",
+   "resposta": {
+    "data_entrega": "2026-05-08",
+    "assunto": "Renovação das Concessões das distribuidoras"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_entrega, assunto FROM ipe_docs WHERE cnpj_companhia='02.429.144/0001-93' AND categoria='Fato Relevante' AND data_entrega < '2026-09-01' ORDER BY data_entrega DESC LIMIT 1",
+   "armadilha": "ordenar por data_entrega; ler o texto para dizer o tema"
+  },
+  {
+   "id": "q021",
+   "tipo": "contagem",
+   "pergunta": "Quantos fatos relevantes ALOS3 divulgou em 2025?",
+   "resposta": 5,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='05.878.397/0001-32' AND categoria='Fato Relevante' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "filtrar por data_entrega, não data_referencia; contar reapresentações é discutível — resposta inclui todas"
+  },
+  {
+   "id": "q022",
+   "tipo": "documento",
+   "pergunta": "Qual foi o último fato relevante de ALOS3 antes de setembro de 2026, e sobre o quê?",
+   "resposta": {
+    "data_entrega": "2026-08-06",
+    "assunto": "Esclarecimentos"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_entrega, assunto FROM ipe_docs WHERE cnpj_companhia='05.878.397/0001-32' AND categoria='Fato Relevante' AND data_entrega < '2026-09-01' ORDER BY data_entrega DESC LIMIT 1",
+   "armadilha": "ordenar por data_entrega; ler o texto para dizer o tema"
+  },
+  {
+   "id": "q023",
+   "tipo": "fato",
+   "pergunta": "Quem é o maior acionista direto de BEEF3 e com quantos % do capital total?",
+   "resposta": {
+    "acionista": "VDQ HOLDING S.A.",
+    "pct_total": 28.891
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT acionista, percentual_total_acoes_circulacao FROM vw_acionistas_diretos WHERE cnpj_companhia='67.620.377/0001-14' AND acionista NOT LIKE 'Outros%' AND acionista NOT LIKE '%Tesouraria%' ORDER BY percentual_total_acoes_circulacao DESC LIMIT 1",
+   "armadilha": "fre_posicao_acionaria mistura níveis da cadeia de controle; usar a view de diretos"
+  },
+  {
+   "id": "q024",
+   "tipo": "fato",
+   "pergunta": "Quem é o maior acionista direto de DASA3 e com quantos % do capital total?",
+   "resposta": {
+    "acionista": "Fundo de Investimento em Participações Genoma III - Multiestratégia",
+    "pct_total": 50.575
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT acionista, percentual_total_acoes_circulacao FROM vw_acionistas_diretos WHERE cnpj_companhia='61.486.650/0001-83' AND acionista NOT LIKE 'Outros%' AND acionista NOT LIKE '%Tesouraria%' ORDER BY percentual_total_acoes_circulacao DESC LIMIT 1",
+   "armadilha": "fre_posicao_acionaria mistura níveis da cadeia de controle; usar a view de diretos"
+  },
+  {
+   "id": "q025",
+   "tipo": "fato",
+   "pergunta": "Quem é o maior acionista direto de RECV3 e com quantos % do capital total?",
+   "resposta": {
+    "acionista": "PetroSantander Luxembourg Holdings S.a.r.l.",
+    "pct_total": 19.605
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT acionista, percentual_total_acoes_circulacao FROM vw_acionistas_diretos WHERE cnpj_companhia='03.342.704/0001-30' AND acionista NOT LIKE 'Outros%' AND acionista NOT LIKE '%Tesouraria%' ORDER BY percentual_total_acoes_circulacao DESC LIMIT 1",
+   "armadilha": "fre_posicao_acionaria mistura níveis da cadeia de controle; usar a view de diretos"
+  },
+  {
+   "id": "q026",
+   "tipo": "numero_par",
+   "pergunta": "O lucro líquido de HBSA3 em 2024 foi reapresentado? Dê o original e o reapresentado.",
+   "resposta": {
+    "original": -621699000.0,
+    "reapresentado": -569415000.0
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT valor_ref, valor_cmp FROM consistency_flags cf JOIN companies c ON c.cnpj=cf.cnpj_companhia WHERE c.ticker='HBSA3' AND layer=2 AND tipo_doc='DRE' AND cd_conta='3.11' AND periodo_fim='2024-12-31' AND fonte_cmp='DFP'",
+   "armadilha": "mostrar os dois lado a lado; o padrão da base é o original"
+  },
+  {
+   "id": "q027",
+   "tipo": "numero_par",
+   "pergunta": "O lucro líquido de BLAU3 em 2024 foi reapresentado? Dê o original e o reapresentado.",
+   "resposta": {
+    "original": 213525000.0,
+    "reapresentado": 245894000.0
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT valor_ref, valor_cmp FROM consistency_flags cf JOIN companies c ON c.cnpj=cf.cnpj_companhia WHERE c.ticker='BLAU3' AND layer=2 AND tipo_doc='DRE' AND cd_conta='3.11' AND periodo_fim='2024-12-31' AND fonte_cmp='DFP'",
+   "armadilha": "mostrar os dois lado a lado; o padrão da base é o original"
+  },
+  {
+   "id": "q028",
+   "tipo": "sem_dado",
+   "pergunta": "Qual foi o fato relevante mais recente da PETR4 publicado ontem?",
+   "resposta": "resposta correta: informar a data do último dado na base (MAX(data_entrega)) e apontar o RAD",
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT MAX(data_entrega) FROM ipe_docs",
+   "armadilha": "defasagem semanal do IPE: ausência de dado não é ausência de evento"
+  },
+  {
+   "id": "q029",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Quanto ECOR3 pagou de dividendos e JCP em 2024, segundo a DFC? (valor positivo, em R$)",
+   "resposta": 535808000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='08.873.873/0001-10' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.01'",
+   "armadilha": "dividendos pagos estão numa linha N da DFC cujo código varia por empresa; não confundir com declarados"
+  },
+  {
+   "id": "q030",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Quanto VBBR3 pagou de dividendos e JCP em 2024, segundo a DFC? (valor positivo, em R$)",
+   "resposta": 1528000000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='34.274.233/0001-02' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.05'",
+   "armadilha": "dividendos pagos estão numa linha N da DFC cujo código varia por empresa; não confundir com declarados"
+  },
+  {
+   "id": "q031",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Quanto EZTC3 pagou de dividendos e JCP em 2024, segundo a DFC? (valor positivo, em R$)",
+   "resposta": 235681000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='08.312.229/0001-73' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.06'",
+   "armadilha": "dividendos pagos estão numa linha N da DFC cujo código varia por empresa; não confundir com declarados"
+  },
+  {
+   "id": "q032",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Qual o capex de ECOR3 em 2024 (aquisição de imobilizado mais intangível, na DFC), em R$ positivos?",
+   "resposta": 3929844000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='08.873.873/0001-10' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.02.01' + SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='08.873.873/0001-10' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.02.02'",
+   "armadilha": "capex = soma de duas linhas N; somar só uma erra"
+  },
+  {
+   "id": "q033",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Qual o capex de GMAT3 em 2024 (aquisição de imobilizado mais intangível, na DFC), em R$ positivos?",
+   "resposta": 1268652000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='24.990.777/0001-09' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.02.01' + SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='24.990.777/0001-09' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.02.02'",
+   "armadilha": "capex = soma de duas linhas N; somar só uma erra"
+  },
+  {
+   "id": "q034",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Qual o capex de LJQQ3 em 2024 (aquisição de imobilizado mais intangível, na DFC), em R$ positivos?",
+   "resposta": 48989000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='96.418.264/0218-02' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.02.02' + SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='96.418.264/0218-02' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.02.04'",
+   "armadilha": "capex = soma de duas linhas N; somar só uma erra"
+  },
+  {
+   "id": "q035",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Quanto FLRY3 gastou com recompra de ações em 2024 segundo a DFC, em R$ positivos?",
+   "resposta": 20915000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='60.840.055/0001-31' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.12'",
+   "armadilha": "linha N de financiamento; vem com sinal negativo"
+  },
+  {
+   "id": "q036",
+   "tipo": "numero",
+   "familia": "dfc_conceito",
+   "pergunta": "Quanto GMAT3 gastou com recompra de ações em 2024 segundo a DFC, em R$ positivos?",
+   "resposta": 10818000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='24.990.777/0001-09' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.10'",
+   "armadilha": "linha N de financiamento; vem com sinal negativo"
+  },
+  {
+   "id": "q037",
+   "tipo": "serie",
+   "familia": "dfc_serie",
+   "pergunta": "Quanto RECV3 pagou de dividendos e JCP em 2023 e em 2024 (DFC, valores positivos em R$)?",
+   "resposta": {
+    "2023": 281943000.0,
+    "2024": 775976000.0
+   },
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='03.342.704/0001-30' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2023-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.08' ; SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='03.342.704/0001-30' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.05'",
+   "armadilha": "o código da linha mudou entre os anos (6.03.08 → 6.03.05): juntar por código mistura contas"
+  },
+  {
+   "id": "q038",
+   "tipo": "serie",
+   "familia": "dfc_serie",
+   "pergunta": "Quanto ONCO3 pagou de dividendos e JCP em 2023 e em 2024 (DFC, valores positivos em R$)?",
+   "resposta": {
+    "2023": 59713000.0,
+    "2024": 11656000.0
+   },
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='12.104.241/0004-02' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2023-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.09' ; SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='12.104.241/0004-02' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03.08'",
+   "armadilha": "o código da linha mudou entre os anos (6.03.09 → 6.03.08): juntar por código mistura contas"
+  },
+  {
+   "id": "q039",
+   "tipo": "numero",
+   "familia": "dfc_fixa",
+   "pergunta": "Qual o caixa líquido das atividades operacionais de FLRY3 em 2024 (DFC)? Mantenha o sinal, em R$.",
+   "resposta": 1930488000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='60.840.055/0001-31' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.01'",
+   "armadilha": "conta fixa 6.0x da DFC; manter o sinal"
+  },
+  {
+   "id": "q040",
+   "tipo": "numero",
+   "familia": "dfc_fixa",
+   "pergunta": "Qual o caixa líquido das atividades de financiamento de FLRY3 em 2024 (DFC)? Mantenha o sinal, em R$.",
+   "resposta": 126010000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='60.840.055/0001-31' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03'",
+   "armadilha": "conta fixa 6.0x da DFC; manter o sinal"
+  },
+  {
+   "id": "q041",
+   "tipo": "numero",
+   "familia": "dfc_fixa",
+   "pergunta": "Qual o caixa líquido das atividades operacionais de ECOR3 em 2024 (DFC)? Mantenha o sinal, em R$.",
+   "resposta": 3942537000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='08.873.873/0001-10' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.01'",
+   "armadilha": "conta fixa 6.0x da DFC; manter o sinal"
+  },
+  {
+   "id": "q042",
+   "tipo": "numero",
+   "familia": "dfc_fixa",
+   "pergunta": "Qual o caixa líquido das atividades de financiamento de ECOR3 em 2024 (DFC)? Mantenha o sinal, em R$.",
+   "resposta": -468922000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_conta FROM demonstrativos_contabeis WHERE cnpj_companhia='08.873.873/0001-10' AND fonte='DFP' AND tipo_doc='DFC_MI' AND data_referencia='2024-12-31' AND ordem_exercicio='Último' AND cd_conta='6.03'",
+   "armadilha": "conta fixa 6.0x da DFC; manter o sinal"
+  },
+  {
+   "id": "q043",
+   "tipo": "numero",
+   "familia": "balanco",
+   "pergunta": "Qual o ativo total de AZUL4 em 31/12/2024, em R$?",
+   "resposta": 26274943000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT ativo_total, patrimonio_liquido, caixa, divida_curto_prazo + COALESCE(divida_longo_prazo,0) FROM vw_balanco WHERE cnpj_companhia='09.305.994/0001-29' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "vw_balanco; BPA+BPP"
+  },
+  {
+   "id": "q044",
+   "tipo": "numero",
+   "familia": "balanco",
+   "pergunta": "Qual a dívida bruta (curto + longo prazo, financeira) de AZUL4 em 31/12/2024, em R$?",
+   "resposta": 36484585000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT ativo_total, patrimonio_liquido, caixa, divida_curto_prazo + COALESCE(divida_longo_prazo,0) FROM vw_balanco WHERE cnpj_companhia='09.305.994/0001-29' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "divida_curto_prazo + divida_longo_prazo da vw_balanco (contas 2.01.04 e 2.02.01)"
+  },
+  {
+   "id": "q045",
+   "tipo": "numero",
+   "familia": "balanco",
+   "pergunta": "Qual o ativo total de VALE3 em 31/12/2024, em R$?",
+   "resposta": 496325000000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT ativo_total, patrimonio_liquido, caixa, divida_curto_prazo + COALESCE(divida_longo_prazo,0) FROM vw_balanco WHERE cnpj_companhia='33.592.510/0001-54' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "vw_balanco; BPA+BPP"
+  },
+  {
+   "id": "q046",
+   "tipo": "numero",
+   "familia": "balanco",
+   "pergunta": "Qual a dívida bruta (curto + longo prazo, financeira) de VALE3 em 31/12/2024, em R$?",
+   "resposta": 96012000000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT ativo_total, patrimonio_liquido, caixa, divida_curto_prazo + COALESCE(divida_longo_prazo,0) FROM vw_balanco WHERE cnpj_companhia='33.592.510/0001-54' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "divida_curto_prazo + divida_longo_prazo da vw_balanco (contas 2.01.04 e 2.02.01)"
+  },
+  {
+   "id": "q047",
+   "tipo": "percentual",
+   "familia": "dre_derivada",
+   "pergunta": "Qual a margem EBIT de AMOB3 em 2024 (EBIT sobre receita líquida), em %?",
+   "resposta": 1.5509191479237963,
+   "tolerancia_rel": 0.02,
+   "sql_referencia": "SELECT ebit, receita_liquida FROM vw_dre WHERE cnpj_companhia='35.654.688/0001-08' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "ebit/receita_liquida da vw_dre (DFP)"
+  },
+  {
+   "id": "q048",
+   "tipo": "percentual",
+   "familia": "dre_derivada",
+   "pergunta": "Qual a margem EBIT de GMAT3 em 2024 (EBIT sobre receita líquida), em %?",
+   "resposta": 6.5163974125575015,
+   "tolerancia_rel": 0.02,
+   "sql_referencia": "SELECT ebit, receita_liquida FROM vw_dre WHERE cnpj_companhia='24.990.777/0001-09' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "ebit/receita_liquida da vw_dre (DFP)"
+  },
+  {
+   "id": "q049",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida de RENT3 no 2T25 isolado (abril a junho de 2025), em R$?",
+   "resposta": 9900107000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre WHERE cnpj_companhia='16.670.085/0001-55' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "ITR 2T tem duas linhas por conta: isolado e acumulado; usar o trimestre isolado"
+  },
+  {
+   "id": "q050",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida acumulada de RENT3 no primeiro semestre de 2025, em R$?",
+   "resposta": 20039390000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre_acumulada WHERE cnpj_companhia='16.670.085/0001-55' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "acumulado do ano (vw_dre_acumulada), não o trimestre"
+  },
+  {
+   "id": "q051",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida de CMIN3 no 2T25 isolado (abril a junho de 2025), em R$?",
+   "resposta": 4038202000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre WHERE cnpj_companhia='08.902.291/0001-15' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "ITR 2T tem duas linhas por conta: isolado e acumulado; usar o trimestre isolado"
+  },
+  {
+   "id": "q052",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida acumulada de CMIN3 no primeiro semestre de 2025, em R$?",
+   "resposta": 7949584000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre_acumulada WHERE cnpj_companhia='08.902.291/0001-15' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "acumulado do ano (vw_dre_acumulada), não o trimestre"
+  },
+  {
+   "id": "q053",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida de PSSA3 no 2T25 isolado (abril a junho de 2025), em R$?",
+   "resposta": 10047836000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre WHERE cnpj_companhia='02.149.205/0001-69' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "ITR 2T tem duas linhas por conta: isolado e acumulado; usar o trimestre isolado"
+  },
+  {
+   "id": "q054",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida acumulada de PSSA3 no primeiro semestre de 2025, em R$?",
+   "resposta": 19753705000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre_acumulada WHERE cnpj_companhia='02.149.205/0001-69' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "acumulado do ano (vw_dre_acumulada), não o trimestre"
+  },
+  {
+   "id": "q055",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida de MGLU3 no 2T25 isolado (abril a junho de 2025), em R$?",
+   "resposta": 9134666000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre WHERE cnpj_companhia='47.960.950/0001-21' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "ITR 2T tem duas linhas por conta: isolado e acumulado; usar o trimestre isolado"
+  },
+  {
+   "id": "q056",
+   "tipo": "numero",
+   "familia": "itr",
+   "pergunta": "Qual a receita líquida acumulada de MGLU3 no primeiro semestre de 2025, em R$?",
+   "resposta": 18523651000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre_acumulada WHERE cnpj_companhia='47.960.950/0001-21' AND fonte='ITR' AND data_referencia='2025-06-30'",
+   "armadilha": "acumulado do ano (vw_dre_acumulada), não o trimestre"
+  },
+  {
+   "id": "q057",
+   "tipo": "numero",
+   "familia": "trimestral",
+   "pergunta": "Qual foi o caixa operacional (DFC) de MRVE3 no 4T24 isolado, em R$?",
+   "resposta": -201037000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_final FROM demonstrativos_trimestrais WHERE cnpj_companhia='08.343.492/0001-20' AND tipo_doc='DFC_MI' AND safra='original' AND cd_conta='6.01' AND dt_fim_exerc='2024-12-31' AND trimestre=4",
+   "armadilha": "a DFC só vem acumulada: o 4T é DFP − acumulado do 3T (demonstrativos_trimestrais, safra original)"
+  },
+  {
+   "id": "q058",
+   "tipo": "numero",
+   "familia": "trimestral",
+   "pergunta": "Qual foi o caixa operacional (DFC) de INTB3 no 4T24 isolado, em R$?",
+   "resposta": -117956000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT vl_final FROM demonstrativos_trimestrais WHERE cnpj_companhia='82.901.000/0001-27' AND tipo_doc='DFC_MI' AND safra='original' AND cd_conta='6.01' AND dt_fim_exerc='2024-12-31' AND trimestre=4",
+   "armadilha": "a DFC só vem acumulada: o 4T é DFP − acumulado do 3T (demonstrativos_trimestrais, safra original)"
+  },
+  {
+   "id": "q059",
+   "tipo": "numero",
+   "familia": "plano",
+   "pergunta": "Qual o lucro líquido de BBSE3 em 2024 (DFP)?",
+   "resposta": 8703353000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT lucro_liquido FROM vw_dre_seguradora WHERE cnpj_companhia='17.344.597/0001-94' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "seguradora: vw_dre volta NULL; usar vw_dre_seguradora (3.13)"
+  },
+  {
+   "id": "q060",
+   "tipo": "numero",
+   "familia": "plano",
+   "pergunta": "Qual o lucro líquido de IRBR3 em 2024 (DFP)?",
+   "resposta": 805740000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT lucro_liquido FROM vw_dre_seguradora WHERE cnpj_companhia='33.376.989/0001-91' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "seguradora: vw_dre volta NULL; usar vw_dre_seguradora (3.13)"
+  },
+  {
+   "id": "q061",
+   "tipo": "numero",
+   "familia": "plano",
+   "pergunta": "Qual o ativo total de BBDC4 em 31/12/2024?",
+   "resposta": 2069506045000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT ativo_total FROM vw_balanco WHERE cnpj_companhia='60.746.948/0001-12' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "ativo_total vale em todos os planos"
+  },
+  {
+   "id": "q062",
+   "tipo": "numero",
+   "familia": "plano",
+   "pergunta": "Qual o ativo total de ITUB4 em 31/12/2024?",
+   "resposta": 2854475000000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT ativo_total FROM vw_balanco WHERE cnpj_companhia='60.872.504/0001-23' AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "ativo_total vale em todos os planos"
+  },
+  {
+   "id": "q063",
+   "tipo": "numero",
+   "familia": "calendario",
+   "pergunta": "Qual a receita líquida de CAML3 no exercício social encerrado em 28/02/2024 (DFP)?",
+   "resposta": 11249647000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre WHERE cnpj_companhia='64.904.295/0001-03' AND fonte='DFP' AND data_referencia='2024-02-28'",
+   "armadilha": "exercício fora do ano-calendário: a data de referência não é 31/12"
+  },
+  {
+   "id": "q064",
+   "tipo": "numero",
+   "familia": "calendario",
+   "pergunta": "Qual a receita líquida de JALL3 no exercício social encerrado em 31/03/2024 (DFP)?",
+   "resposta": 1909528000.0,
+   "tolerancia_rel": 0.005,
+   "sql_referencia": "SELECT receita_liquida FROM vw_dre WHERE cnpj_companhia='02.635.522/0001-95' AND fonte='DFP' AND data_referencia='2024-03-31'",
+   "armadilha": "exercício fora do ano-calendário: a data de referência não é 31/12"
+  },
+  {
+   "id": "q065",
+   "tipo": "contagem",
+   "familia": "insider",
+   "pergunta": "Quantas operações de compra em mercado (à vista, a termo ou compra simples) os insiders de BEEF3 fizeram em 2025?",
+   "resposta": 12,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*), ROUND(SUM(v.volume), 2) FROM vlmo_movimentacoes v WHERE v.cnpj_companhia='67.620.377/0001-14' AND v.versao = (SELECT MAX(versao) FROM vlmo_movimentacoes m WHERE m.cnpj_companhia=v.cnpj_companhia AND m.data_referencia=v.data_referencia) AND v.tipo_movimentacao IN ('Compra à vista','Compra à termo','Compra') AND v.data_movimentacao BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "só a última versão de cada formulário mensal; excluir Saldo Inicial/Final, posse, aluguel"
+  },
+  {
+   "id": "q066",
+   "tipo": "numero",
+   "familia": "insider",
+   "pergunta": "Qual o volume financeiro total, em R$, das compras de insiders de BEEF3 em 2025?",
+   "resposta": 13029641.86,
+   "tolerancia_rel": 0.01,
+   "sql_referencia": "SELECT COUNT(*), ROUND(SUM(v.volume), 2) FROM vlmo_movimentacoes v WHERE v.cnpj_companhia='67.620.377/0001-14' AND v.versao = (SELECT MAX(versao) FROM vlmo_movimentacoes m WHERE m.cnpj_companhia=v.cnpj_companhia AND m.data_referencia=v.data_referencia) AND v.tipo_movimentacao IN ('Compra à vista','Compra à termo','Compra') AND v.data_movimentacao BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "somar volume só das compras da última versão de cada mês"
+  },
+  {
+   "id": "q067",
+   "tipo": "contagem",
+   "familia": "recompra",
+   "pergunta": "Quantos programas de recompra de ações de CYRE3 estão em andamento?",
+   "resposta": 1,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM recompra_programas WHERE cnpj_companhia='73.178.600/0001-18' AND situacao='Em Andamento'",
+   "armadilha": "recompra_programas.situacao = 'Em Andamento'"
+  },
+  {
+   "id": "q068",
+   "tipo": "fato",
+   "familia": "recompra",
+   "pergunta": "Quando CYRE3 deliberou seu programa de recompra mais recente e até quando vai o prazo?",
+   "resposta": {
+    "data_deliberacao": "2026-06-05",
+    "data_final_prazo": "2027-12-08"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_deliberacao, data_final_prazo FROM recompra_programas WHERE cnpj_companhia='73.178.600/0001-18' ORDER BY data_deliberacao DESC LIMIT 1",
+   "armadilha": "ordenar por data_deliberacao"
+  },
+  {
+   "id": "q069",
+   "tipo": "quantidade",
+   "familia": "fre",
+   "pergunta": "Quantas ações compõem o capital integralizado de GFSA3 segundo o FRE mais recente?",
+   "resposta": 157368967,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT quantidade_total_acoes FROM fre_capital_social WHERE cnpj_companhia='01.545.826/0001-07' AND tipo_capital='Capital Integralizado' AND data_referencia=(SELECT MAX(data_referencia) FROM fre_capital_social WHERE cnpj_companhia='01.545.826/0001-07' AND tipo_capital='Capital Integralizado') AND versao=(SELECT MAX(versao) FROM fre_capital_social WHERE cnpj_companhia='01.545.826/0001-07' AND tipo_capital='Capital Integralizado' AND data_referencia=(SELECT MAX(data_referencia) FROM fre_capital_social WHERE cnpj_companhia='01.545.826/0001-07' AND tipo_capital='Capital Integralizado'))",
+   "armadilha": "fre_capital_social: tipo_capital 'Capital Integralizado', FRE e versão mais recentes"
+  },
+  {
+   "id": "q070",
+   "tipo": "quantidade",
+   "familia": "fre",
+   "pergunta": "Quantos membros tem o Conselho de Administração de LAVV3 segundo a remuneração do FRE mais recente?",
+   "resposta": 6,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT numero_membros FROM fre_remuneracao_orgao WHERE cnpj_companhia='26.462.693/0001-28' AND orgao_administracao='Conselho de Administração' AND data_referencia=(SELECT MAX(data_referencia) FROM fre_remuneracao_orgao WHERE cnpj_companhia='26.462.693/0001-28') ORDER BY versao DESC LIMIT 1",
+   "armadilha": "fre_remuneracao_orgao: órgão 'Conselho de Administração', FRE mais recente"
+  },
+  {
+   "id": "q071",
+   "tipo": "contagem",
+   "familia": "assembleia",
+   "pergunta": "Quantos editais de convocação de assembleia (AGO, AGE ou AGO/E) DXCO3 entregou em 2025?",
+   "resposta": 1,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='97.837.181/0001-47' AND categoria='Assembleia' AND tipo IN ('AGO','AGE','AGO/E') AND especie='Edital de Convocação' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "categoria Assembleia, especie Edital de Convocação, filtrar por data_entrega"
+  },
+  {
+   "id": "q072",
+   "tipo": "contagem",
+   "familia": "assembleia",
+   "pergunta": "Quantos editais de convocação de assembleia (AGO, AGE ou AGO/E) VBBR3 entregou em 2025?",
+   "resposta": 1,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='34.274.233/0001-02' AND categoria='Assembleia' AND tipo IN ('AGO','AGE','AGO/E') AND especie='Edital de Convocação' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "categoria Assembleia, especie Edital de Convocação, filtrar por data_entrega"
+  },
+  {
+   "id": "q073",
+   "tipo": "fato",
+   "familia": "assembleia",
+   "pergunta": "Quando VALE3 entregou a ata da última assembleia geral ordinária (AGO ou AGO/E)?",
+   "resposta": {
+    "data_entrega": "2026-04-30",
+    "tipo": "AGO/E"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_entrega, tipo FROM ipe_docs WHERE cnpj_companhia='33.592.510/0001-54' AND categoria='Assembleia' AND especie='Ata' AND tipo IN ('AGO','AGO/E') ORDER BY data_entrega DESC LIMIT 1",
+   "armadilha": "especie 'Ata', tipo AGO ou AGO/E; data_entrega"
+  },
+  {
+   "id": "q074",
+   "tipo": "documento",
+   "familia": "documento",
+   "pergunta": "Qual foi o último comunicado ao mercado de PSSA3 antes de setembro de 2026, e sobre o quê?",
+   "resposta": {
+    "data_entrega": "2026-08-10",
+    "assunto": "Reporte Setorial Susep - Jun/26"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_entrega, assunto FROM ipe_docs WHERE cnpj_companhia='02.149.205/0001-69' AND categoria='Comunicado ao Mercado' AND data_entrega < '2026-09-01' ORDER BY data_entrega DESC LIMIT 1",
+   "armadilha": "categoria 'Comunicado ao Mercado', data_entrega"
+  },
+  {
+   "id": "q075",
+   "tipo": "contagem",
+   "familia": "documento",
+   "pergunta": "Quantos avisos aos acionistas DASA3 divulgou em 2025?",
+   "resposta": 3,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='61.486.650/0001-83' AND categoria='Aviso aos Acionistas' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "categoria 'Aviso aos Acionistas', data_entrega (inclui reapresentações)"
+  },
+  {
+   "id": "q076",
+   "tipo": "contagem",
+   "familia": "documento",
+   "pergunta": "Quantos avisos aos acionistas MILS3 divulgou em 2025?",
+   "resposta": 5,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='27.093.558/0001-15' AND categoria='Aviso aos Acionistas' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31'",
+   "armadilha": "categoria 'Aviso aos Acionistas', data_entrega (inclui reapresentações)"
+  },
+  {
+   "id": "q077",
+   "tipo": "fato",
+   "familia": "documento",
+   "pergunta": "Em que data VLID3 entregou o release de resultados do 2T26?",
+   "resposta": {
+    "data_entrega": "2026-08-05"
+   },
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT data_entrega FROM ipe_docs WHERE cnpj_companhia='33.113.309/0001-47' AND categoria='Dados Econômico-Financeiros' AND tipo='Press-release' AND data_referencia='2026-06-30' ORDER BY data_entrega DESC LIMIT 1",
+   "armadilha": "release de resultados = Dados Econômico-Financeiros / Press-release; não existe categoria 'Resultado'"
+  },
+  {
+   "id": "q078",
+   "tipo": "contagem",
+   "familia": "documento",
+   "pergunta": "Quantos fatos relevantes de CPLE3 em 2025 têm no assunto dividendos, JCP ou proventos?",
+   "resposta": 3,
+   "tolerancia_rel": 0,
+   "sql_referencia": "SELECT COUNT(*) FROM ipe_docs WHERE cnpj_companhia='76.483.817/0001-20' AND categoria='Fato Relevante' AND data_entrega BETWEEN '2025-01-01' AND '2025-12-31' AND (assunto LIKE '%ividend%' OR assunto LIKE '%rovento%' OR assunto LIKE '%JCP%' OR assunto LIKE '%apital próprio%' OR assunto LIKE '%apital proprio%')",
+   "armadilha": "busca por tema no assunto; aceita-se a contagem que usa assunto (reapresentações incluídas)"
+  },
+  {
+   "id": "q079",
+   "tipo": "sem_dado",
+   "familia": "adversarial",
+   "pergunta": "Qual a receita líquida de ELET6 em 2024?",
+   "resposta": "resposta correta: dizer que ELET6 não está na base (companies) e oferecer o onboarding ou apontar o RAD, sem inventar valor",
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT COUNT(*) FROM companies WHERE ticker='ELET6'",
+   "armadilha": "empresa fora da base: não inventar nem usar outra"
+  },
+  {
+   "id": "q080",
+   "tipo": "sem_dado",
+   "familia": "adversarial",
+   "pergunta": "Qual será a receita líquida da WEGE3 em 2027?",
+   "resposta": "resposta correta: dizer que a base só tem demonstrações publicadas (até a data do último ITR/DFP) e não projeções",
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT MAX(data_referencia) FROM filings WHERE fonte='ITR'",
+   "armadilha": "pedido de projeção: sem dado"
+  },
+  {
+   "id": "q081",
+   "tipo": "sem_dado",
+   "familia": "adversarial",
+   "pergunta": "Qual o lucro líquido do Itaú em 2024?",
+   "resposta": "resposta correta: o 'Itaú' é ambíguo (Itaú Unibanco ITUB4 × Itaúsa ITSA4): resolver pela empresa mais provável (Itaú Unibanco) declarando a premissa ou perguntando; o valor de ITUB4 é o do banco (vw_dre_financeiro), nunca o NULL de vw_dre",
+   "tolerancia_rel": null,
+   "sql_referencia": "SELECT lucro_liquido FROM vw_dre_financeiro WHERE cnpj_companhia=(SELECT cnpj FROM companies WHERE ticker='ITUB4') AND fonte='DFP' AND data_referencia='2024-12-31'",
+   "armadilha": "nome ambíguo + plano de banco"
+  }
+ ]
+}

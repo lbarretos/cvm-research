@@ -29,13 +29,16 @@ from datetime import date
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[2]
-GOLDEN = RAIZ / "docs/proximos-passos/avaliacao/golden_v0.json"
+GOLDEN = RAIZ / "docs/proximos-passos/avaliacao/golden_v0.json"   # --golden troca
 RUNS = RAIZ / "docs/proximos-passos/avaliacao/runs"
-AUTOMATICOS = {"numero", "contagem", "numero_par"}
+AUTOMATICOS = {"numero", "contagem", "numero_par", "serie", "percentual", "quantidade"}
 
 SUFIXO = {
     "numero": "\n\nTermine a resposta com uma última linha exatamente neste formato: `RESPOSTA: <número em R$, sem separador de milhar, ponto decimal>`.",
     "contagem": "\n\nTermine a resposta com uma última linha exatamente neste formato: `RESPOSTA: <inteiro>`.",
+    "percentual": "\n\nTermine a resposta com uma última linha exatamente neste formato: `RESPOSTA: <número em %, ponto decimal, sem o símbolo>`.",
+    "quantidade": "\n\nTermine a resposta com uma última linha exatamente neste formato: `RESPOSTA: <inteiro, sem separador de milhar>`.",
+    "serie": "\n\nTermine a resposta com uma última linha exatamente neste formato: `RESPOSTA: 2023=<número em R$>; 2024=<número em R$>` (sem separador de milhar, ponto decimal).",
     "numero_par": "\n\nTermine a resposta com uma última linha exatamente neste formato: `RESPOSTA: original=<número em R$>; reapresentado=<número em R$>` (sem separador de milhar, ponto decimal).",
 }
 
@@ -142,6 +145,10 @@ def corrigir_auto(q: dict, resposta: str) -> tuple[bool, str]:
         return False, "sem linha RESPOSTA"
     tol = q.get("tolerancia_rel") or 0
     ref = q["resposta"]
+    if q["tipo"] == "serie":
+        got = dict(re.findall(r"(\d{4})\s*=\s*(-?[\d.]+)", linha))
+        ok = all(k in got and perto(float(got[k]), v, tol or 0.005) for k, v in ref.items())
+        return ok, linha
     if q["tipo"] == "numero_par":
         got = dict(re.findall(r"(original|reapresentado)\s*=\s*(-?[\d.]+)", linha))
         ok = all(k in got and perto(float(got[k]), ref[k], 0.005) for k in ("original", "reapresentado"))
@@ -226,12 +233,13 @@ def main() -> None:
     ap.add_argument("--db", help="banco a consultar (CVM_DB_PATH)")
     ap.add_argument("--paralelo", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--golden", default="v0", help="v0 ou v1 (avaliacao/golden_<v>.json)")
     ap.add_argument("--comparar", nargs=2, metavar=("A", "B"))
     a = ap.parse_args()
     if a.comparar:
         return comparar(*a.comparar)
 
-    g = json.load(open(GOLDEN))
+    g = json.load(open(RAIZ / f"docs/proximos-passos/avaliacao/golden_{a.golden}.json"))
     qs = g["perguntas"]
     if a.ids:
         qs = [q for q in qs if q["id"] in a.ids.split(",")]

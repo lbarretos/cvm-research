@@ -109,3 +109,34 @@ custo; as perguntas difíceis (texto conceitual, documentos longos, padronizaç�
 | 2026-10-15 Etapa 7 | 27/28 | 4,4 | 319 mil | 0 | `get_financials` liberado; q027 errada (ver doc da Etapa 7) |
 
 Os tokens não caem entre execuções porque o prefixo de sessão domina (ver Etapa 3). A v1 do conjunto continua pendente.
+
+### Conjunto v1 (81 perguntas, 2026-10-15)
+
+[`avaliacao/golden_v1.json`](avaliacao/golden_v1.json), gerado por [`stress/st2_golden_v1.py`](stress/st2_golden_v1.py). Mantém as 28
+do v0 (mesmos ids) e acrescenta 53 que o v0 não cobria:
+
+| Família | n | Armadilha testada |
+|---|---|---|
+| `dfc_conceito` | 8 | dividendos, capex (imobilizado + intangível), juros e recompra estão em linhas N da DFC cujo código varia por empresa (domínio do `get_financials`) |
+| `dfc_serie` | 2 | a mesma linha muda de código entre 2023 e 2024: juntar por código mistura contas |
+| `dfc_fixa` | 4 | caixa das atividades 6.01/6.03, com o sinal |
+| `balanco`, `dre_derivada` | 6 | ativo total, dívida bruta (curto + longo), margem EBIT |
+| `itr` | 8 | 2T isolado × acumulado do semestre |
+| `trimestral` | 2 | 4T da DFC, que só existe derivado (DFP − 3T) |
+| `plano` | 4 | seguradora (`vw_dre_seguradora`) e banco (ativo total vale em todos os planos) |
+| `calendario` | 2 | exercício social que não termina em 31/12 |
+| `insider`, `recompra`, `fre` | 6 | última versão do VLMO, programas em andamento, FRE e versão mais recentes |
+| `assembleia`, `documento` | 8 | editais, ata da AGO, último comunicado, release do 2T26, FR por tema |
+| `adversarial` | 3 | empresa fora da base, projeção, nome ambíguo (Itaú) |
+
+Tipos novos no executor: `serie` (`RESPOSTA: 2023=…; 2024=…`), `percentual` e `quantidade`; `--golden v1` escolhe o conjunto.
+
+**Limites conhecidos.** As verdades de DFC vêm da linha lida direto (empresas em que o conceito está numa única linha de nome
+inequívoco), então medem se o LLM acha e soma a linha certa, não a cobertura das regras da Etapa 7; as perguntas de documento
+usam metadados (`assunto`, `data_entrega`) como verdade, não leitura do conteúdo. Ainda faltam: perguntas conceituais sobre o
+texto ("a empresa sinalizou corte de dividendos?") e documentos longos (proposta da AGO), que pedem gabarito escrito à mão.
+Sorteio com semente fixa, mas as respostas dependem do banco no dia (`gerado_em`); regerar depois de uma recarga muda os
+números reapresentados e as contagens de FR.
+
+**Baseline do v1: ainda não registrada.** Uma execução completa custa ~US$ 35–40 e ~15 min; a validação do gerador e do
+corretor foi com 4 perguntas de tipos novos (4 de 4 certas).

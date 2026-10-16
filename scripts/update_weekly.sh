@@ -242,6 +242,23 @@ checkpoint_wal() {
 # Resumo do banco após a atualização
 DB="$PROJECT_DIR/cvm_research.db"
 checkpoint_wal "$DB"
+
+# Snapshot somente leitura para o analista (usuário "assistente"): só o .db, nunca .env/.git.
+# O disco não comporta duas cópias: apaga a anterior e gera a nova (analista fica ~2 min sem base).
+SHARE_DIR="/Users/Shared/cvm-research"
+if command -v sqlite3 >/dev/null && [ -f "$DB" ] && [ -d "$SHARE_DIR" ]; then
+  SNAP_TMP="$SHARE_DIR/.cvm_research.db.tmp"
+  rm -f "$SNAP_TMP" "$SNAP_TMP-journal" "$SHARE_DIR/cvm_research.db" "$SHARE_DIR/cvm_research.db-shm" "$SHARE_DIR/cvm_research.db-wal"
+  if sqlite3 "$DB" ".backup '$SNAP_TMP'" >>"$LOG_FILE" 2>&1 \
+     && sqlite3 "$SNAP_TMP" "PRAGMA journal_mode=DELETE;" >/dev/null 2>>"$LOG_FILE" \
+     && chmod 644 "$SNAP_TMP" \
+     && mv -f "$SNAP_TMP" "$SHARE_DIR/cvm_research.db"; then
+    log "Snapshot compartilhado atualizado em $SHARE_DIR."
+  else
+    rm -f "$SNAP_TMP"
+    log "AVISO: falha ao atualizar snapshot compartilhado (rode o .backup à mão)."
+  fi
+fi
 if command -v sqlite3 >/dev/null; then
   log "Resumo: $(sqlite3 "$DB" "SELECT 'ipe_docs='||COUNT(*)||' com_texto='||SUM(texto_extraido IS NOT NULL)||' max_entrega='||MAX(data_entrega) FROM ipe_docs")"
   # A CVM publica o IPE toda semana: documento mais novo com mais de 9 dias quer

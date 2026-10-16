@@ -6,6 +6,8 @@ fazer) e **stress test** (a proposta testada contra os dados reais, com o veredi
 mudou na proposta). Os scripts dos testes estão em [`stress/`](stress/) e rodam só em leitura, ou
 sobre uma cópia do banco.
 
+**Retomar em outra máquina e pendências:** [ESTADO.md](ESTADO.md).
+
 ## Etapas, na ordem de execução
 
 A numeração é a ordem recomendada. Cada etapa só depende das anteriores.

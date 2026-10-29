@@ -147,3 +147,8 @@ TEND3,71.476.527/0001-35,21148,CONSTRUTORA TENDA S.A.,Imobiliario,ATIVO,auto:ass
 VLID3,33.113.309/0001-47,20028,VALID SOLUÇÕES S.A.,Tecnologia,ATIVO,auto:assumed
 VULC3,50.926.955/0001-42,11762,VULCABRAS S.A.,Varejo,ATIVO,auto:assumed
 ALPA4,61.079.117/0001-05,10456,ALPARGATAS S.A.,Varejo,ATIVO,manual: ALPA4 (PN mais líquida; ALPA3 também listada)
+AERI3,12.528.708/0001-07,25283,AERIS INDUSTRIA E COMERCIO DE EQUIPAMENTOS PARA GERACAO DE ENERGIA S.A.,Industrial,ATIVO,manual: Restructuring (Notion); CNPJ e codigo_cvm via web
+PCAR3,47.508.411/0001-56,14826,COMPANHIA BRASILEIRA DE DISTRIBUICAO,Varejo,ATIVO,manual: Restructuring (Notion); Grupo Pão de Açúcar (ex-CBD); CNPJ e codigo_cvm via web
+BOBR4,50.564.053/0001-03,12190,BOMBRIL S.A.,Industrial,ATIVO,manual: Restructuring (Notion); BOBR3 também listada; CNPJ e codigo_cvm via web
+LUPA3,89.463.822/0001-12,20060,LUPATECH S.A.,Industrial,ATIVO,manual: Restructuring (Notion); codigo_cvm de fonte única
+PMAM3,60.398.369/0004-79,9393,PARANAPANEMA S.A.,Industrial,ATIVO,manual: Restructuring (Notion); codigo_cvm de fonte única

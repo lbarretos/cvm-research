@@ -38,9 +38,11 @@ Módulo da Etapa 8. Ferramentas do MCP: `resolve_bond`, `get_bond`, `search_bond
   diz "Não serão constituídas garantias específicas, reais ou pessoais, sobre os CRA" (`sem_garantia`, escopo
   `titulo`) e o risco fica no **devedor** e em quem garante o lastro. Responda separando os dois. A “Emissora” é a
   securitizadora, que não define grupo econômico e fica fora de `grupo`/`ativos_do_grupo`.
-- **CRI/CRA não têm cadastro automático.** A CVM não publica o código de negociação e a taxa ANBIMA de CRI/CRA está
-  sem fonte: o título só existe se estiver em `rf_watchlist.csv` com securitizadora e emissão (série e ISIN, se
-  conhecidos). Se `get_bond` não achar um CRA, diga isso e indique preencher a linha, sem inventar dados. **O termo
+- **CRI/CRA dependem de um download manual.** A CVM não publica o código de negociação; cadastro e taxa de CRI/CRA
+  vêm do dataset "CRIs e CRAs - Precificação ANBIMA" (data.anbima.com.br → Datasets, formulário), carregado com
+  `python scripts/ingest/ingest_rf_taxas.py --arquivo <xls>` (`fonte = 'anbima'` em `rf_ativos`). Só entram os títulos
+  com preço ANBIMA na semana do arquivo; os outros, só por `rf_watchlist.csv` com securitizadora e emissão. Se a taxa
+  de um CRI/CRA estiver velha ou ausente, diga a data da última taxa e indique o download, sem inventar dados. **O termo
   de securitização não cita o código de negociação**, só o ISIN por série: sem a série na watchlist, o título fica
   ligado à emissão inteira (todas as séries), e vencimento/remuneração por série ficam em aberto.
 - **Taxa indicativa ≠ negócio.** É a taxa de referência calculada pela ANBIMA; títulos sem liquidez podem não ser

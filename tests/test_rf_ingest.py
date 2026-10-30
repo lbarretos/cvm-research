@@ -237,6 +237,67 @@ def test_taxas_janela_feriado_e_retencao(conn, monkeypatch):
 
 # ── extrai_rf ────────────────────────────────────────────────────────────────
 
+COLUNAS_ANBIMA_DATA = ["Data de referência", "Tipo", "Código", "Emissor", "Devedor", "Tipo de remuneração",
+                       "Taxa de correção", "Série", "Emissão", "Data de vencimento", "Taxa de compra", "Taxa de venda",
+                       "Taxa indicativa", "PU Indicativo", "Desvio padrão", "Duration (dias úteis)", "% PU par",
+                       "% VNE", "% REUNE", "Referência NTN-B"]
+
+
+def _planilha_cri_cra(tmp_path):
+    """Layout do dataset 'CRIs e CRAs - Precificação ANBIMA' (conferido em 2026-10-30), valores sintéticos.
+    O site entrega .xlsx com extensão .xls."""
+    import pandas as pd
+    nan = float("nan")
+    linhas = [
+        ["28/10/2026", "CRA", "CRA0000001X", "SEC X S.A.", "DEVEDORA Y S.A.", "IPCA", 6.5, 3, 204, "16/05/2039",
+         10.0, nan, 9.6, 939.7, 1.07, 1886.6, 81.8, nan, nan, "15/05/2037"],
+        ["29/10/2026", "CRA", "CRA0000001X", "SEC X S.A.", "DEVEDORA Y S.A.", "IPCA", 6.5, 3, 204, "16/05/2039",
+         10.2, nan, 9.5877, 940.8, 1.03, 1886.1, 81.9, nan, nan, "15/05/2037"],
+        ["29/10/2026", "CRI", "21D0000002", "SEC X S.A.", "Z S.A.", "DI MULTIPLICATIVO", 101.5, 1, 9, "15/10/2030",
+         nan, nan, nan, nan, nan, nan, nan, nan, nan, nan],   # sem taxa: entra no cadastro, não em rf_taxas
+        ["29/10/2026", "CRI", "21D0000003", "SEC X S.A.", "Z S.A.", "DI ADITIVO", 1.2, 2, 9, "15/10/2031",
+         nan, nan, 1.1, 1001.0, nan, 700.0, 100.1, nan, nan, nan],
+    ]
+    caminho = tmp_path / "certificados-recebiveis-precos.xls"
+    pd.DataFrame(linhas, columns=COLUNAS_ANBIMA_DATA).to_excel(caminho, index=False, engine="openpyxl")
+    return caminho
+
+
+def test_remuneracao_anbima_no_formato_do_snd():
+    assert F.remuneracao_anbima("IPCA", 6.7825) == "IPCA + 6,7825%"
+    assert F.remuneracao_anbima("DI MULTIPLICATIVO", 101.5) == "101,5% do DI"
+    assert F.remuneracao_anbima("DI ADITIVO", 1.2) == "DI + 1,2%"
+    assert F.remuneracao_anbima("PRE FIXADO", 14.1637) == "14,1637%"
+    assert F.indexador_de(F.remuneracao_anbima("DI MULTIPLICATIVO", 101.5)) == "DI"
+
+
+def test_planilha_cri_cra_taxas_e_cadastro_do_dia_mais_recente(tmp_path):
+    taxas, cadastro = F.ler_anbima_data_cri_cra(_planilha_cri_cra(tmp_path))
+    assert sorted((t["codigo"], t["data"]) for t in taxas) == [
+        ("21D0000003", "2026-10-29"), ("CRA0000001X", "2026-10-28"), ("CRA0000001X", "2026-10-29")]
+    t = next(t for t in taxas if t["data"] == "2026-10-29" and t["codigo"] == "CRA0000001X")
+    assert (t["taxa_indicativa"], t["indice"], t["referencia"], t["tipo"]) == (9.5877, "IPCA + 6,5%", "15/05/2037", "CRA")
+    c = {x["codigo"]: x for x in cadastro}
+    assert set(c) == {"CRA0000001X", "21D0000002", "21D0000003"}
+    assert (c["CRA0000001X"]["serie"], c["CRA0000001X"]["emissao"], c["CRA0000001X"]["data_vencimento"]) == \
+        ("3", "204", "2039-05-16")
+
+
+def test_arquivo_cri_cra_completa_sem_sobrescrever(conn, tmp_path):
+    conn.execute("INSERT INTO rf_ofertas (chave, fonte, emissor_cnpj, emissor_nome) "
+                 "VALUES ('k', 'cvm_160', '11.111.111/0001-91', 'SEC X S.A.')")
+    conn.execute("INSERT INTO rf_ativos (codigo, tipo, emissor_cnpj, emissao, serie, devedor_nome, fonte) "
+                 "VALUES ('CRA0000001X', 'CRA', '08.769.451/0001-08', '204', '3', 'JBS S.A.', 'manual')")
+    n, novos = ingest_rf_taxas.carregar_arquivo_cri_cra(conn, _planilha_cri_cra(tmp_path))
+    assert (n, novos) == (3, 2)
+    r = conn.execute("SELECT emissor_cnpj, devedor_nome, remuneracao, data_vencimento, fonte FROM rf_ativos "
+                     "WHERE codigo = 'CRA0000001X'").fetchone()
+    assert r == ("08.769.451/0001-08", "JBS S.A.", "IPCA + 6,5%", "2039-05-16", "manual")   # manual prevalece
+    assert conn.execute("SELECT emissor_cnpj, fonte FROM rf_ativos WHERE codigo = '21D0000002'").fetchone() == \
+        ("11.111.111/0001-91", "anbima")   # CNPJ da securitizadora pelo nome nas ofertas
+    assert ingest_rf_taxas.carregar_arquivo_cri_cra(conn, _planilha_cri_cra(tmp_path)) == (3, 0)   # idempotente
+
+
 def test_extrai_partes_papeis_e_nomes():
     r = extrai_rf.extrair(make_test_db.ESCRITURA_RUMOB6, "DEB")
     partes = {(p["papel"], p["cnpj"]): p["nome"] for p in r["partes"]}

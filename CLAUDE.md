@@ -384,8 +384,11 @@ inteiro; PDFs só dos códigos de `rf_watchlist.csv`. Ingestores em `scripts/ing
 Fontes conferidas com `rf_fontes.py --verificar` em 2026-10-30: SND lê (4.851 debêntures; sem coluna de volume:
 `valor_emissao` = quantidade emitida × valor nominal na emissão), ANBIMA debêntures lê (~1.275/dia), **CVM não publica código nem ISIN** e a Resolução 160 não tem série
 (casa por emissor + emissão; traz `descricao_garantias`/`descricao_lastro`/`devedores_coobrigados`, extraídas por regra com
-`fonte = 'cvm_oferta'`), **ANBIMA CRI/CRA sem URL conhecida** (desligada; `RF_URL_ANBIMA_CRI_CRA`). Por isso CRI/CRA só entram
-por `rf_watchlist.csv` com `emissor_cnpj` e `emissao` (e `serie`/`isin`, se souber) preenchidos à mão; o termo não cita o código.
+`fonte = 'cvm_oferta'`), **ANBIMA CRI/CRA sem URL fixa**: o dataset público "CRIs e CRAs - Precificação ANBIMA"
+(data.anbima.com.br → Datasets) sai por formulário, é baixado à mão (.xlsx com extensão .xls, últimos 5 dias úteis, mercado
+inteiro) e lido por `ingest_rf_taxas.py --arquivo X.xls`: grava `rf_taxas` e cria em `rf_ativos` (`fonte = 'anbima'`) os CRI/CRA
+com emissor, devedor, série, emissão, vencimento e remuneração (CNPJ da securitizadora pelo nome nas ofertas CVM, ~65%). Sem
+esse download semanal, CRI/CRA ficam sem taxa e só entram por `rf_watchlist.csv`; o termo não cita o código.
 A extração por regra é testada contra trechos de dois termos reais (`tests/fixtures/rf/termos_reais.py`); para medir em mais
 PDFs: `python docs/proximos-passos/stress/st8_extrai_rf.py CRA termo.pdf`. URL e apelidos de coluna moram só em
 `rf_fontes.py`. Banco anterior à Etapa 8: os ingestores `rf_*` criam as tabelas sozinhos na primeira execução

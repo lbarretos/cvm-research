@@ -41,8 +41,10 @@ URL_CVM_OFERTAS = os.environ.get(
 # {aammdd} = data do arquivo (ex.: 261030)
 URL_ANBIMA_DEB = os.environ.get(
     "RF_URL_ANBIMA_DEB", "https://www.anbima.com.br/informacoes/merc-sec-debentures/arqs/db{aammdd}.txt")
-# CRI/CRA: o caminho que parecia o análogo do de debêntures (merc-sec-cri-cra/arqs/cr{aammdd}.txt) deu 404 em
-# 2026-10-30. Desligado até alguém achar o link de download no site da ANBIMA e defini-lo aqui ou no ambiente.
+# CRI/CRA: não há arquivo diário em URL fixa (merc-sec-cri-cra/arqs/cr{aammdd}.txt deu 404 em 2026-10-30). A
+# fonte é o dataset público "CRIs e CRAs - Precificação ANBIMA" do data.anbima.com.br, que só sai depois de um
+# formulário (nome, e-mail, aceite dos termos): download manual, lido por `ingest_rf_taxas.py --arquivo`
+# (parse_anbima_data_cri_cra). Fica vazio a menos que a ANBIMA volte a publicar um link direto.
 URL_ANBIMA_CRI_CRA = os.environ.get("RF_URL_ANBIMA_CRI_CRA", "")
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CVM-Research-Bot/1.0)"}
@@ -472,6 +474,103 @@ def parse_anbima(raw: bytes, dia: date, tipo_padrao: str) -> list[dict]:
     return out
 
 
+# ── ANBIMA Data: dataset "CRIs e CRAs - Precificação ANBIMA" (download manual) ──
+
+APELIDOS_ANBIMA_DATA = {
+    "data":            ["Data de referencia"],
+    "tipo":            ["Tipo"],
+    "codigo":          ["Codigo"],
+    "emissor":         ["Emissor"],
+    "devedor":         ["Devedor"],
+    "tipo_remuneracao": ["Tipo de remuneracao"],
+    "taxa_correcao":   ["Taxa de correcao"],
+    "serie":           ["Serie"],
+    "emissao":         ["Emissao"],
+    "vencimento":      ["Data de vencimento"],
+    "taxa_compra":     ["Taxa de compra"],
+    "taxa_venda":      ["Taxa de venda"],
+    "taxa_indicativa": ["Taxa indicativa"],
+    "pu":              ["PU Indicativo"],
+    "desvio_padrao":   ["Desvio padrao"],
+    "duration":        ["Duration (dias uteis)", "Duration"],
+    "pct_pu_par":      ["% PU par"],
+    "referencia":      ["Referencia NTN-B"],
+}
+
+
+def _num_xls(v) -> float | None:
+    """Célula numérica do Excel (float) ou texto brasileiro."""
+    if isinstance(v, (int, float)):
+        return None if v != v else float(v)
+    return num_br(v)
+
+
+def _pct(v: float) -> str:
+    return f"{v:.4f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def remuneracao_anbima(tipo: str | None, taxa: float | None) -> str | None:
+    """('IPCA', 6.7825) → 'IPCA + 6,7825%'; ('DI MULTIPLICATIVO', 101.5) → '101,5% do DI'; no formato do SND."""
+    n = norm(tipo)
+    if not n:
+        return None
+    if taxa is None:
+        return tipo
+    if "multiplicativo" in n:
+        return f"{_pct(taxa)}% do DI"
+    if "pre" in n:
+        return f"{_pct(taxa)}%"
+    rotulo = "DI" if n.startswith("di") else (tipo or "").strip()
+    return f"{rotulo} + {_pct(taxa)}%"
+
+
+def parse_anbima_data_cri_cra(df: pd.DataFrame) -> tuple[list[dict], list[dict]]:
+    """Planilha do dataset (uma linha por título × dia, últimos cinco dias úteis do mercado inteiro) →
+    (linhas de rf_taxas, cadastro por código para rf_ativos, do dia mais recente)."""
+    mapa = achar_colunas([str(c) for c in df.columns], APELIDOS_ANBIMA_DATA,
+                         obrigatorias=("data", "codigo", "taxa_indicativa"))
+    taxas, cadastro = [], {}
+    for r in df.to_dict("records"):
+        codigo = (texto(_valor(r, mapa, "codigo")) or "").upper()
+        dia = data_br(_valor(r, mapa, "data"))
+        if not (re.fullmatch(r"[A-Z0-9]{6,14}", codigo) and dia):
+            continue
+        tipo = (texto(_valor(r, mapa, "tipo")) or tipo_por_codigo(codigo)).upper()
+        remun = remuneracao_anbima(texto(_valor(r, mapa, "tipo_remuneracao")), _num_xls(_valor(r, mapa, "taxa_correcao")))
+        taxas.append({
+            "codigo": codigo, "data": dia, "tipo": tipo, "indice": remun,
+            "taxa_compra":     _num_xls(_valor(r, mapa, "taxa_compra")),
+            "taxa_venda":      _num_xls(_valor(r, mapa, "taxa_venda")),
+            "taxa_indicativa": _num_xls(_valor(r, mapa, "taxa_indicativa")),
+            "desvio_padrao":   _num_xls(_valor(r, mapa, "desvio_padrao")),
+            "pu":              _num_xls(_valor(r, mapa, "pu")),
+            "pct_pu_par":      _num_xls(_valor(r, mapa, "pct_pu_par")),
+            "duration_du":     _num_xls(_valor(r, mapa, "duration")),
+            "referencia":      texto(_valor(r, mapa, "referencia")),   # '15/05/2037', como no arquivo de debêntures
+        })
+        ant = cadastro.get(codigo)
+        if ant and ant["_dia"] >= dia:
+            continue
+
+        def inteiro(v):
+            x = _num_xls(v)
+            return str(int(x)) if x is not None else texto(v)
+        cadastro[codigo] = {
+            "_dia": dia, "codigo": codigo, "tipo": tipo,
+            "emissor_nome": texto(_valor(r, mapa, "emissor")), "devedor_nome": texto(_valor(r, mapa, "devedor")),
+            "emissao": inteiro(_valor(r, mapa, "emissao")), "serie": inteiro(_valor(r, mapa, "serie")),
+            "data_vencimento": data_br(_valor(r, mapa, "vencimento")),
+            "indexador": indexador_de(remun), "remuneracao": remun,
+        }
+    return [t for t in taxas if t["taxa_indicativa"] is not None or t["pu"] is not None], \
+        [{k: v for k, v in c.items() if k != "_dia"} for c in cadastro.values()]
+
+
+def ler_anbima_data_cri_cra(caminho) -> tuple[list[dict], list[dict]]:
+    """O arquivo vem com extensão .xls, mas é .xlsx (OOXML)."""
+    return parse_anbima_data_cri_cra(pd.read_excel(caminho, engine="openpyxl"))
+
+
 # ── Verificação ──────────────────────────────────────────────────────────────
 
 def _baixar(url: str) -> bytes:
@@ -522,7 +621,8 @@ def verificar() -> int:
         falhas += 1
     for tipo in ("DEB", "CRI_CRA"):
         if tipo == "CRI_CRA" and not URL_ANBIMA_CRI_CRA:
-            print("\n== ANBIMA CRI_CRA: desligada (RF_URL_ANBIMA_CRI_CRA vazio; ver comentário no topo do arquivo)")
+            print("\n== ANBIMA CRI_CRA: sem URL fixa; baixe o dataset no data.anbima.com.br e rode "
+                  "ingest_rf_taxas.py --arquivo (ver comentário no topo do arquivo)")
             continue
         dia, lido = date.today(), False
         for _ in range(7):   # volta até achar um dia útil publicado

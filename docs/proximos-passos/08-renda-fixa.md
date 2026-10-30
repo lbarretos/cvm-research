@@ -121,6 +121,16 @@ Observações: o diretório público de taxas da ANBIMA guarda só ~6 dias útei
 dias se forma semana a semana e uma semana sem job vira buraco. O grupo da Rumo mostra Julia Arduini (3,82%) como
 controladora direta porque é o que o FRE 2026 da Rumo declara (Maglev FIP, 20%, vem como não controlador): fiel à fonte.
 
-Pendente (decisão do usuário): o data.anbima.com.br lê de `data-api.prd.anbima.com.br/web-bff/v1/certificado-recebiveis/<código>`
-(características, preços, documentos). É a única origem de taxa e termo de CRI/CRA sem a Feed API paga, mas é uma API
-interna, não documentada; não foi automatizada. Sem ela: `ingest_rf_docs.py --codigo X --arquivo termo.pdf`.
+### Taxa e cadastro de CRI/CRA pelo dataset público da ANBIMA (2026-10-30)
+
+A API do data.anbima.com.br (`data-api.prd.anbima.com.br/web-bff/…`) exige token (`401 token cannot be blank`): não foi
+usada. A saída é o dataset público "CRIs e CRAs - Precificação ANBIMA" (Datasets), cujo download passa por um formulário
+(nome, e-mail, aceite dos termos), feito pelo usuário. O arquivo é .xlsx com extensão .xls, 20 colunas, os últimos cinco
+dias úteis do mercado inteiro (~330 títulos/dia). `ingest_rf_taxas.py --arquivo` grava as taxas e o cadastro.
+
+Primeira carga: 1.283 taxas (CRA 895, CRI 388; 5 dias), 337 CRI/CRA novos em `rf_ativos`, CNPJ da securitizadora por nome
+em 221 (o resto tem nome diferente na CVM). CRA024004SB: 9,5877% em 29/10, igual à página do título; CRA02300796 completo
+(vencimento, IPCA + 8,9555%). Critério 2 passa a **OK para taxa e emissão**; o termo dos CRAs continua manual
+(`ingest_rf_docs.py --arquivo`, PDF da aba Documentos), pois a Resolução 160 não passa pelo IPE.
+
+Limites: o download é manual e semanal (sem URL fixa, não entra no job); semana sem download vira buraco na série de CRI/CRA.

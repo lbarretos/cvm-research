@@ -162,7 +162,7 @@ obrigatórios antes de publicar, não opcionais.
 | Cobertura ≥ 85% | **da_total, dividendos, capex_total**; os demais dependem de a empresa ter a linha (arrendamento, recompra, captação), sem denominador de "aplicável" |
 | Sinal trocado < 1% | **0% por construção**: linha de sinal contrário ao esperado sai do conceito (venda de tesouraria não é recompra). O custo é cobertura menor |
 | Nenhuma linha em dois conceitos | **Cumprido**: conflito vira "sem conceito" e a regra específica vence a geral |
-| Identidade D&A × DVA ≥ 90% a menos de 2% | **Não atingido**: 1.468 `ok` + 77 `ok_*` de 1.730 = **89,5%** com a definição alternativa (**84,9%** só com a total). A DVA 7.04.01 não tem definição única entre empresas |
+| Identidade D&A × DVA ≥ 90% a menos de 2% | **Atingido em 2026-10-30**: 1.477 `ok` + 76 `ok_*` de 1.717 = **90,4%** (86,0% só com a total), depois da revisão abaixo. Antes: 1.468 `ok` + 77 `ok_*` de 1.730 = **89,5%** com a definição alternativa (**84,9%** só com a total). A DVA 7.04.01 não tem definição única entre empresas |
 | Precisão ≥ 98% em amostra de 100 linhas | **Atingido em 2026-10-30 por revisão exaustiva (não amostra)**, ver abaixo; antes: duas rodadas de revisão **minha** (não de um analista), 97 e 140 linhas, deram ~92% e ~88% **antes** das últimas correções. Os piores: `divida_liquida_fluxo` (nome ambíguo, 3 a 7 em 10 errados), e rótulos propagados pelo voto para linhas de nome diferente. Não revisei a amostra final |
 
 ### Revisão exaustiva dos três piores conceitos (2026-10-30)

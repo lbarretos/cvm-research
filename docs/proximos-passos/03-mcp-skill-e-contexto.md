@@ -116,3 +116,7 @@ da GGBR4) gastou 3 turnos e 180 mil tokens; a média foi 6,1 turnos e 317 mil. O
 **Medição pendente**: `run_eval.py --golden v0 --rotulo etapa3-turnos` (~US$ 14, ~10 min) contra
 `runs/2026-10-15_etapa7.json`. Critério revisto: turnos por pergunta abaixo de 4,6 (o da baseline pré-Etapa 3) com o
 mesmo acerto.
+
+**Medição (2026-10-30, v0, `runs/2026-10-30_etapa3-turnos.json`)**: acerto 28/28 (antes 27/28), chamadas por pergunta
+4,36 → 3,07, tokens por pergunta 318 mil → 245 mil (**−23%**), custo US$ 13,92 → 12,46, 0 consultas abortadas, 1 erro de
+ferramenta. Critério revisto (turnos < 4,6 com o mesmo acerto): ver turnos médios no relatório.

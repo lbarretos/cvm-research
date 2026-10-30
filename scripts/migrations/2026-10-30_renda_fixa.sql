@@ -103,7 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_rf_taxas_data ON rf_taxas (data);
 -- Documentos do título (escritura, aditamentos, termo de securitização, relatório do agente
 -- fiduciário…), com o texto extraído do PDF. Um documento serve a várias séries: rf_doc_ativo.
 CREATE TABLE IF NOT EXISTS rf_docs (
-    doc_id              TEXT PRIMARY KEY,       -- protocolo do IPE ou 'url:<sha1 do link>'
+    doc_id              TEXT PRIMARY KEY,       -- protocolo do IPE ou 'url:<sha256 do link>'
     origem              TEXT NOT NULL,          -- 'ipe', 'url'
     cnpj_remetente      TEXT,
     categoria           TEXT,

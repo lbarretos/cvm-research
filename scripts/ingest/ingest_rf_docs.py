@@ -136,7 +136,7 @@ def candidatos(conn, ativo: dict) -> tuple[list[dict], list[dict]]:
 # ── Gravação ─────────────────────────────────────────────────────────────────
 
 def ligar_doc(conn, codigo: str, doc: dict, origem: str, cnpj: str | None) -> str:
-    doc_id = doc.get("protocolo_entrega") or "url:" + hashlib.sha1(doc["link_download"].encode()).hexdigest()
+    doc_id = doc.get("protocolo_entrega") or "url:" + hashlib.sha256(doc["link_download"].encode()).hexdigest()
     conn.execute(
         "INSERT INTO rf_docs (doc_id, origem, cnpj_remetente, categoria, tipo, especie, assunto, data_entrega, "
         "link_download, texto_extraido, chars_extraidos, extraido_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "

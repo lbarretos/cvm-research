@@ -1,0 +1,8 @@
+# Títulos de renda fixa acompanhados sob demanda: o job semanal busca os documentos (escritura, termo de
+# securitização) e extrai partes/garantias/lastro destes códigos. Cadastro e taxas cobrem o mercado inteiro.
+# Acrescente com: python scripts/ingest/ingest_rf_docs.py --codigo CODIGO
+codigo,observacao
+RUMOB6,exemplo inicial
+ERDVB4,exemplo inicial
+CRA024004SB,exemplo inicial
+CRA02300796,exemplo inicial

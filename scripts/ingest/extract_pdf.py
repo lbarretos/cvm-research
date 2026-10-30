@@ -44,13 +44,15 @@ HEADERS = {
 
 # ── Download e extração de texto ──────────────────────────────────────────────
 
-def fetch_pdf_text(url: str) -> str | None:
+def fetch_pdf_text(url: str, dominios: tuple[str, ...] = ("cvm.gov.br",)) -> str | None:
+    """`dominios`: onde o PDF pode estar depois dos redirects (o IPE só serve da CVM; os documentos
+    de renda fixa também vêm da B3/Fundos.NET, ver ingest_rf_docs.py)."""
     try:
         r = httpx.get(url, headers=HEADERS, timeout=60, follow_redirects=True)
         r.raise_for_status()
         final_host = str(r.url.host)
-        if not (final_host.endswith(".cvm.gov.br") or final_host == "cvm.gov.br"):
-            print(f"    SKIP: redirect para domínio não-CVM: {final_host}")
+        if not any(final_host == d or final_host.endswith("." + d) for d in dominios):
+            print(f"    SKIP: redirect para domínio fora de {dominios}: {final_host}")
             return None
         content_length = int(r.headers.get("content-length", 0))
         if content_length > 50 * 1024 * 1024:

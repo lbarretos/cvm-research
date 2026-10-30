@@ -26,6 +26,7 @@
 #
 # Blocos:
 #   --sem-pdf      pula a extração de texto (a parte longa)
+#   --sem-rf       pula a renda fixa (cadastro SND/CVM, taxas ANBIMA do último mês, PDFs de rf_watchlist.csv)
 #   --so-pdf       só retoma a extração de texto
 #   --so-analise   só regenera as camadas de consistência
 #   --dry-run      mostra o plano (cobertura, período, blocos) e sai sem baixar nada
@@ -52,7 +53,7 @@ ITR_DESDE="${ITR_DESDE:-$PISO_ITR}"
 PDF_LOTE="${PDF_LOTE:-500}"
 UNIVERSO="${UNIVERSO:-}"
 
-FAZER_INGEST=1; FAZER_ANALISE=1; FAZER_PDF=1; SUBSTITUIR=0; DESDE=""; DRY=0
+FAZER_INGEST=1; FAZER_ANALISE=1; FAZER_PDF=1; FAZER_RF=1; SUBSTITUIR=0; DESDE=""; DRY=0
 
 # Imprime o cabeçalho deste arquivo (linhas 2 até a última que começa com #).
 ajuda() { awk '/^#/ && NR > 1 { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
@@ -63,6 +64,7 @@ while [ $# -gt 0 ]; do
     --desde)       DESDE="${2:?--desde precisa de um ano}"; shift 2 ;;
     --substituir)  SUBSTITUIR=1; shift ;;
     --sem-pdf)     FAZER_PDF=0; shift ;;
+    --sem-rf)      FAZER_RF=0; shift ;;
     --so-pdf)      FAZER_INGEST=0; FAZER_ANALISE=0; FAZER_PDF=1; shift ;;
     --so-analise)  FAZER_INGEST=0; FAZER_PDF=0; shift ;;
     --dry-run)     DRY=1; shift ;;
@@ -116,7 +118,10 @@ if [ "$DRY" = 1 ]; then
   echo "  período    : IPE $IPE_DESDE · VLMO $VLMO_DESDE · FRE $FRE_DESDE · DFP $DFP_DESDE · ITR $ITR_DESDE"
   echo "  blocos     : brutos=$([ "$FAZER_INGEST" = 1 ] && echo sim || echo não)" \
        "· tratamento=$([ "$FAZER_ANALISE" = 1 ] && echo sim || echo não)" \
-       "· pdf=$([ "$FAZER_PDF" = 1 ] && echo sim || echo não)"
+       "· pdf=$([ "$FAZER_PDF" = 1 ] && echo sim || echo não)" \
+       "· renda fixa=$([ "$FAZER_RF" = 1 ] && [ "$FAZER_INGEST" = 1 ] && echo sim || echo não)"
+  echo "  renda fixa : cadastro do mercado (SND + ofertas CVM), taxas ANBIMA dos últimos 30 dias," \
+       "PDFs de $(grep -cv '^\(codigo\|#\|$\)' rf_watchlist.csv 2>/dev/null || echo 0) códigos de rf_watchlist.csv"
   echo "  pendentes  : $(sqlite3 "$DB" 'SELECT COUNT(*) FROM ipe_docs WHERE texto_extraido IS NULL AND extracao_falhou = 0') PDFs sem texto"
   echo
   echo "Rode o mesmo comando sem --dry-run para executar."
@@ -209,6 +214,21 @@ if [ "$FAZER_INGEST" = 1 ]; then
   "$PY" ingest_itr.py --desde "$ITR_DESDE"
 fi
 
+# ── 1b. Renda fixa (Etapa 8) ─────────────────────────────────────────────────
+# Cadastro e taxas são do mercado inteiro e leves; os PDFs só dos códigos de rf_watchlist.csv.
+# Depende do FRE (cadeia de controle) e do IPE (escrituras dos emissores do watchlist).
+# Falha aqui não aborta a carga: os layouts das fontes são conferidos com rf_fontes.py --verificar.
+if [ "$FAZER_INGEST" = 1 ] && [ "$FAZER_RF" = 1 ]; then
+  passo "renda fixa — cadastro (SND + ofertas CVM)"
+  "$PY" ingest_rf_cadastro.py || log "aviso: cadastro de renda fixa falhou (rode rf_fontes.py --verificar)"
+  passo "renda fixa — taxas indicativas ANBIMA, últimos 30 dias"
+  "$PY" ingest_rf_taxas.py --dias 30 --reter 30 || log "aviso: taxas ANBIMA falharam"
+  passo "renda fixa — documentos de rf_watchlist.csv e extração de garantias"
+  "$PY" ingest_rf_docs.py || log "aviso: documentos de renda fixa falharam"
+  passo "renda fixa — cadeia de controle das partes"
+  "$PY" rf_grupo.py || log "aviso: rf_grupo falhou"
+fi
+
 # ── 2. Tratamento (camadas de consistência) ──────────────────────────────────
 # Sem este bloco, consistency_flags, cd_conta_ds_timeline e demonstrativos_trimestrais
 # ficam vazias e as queries trimestrais do CLAUDE.md não respondem nada.
@@ -260,7 +280,10 @@ UNION ALL SELECT 'vlmo_movimentacoes',         COUNT(*) FROM vlmo_movimentacoes
 UNION ALL SELECT 'demonstrativos_contabeis',   COUNT(*) FROM demonstrativos_contabeis
 UNION ALL SELECT 'demonstrativos_trimestrais', COUNT(*) FROM demonstrativos_trimestrais
 UNION ALL SELECT 'consistency_flags',          COUNT(*) FROM consistency_flags
-UNION ALL SELECT 'cd_conta_ds_timeline',       COUNT(*) FROM cd_conta_ds_timeline;"
+UNION ALL SELECT 'cd_conta_ds_timeline',       COUNT(*) FROM cd_conta_ds_timeline
+UNION ALL SELECT 'rf_ativos',                  COUNT(*) FROM rf_ativos
+UNION ALL SELECT 'rf_taxas',                   COUNT(*) FROM rf_taxas
+UNION ALL SELECT 'rf_docs com texto',          COUNT(*) FROM rf_docs WHERE texto_extraido IS NOT NULL;"
 echo
 log "confira o tratamento com: .venv/bin/python -m pytest tests/ -q"
 log "a partir daqui, mantenha a base com: bash scripts/update_weekly.sh"

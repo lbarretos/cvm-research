@@ -1,0 +1,326 @@
+"""
+Renda fixa (Etapa 8): leitura das fontes (rf_fontes.py), ingestores de cadastro e taxas com HTTP falso,
+extração por regra das partes/garantias/lastro (extrai_rf.py), cadeia de controle (rf_grupo.py) e escolha
+dos documentos do IPE (ingest_rf_docs.py). Os layouts das fontes são sintéticos: o que se testa é o
+mapeamento por apelido e o comportamento quando falta coluna, não o arquivo real.
+"""
+import io
+import os
+import sqlite3
+import sys
+import zipfile
+from datetime import date, timedelta
+from unittest.mock import MagicMock
+
+import httpx
+import pytest
+
+RAIZ = os.path.join(os.path.dirname(__file__), "..")
+sys.path.insert(0, os.path.join(RAIZ, "scripts", "ingest"))
+sys.path.insert(0, os.path.join(RAIZ, "tests", "fixtures", "rf"))
+
+import extrai_rf  # noqa: E402
+import ingest_rf_cadastro  # noqa: E402
+import ingest_rf_docs  # noqa: E402
+import ingest_rf_taxas  # noqa: E402
+import make_test_db  # noqa: E402
+import rf_fontes as F  # noqa: E402
+import rf_grupo  # noqa: E402
+
+
+@pytest.fixture
+def conn():
+    c = sqlite3.connect(":memory:")
+    c.executescript(open(os.path.join(RAIZ, "schema.sql")).read())
+    yield c
+    c.close()
+
+
+# ── rf_fontes ────────────────────────────────────────────────────────────────
+
+def test_normalizacoes():
+    assert F.fmt_cnpj("02387241000160") == "02.387.241/0001-60"
+    assert F.fmt_cnpj("123") is None
+    assert F.num_br("1.234,56") == 1234.56 and F.num_br("108,5%") == 108.5 and F.num_br("-") is None
+    assert F.num_br("6.4") == 6.4 and F.num_br("1.650") == 1650.0
+    assert F.data_br("30/10/2026") == "2026-10-30" and F.data_br("2026-10-30") == "2026-10-30"
+    assert [F.tipo_por_codigo(c) for c in ("RUMOB6", "ERDVB4", "CRA024004SB", "CRI0230001X", "X")] == \
+        ["DEB", "DEB", "CRA", "CRI", "OUTRO"]
+    assert F.indexador_de("IPCA + 6,0%") == "IPCA" and F.indexador_de("108% do DI") == "DI"
+
+
+def test_achar_colunas_por_apelido_e_falta_obrigatoria():
+    m = F.achar_colunas(["Código do Ativo", "Índice/ Correção", "Taxa Indicativa"], F.APELIDOS_ANBIMA,
+                        obrigatorias=("codigo", "taxa_indicativa"))
+    assert m["codigo"] == "Código do Ativo" and m["indice"] == "Índice/ Correção"
+    with pytest.raises(F.ColunaAusente, match="taxa_indicativa"):
+        F.achar_colunas(["Código", "PU"], F.APELIDOS_ANBIMA, obrigatorias=("codigo", "taxa_indicativa"))
+
+
+ANBIMA = """ANBIMA - Associação Brasileira das Entidades dos Mercados Financeiro e de Capitais
+Taxas de Debêntures - 29/10/2026
+
+DI SPREAD
+Código@Nome@Repac./  Venc.@Índice/ Correção@Taxa de Compra@Taxa de Venda@Taxa Indicativa@Desvio Padrão@Intervalo Indicativo Mínimo@Intervalo Indicativo Máximo@PU@% PU Par@Duration@% Reune@Referência NTN-B
+ERDVB4@BETA@01/03/2030@DI + 1,8000%@1,6000@1,5000@1,5500@0,0100@1,2000@1,9000@1.003,000000@100,40@980@--@--
+
+IPCA SPREAD
+Código@Nome@Repac./  Venc.@Índice/ Correção@Taxa de Compra@Taxa de Venda@Taxa Indicativa@Desvio Padrão@Intervalo Indicativo Mínimo@Intervalo Indicativo Máximo@PU@% PU Par@Duration@% Reune@Referência NTN-B
+RUMOB6@ALFA@15/06/2032@IPCA + 6,0000%@6,5000@6,3000@6,4000@0,0200@6,0000@6,8000@1.012,500000@101,20@1.650@--@15/08/2032
+* nota de rodapé sem dados
+"""
+
+
+def test_parse_anbima_varios_blocos():
+    linhas = F.parse_anbima(ANBIMA.encode("latin-1"), date(2026, 10, 29), "DEB")
+    por = {l["codigo"]: l for l in linhas}
+    assert set(por) == {"ERDVB4", "RUMOB6"}
+    r = por["RUMOB6"]
+    assert (r["taxa_indicativa"], r["pu"], r["pct_pu_par"], r["duration_du"]) == (6.4, 1012.5, 101.2, 1650.0)
+    assert r["indice"] == "IPCA + 6,0000%" and r["referencia"] == "15/08/2032" and r["data"] == "2026-10-29"
+    assert por["ERDVB4"]["referencia"] is None
+
+
+SND = ("Características das debêntures\tgerado em 30/10/2026\n"
+       "Codigo do Ativo\tEmpresa\tCNPJ\tSituacao\tData de Emissao\tData de Vencimento\tEmissao\tSerie\t"
+       "Volume\tIndice\tPercentual Multiplicador/Rentabilidade\tTaxa de Juros\tEspecie\t"
+       "Artigo 2 da Lei 12.431\tAgente Fiduciario\n"
+       "RUMOB6\tALFA [TESTE]\t11111111000111\tRegistrado\t15/06/2022\t15/06/2032\t6\t1\t1.500.000.000,00\tIPCA\t\t6,0000\t"
+       "Quirografaria\tSim\tAGENTE TESTE\n"
+       "ERDVB4\tBETA [TESTE]\t55555555000155\tRegistrado\t01/03/2023\t01/03/2030\t4\t2\t800.000.000,00\tDI\t100\t1,8000\t"
+       "Quirografaria\tNao\tAGENTE TESTE\n"
+       "\tlinha de total\n")
+
+
+def test_parse_snd():
+    linhas = {l["codigo"]: l for l in F.parse_snd(SND.encode("latin-1"))}
+    assert set(linhas) == {"RUMOB6", "ERDVB4"}
+    r = linhas["RUMOB6"]
+    assert r["emissor_cnpj"] == "11.111.111/0001-11" and r["valor_emissao"] == 1.5e9
+    assert r["indexador"] == "IPCA" and r["remuneracao"] == "IPCA + 6,0000%" and r["incentivada_12431"] == 1
+    assert linhas["ERDVB4"]["remuneracao"] == "100% do DI + 1,8000%" and linhas["ERDVB4"]["incentivada_12431"] == 0
+
+
+def _ofertas_df():
+    import pandas as pd
+    return pd.DataFrame([
+        {"Numero_Registro_Oferta": "R1", "Tipo_Ativo": "Certificados de Recebíveis do Agronegócio",
+         "Cod_Negociacao": "cra024004sb", "CNPJ_Emissor": "66666666000166", "Nome_Emissor": "SECURITIZADORA",
+         "CNPJ_Devedor": "77777777000177", "Nome_Devedor": "AGRO DELTA", "Emissao": "240", "Serie": "1",
+         "Data_Registro_Oferta": "01/04/2024", "Valor_Total": "600000000,00", "Quantidade_Total": "600000",
+         "Taxa_Juros": "7,10%", "Atualizacao_Monetaria": "IPCA"},
+        {"Numero_Registro_Oferta": "R2", "Tipo_Ativo": "Ações", "Cod_Negociacao": "", "CNPJ_Emissor": "1",
+         "Nome_Emissor": "X", "Emissao": "", "Serie": "", "Data_Registro_Oferta": "", "Valor_Total": "",
+         "Quantidade_Total": "", "Taxa_Juros": "", "Atualizacao_Monetaria": "", "CNPJ_Devedor": "", "Nome_Devedor": ""},
+        {"Numero_Registro_Oferta": "R3", "Tipo_Ativo": "Debêntures", "Cod_Negociacao": "RUMOB6",
+         "CNPJ_Emissor": "11111111000111", "Nome_Emissor": "ALFA", "Emissao": "6", "Serie": "1",
+         "Data_Registro_Oferta": "01/06/2022", "Valor_Total": "1", "Quantidade_Total": "1", "Taxa_Juros": "",
+         "Atualizacao_Monetaria": "", "CNPJ_Devedor": "", "Nome_Devedor": ""},
+    ])
+
+
+def test_parse_cvm_ofertas_so_divida():
+    linhas = F.parse_cvm_ofertas(_ofertas_df(), "cvm_160")
+    assert [l["numero_registro"] for l in linhas] == ["R1", "R3"]
+    cra = linhas[0]
+    assert cra["codigo"] == "CRA024004SB" and cra["devedor_cnpj"] == "77.777.777/0001-77"
+    assert cra["remuneracao"] == "IPCA 7,10%" and cra["valor_total"] == 6e8
+    assert len({l["chave"] for l in linhas}) == 2
+
+
+# ── ingest_rf_cadastro ───────────────────────────────────────────────────────
+
+def test_cadastro_snd_tem_precedencia_e_cvm_completa(conn, monkeypatch):
+    monkeypatch.setattr(ingest_rf_cadastro, "get_db", lambda: conn)
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_snd", lambda: F.parse_snd(SND.encode("latin-1")))
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_ofertas", lambda: F.parse_cvm_ofertas(_ofertas_df(), "cvm_160"))
+    monkeypatch.setattr(sys, "argv", ["x"])
+    ingest_rf_cadastro.main()
+    ingest_rf_cadastro.main()   # idempotente
+    rows = {r[0]: r[1:] for r in conn.execute("SELECT codigo, tipo, fonte, devedor_cnpj FROM rf_ativos")}
+    assert rows["RUMOB6"] == ("DEB", "snd", None)              # a oferta não sobrescreve o SND
+    assert rows["CRA024004SB"] == ("CRA", "cvm_oferta", "77.777.777/0001-77")
+    assert conn.execute("SELECT COUNT(*) FROM rf_ofertas").fetchone()[0] == 2
+    papeis = {(c, p) for c, p in conn.execute("SELECT codigo, papel FROM rf_partes")}
+    assert {("CRA024004SB", "securitizadora"), ("CRA024004SB", "devedor"), ("RUMOB6", "emissor"),
+            ("RUMOB6", "agente_fiduciario")} <= papeis
+    assert conn.execute("SELECT COUNT(*) FROM rf_partes").fetchone()[0] == len(papeis)
+
+
+def test_cadastro_falha_total_sai_com_erro(conn, monkeypatch):
+    def quebra():
+        raise RuntimeError("fora do ar")
+    monkeypatch.setattr(ingest_rf_cadastro, "get_db", lambda: conn)
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_snd", quebra)
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_ofertas", quebra)
+    monkeypatch.setattr(sys, "argv", ["x"])
+    with pytest.raises(SystemExit):
+        ingest_rf_cadastro.main()
+
+
+# ── ingest_rf_taxas ──────────────────────────────────────────────────────────
+
+def test_taxas_janela_feriado_e_retencao(conn, monkeypatch):
+    dias = ingest_rf_taxas.dias_uteis(date.today(), 10)
+    feriado = dias[-2]
+    chamadas = []
+
+    def get(url, timeout=60):
+        chamadas.append(url)
+        if feriado.strftime("%y%m%d") in url:
+            resp = httpx.Response(404, request=httpx.Request("GET", url))
+            raise httpx.HTTPStatusError("404", request=resp.request, response=resp)
+        return MagicMock(content=ANBIMA.encode("latin-1"))
+
+    conn.execute("INSERT INTO rf_taxas (codigo, data, tipo, taxa_indicativa) VALUES ('VELHA1', ?, 'DEB', 1)",
+                 ((date.today() - timedelta(days=90)).isoformat(),))
+    monkeypatch.setattr(ingest_rf_taxas, "get_db", lambda: conn)
+    monkeypatch.setattr(ingest_rf_taxas, "_http_get", get)
+    monkeypatch.setattr(sys, "argv", ["x", "--dias", "10", "--so-deb"])
+    ingest_rf_taxas.main()
+    assert len(chamadas) == len(dias)
+    datas = {r[0] for r in conn.execute("SELECT DISTINCT data FROM rf_taxas")}
+    assert datas == {d.isoformat() for d in dias if d != feriado}       # a velha foi apagada
+    chamadas.clear()
+    ingest_rf_taxas.main()                                               # só re-tenta o feriado
+    assert chamadas == [F.url_anbima("DEB", feriado)]
+
+
+# ── extrai_rf ────────────────────────────────────────────────────────────────
+
+def test_extrai_partes_papeis_e_nomes():
+    r = extrai_rf.extrair(make_test_db.ESCRITURA_RUMOB6, "DEB")
+    partes = {(p["papel"], p["cnpj"]): p["nome"] for p in r["partes"]}
+    assert partes == {
+        ("emissor", make_test_db.ALFA): "ALFA LOGÍSTICA S.A. [TESTE]",
+        ("agente_fiduciario", make_test_db.AGENTE): "AGENTE TESTE DTVM LTDA.",
+        ("fiador", make_test_db.HOLDING): "HOLDING ALFA PARTICIPAÇÕES S.A. [TESTE]",
+    }
+    assert all(make_test_db.ALFA in p["evidencia"] or p["papel"] != "emissor" for p in r["partes"])
+
+
+def test_extrai_garantias_ignora_negacao():
+    tipos = {g["tipo"] for g in extrai_rf.extrair(make_test_db.ESCRITURA_RUMOB6, "DEB")["garantias"]}
+    assert tipos == {"fianca", "quirografaria"}    # "não contarão com alienação fiduciária" não entra
+
+
+def test_extrai_cra_securitizadora_devedor_e_lastro():
+    r = extrai_rf.extrair(make_test_db.TERMO_CRA, "CRA")
+    papeis = {p["papel"]: p["cnpj"] for p in r["partes"]}
+    assert papeis["securitizadora"] == make_test_db.SECURIT       # “Emissora” no CRA é a securitizadora
+    assert papeis["devedor"] == make_test_db.DELTA and papeis["fiador"] == make_test_db.ALFA
+    assert [l["tipo_lastro"] for l in r["lastro"]] == ["CPR-F"]   # o CPR genérico não duplica
+    assert {g["tipo"] for g in r["garantias"]} == {"cessao_fiduciaria", "fundo_reserva"}
+
+
+def test_extrai_cnpj_sem_termo_definido_nao_vira_parte():
+    t = "Banco Coordenador S.A., instituição financeira, inscrita no CNPJ 99.999.999/0001-99, atuará como coordenador."
+    assert extrai_rf.extrair(t, "DEB")["partes"] == []
+
+
+def test_gravar_liga_prestador_e_nao_toca_cadastro(conn):
+    conn.execute("INSERT INTO rf_ativos (codigo, tipo, fonte) VALUES ('RUMOB6', 'DEB', 'teste')")
+    conn.execute("INSERT INTO rf_partes (chave, codigo, papel, nome, fonte, confianca) "
+                 "VALUES ('RUMOB6|emissor|x|cadastro', 'RUMOB6', 'emissor', 'X', 'cadastro', 1)")
+    r = extrai_rf.extrair(make_test_db.ESCRITURA_RUMOB6, "DEB")
+    extrai_rf.gravar(conn, "D1", "RUMOB6", "DEB", r)
+    extrai_rf.gravar(conn, "D1", "RUMOB6", "DEB", r)                  # idempotente
+    fianca = conn.execute("SELECT prestador_cnpj FROM rf_garantias WHERE tipo = 'fianca'").fetchone()
+    assert fianca == (make_test_db.HOLDING,)
+    assert conn.execute("SELECT COUNT(*) FROM rf_partes WHERE fonte = 'cadastro'").fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM rf_partes WHERE fonte = 'pdf'").fetchone()[0] == 3
+
+
+# ── rf_grupo ─────────────────────────────────────────────────────────────────
+
+def test_grupo_atravessa_cadeia_e_fres(tmp_path):
+    conn = make_test_db.montar(tmp_path / "t.db")
+    g = conn.execute("SELECT cnpj_origem, nivel, controlador_doc FROM rf_grupo ORDER BY 1, 2").fetchall()
+    assert (make_test_db.ALFA, 1, make_test_db.HOLDING) in g
+    assert (make_test_db.ALFA, 2, "12345678900") in g                  # holding → família, na cadeia do FRE
+    assert (make_test_db.BETA, 2, "12345678900") in g                  # BETA → HOLDING → FRE da HOLDING
+    assert not any(c == make_test_db.DELTA for c, _, _ in g)           # sem FRE na base
+
+
+def test_grupo_para_em_ciclo():
+    a, b = "11111111000111", "22222222000122"
+    fres = {a: [dict(cnpj_companhia=F.fmt_cnpj(a), data_referencia="2026", id_acionista=1, id_acionista_relacionado=None,
+                     acionista="B", tipo_pessoa_acionista="PJ", cpf_cnpj_acionista=b,
+                     percentual_total_acoes_circulacao=50, acionista_controlador="S")],
+            b: [dict(cnpj_companhia=F.fmt_cnpj(b), data_referencia="2026", id_acionista=2, id_acionista_relacionado=None,
+                     acionista="A", tipo_pessoa_acionista="PJ", cpf_cnpj_acionista=a,
+                     percentual_total_acoes_circulacao=50, acionista_controlador="S")]}
+    c = rf_grupo.cadeia(F.fmt_cnpj(a), fres)
+    assert [x["controlador_doc"] for x in c] == [F.fmt_cnpj(b), F.fmt_cnpj(a)]
+
+
+# ── ingest_rf_docs ───────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("assunto, tipo_doc, esperado", [
+    ("6ª Emissão de Debêntures", "Escritura de Emissão de Debêntures", "certo"),
+    ("Aditamento à Escritura da 5ª Emissão", "Escritura de Emissão de Debêntures", "talvez"),
+    ("Aviso aos debenturistas", "Comunicado ao Mercado", None),
+])
+def test_relevancia_debenture(assunto, tipo_doc, esperado):
+    ativo = {"codigo": "RUMOB6", "tipo": "DEB", "emissao": "6", "serie": "1"}
+    assert ingest_rf_docs.relevante({"tipo": tipo_doc, "assunto": assunto}, ativo) == esperado
+
+
+def test_relevancia_cra_exige_emissao_e_serie():
+    ativo = {"codigo": "CRA024004SB", "tipo": "CRA", "emissao": "240", "serie": "1"}
+    doc = {"categoria": "Securitização de Recebíveis", "tipo": "Termo de Securitização"}
+    assert ingest_rf_docs.relevante({**doc, "assunto": "1ª Série da 240ª Emissão"}, ativo) == "certo"
+    assert ingest_rf_docs.relevante({**doc, "assunto": "2ª Série da 240ª Emissão"}, ativo) == "talvez"
+    assert ingest_rf_docs.relevante({**doc, "assunto": "CRA024004SB"}, ativo) == "certo"
+
+
+def test_watchlist_aditiva(tmp_path):
+    w = tmp_path / "rf.csv"
+    ingest_rf_docs.acrescentar_watchlist(["RUMOB6"], w)
+    ingest_rf_docs.acrescentar_watchlist(["RUMOB6", "ERDVB4"], w)
+    assert ingest_rf_docs.ler_watchlist(w) == ["RUMOB6", "ERDVB4"]
+
+
+def test_docs_do_ipe_local_ligados_e_texto_reaproveitado(conn, monkeypatch):
+    emissor = make_test_db.ALFA
+    conn.execute("INSERT INTO rf_ativos (codigo, tipo, emissor_cnpj, emissao, serie, fonte) "
+                 "VALUES ('RUMOB6', 'DEB', ?, '6', '1', 'teste')", (emissor,))
+    conn.executemany("INSERT INTO ipe_docs (protocolo_entrega, cnpj_companhia, categoria, tipo, assunto, data_entrega, "
+                     "link_download, texto_extraido) VALUES (?,?,?,?,?,?,?,?)", [
+        ("P1", emissor, "Escritura de Emissão", "Escritura de Emissão de Debêntures", "6ª Emissão", "2022-06-01",
+         "https://www.rad.cvm.gov.br/x", make_test_db.ESCRITURA_RUMOB6),
+        ("P2", emissor, "Escritura de Emissão", "Escritura de Emissão de Debêntures", "5ª Emissão", "2021-01-01",
+         "https://www.rad.cvm.gov.br/y", None),
+        ("P3", emissor, "Fato Relevante", None, "Resultado", "2022-01-01", "https://www.rad.cvm.gov.br/z", None),
+    ])
+    assert ingest_rf_docs.processar_codigo(conn, "RUMOB6") == 1          # só a 6ª emissão
+    assert ingest_rf_docs.extrair_textos(conn, ["RUMOB6"], 10) == 0      # texto veio do ipe_docs
+    ingest_rf_docs.rebuild_fts(conn)
+    extrai_rf.processar(conn, "RUMOB6")
+    assert conn.execute("SELECT COUNT(*) FROM rf_partes WHERE fonte = 'pdf'").fetchone()[0] == 3
+    assert conn.execute("SELECT doc_id FROM rf_docs_fts WHERE rf_docs_fts MATCH 'fiança'").fetchall() == [("P1",)]
+
+
+def test_zip_ipe_filtrado_pelo_cnpj(monkeypatch):
+    """Emissor fora do watchlist: o ZIP anual do IPE é baixado e filtrado pelo CNPJ (uma vez por ano)."""
+    import ingest_ipe
+    import pandas as pd
+    df = pd.DataFrame([{"CNPJ_Companhia": "A", "Protocolo_Entrega": "1", "Data_Referencia": "2025-01-01",
+                        "Data_Entrega": "2025-01-02", "Versao": "1", "Categoria": "Escritura"},
+                       {"CNPJ_Companhia": "B", "Protocolo_Entrega": "2", "Data_Referencia": "2025-01-01",
+                        "Data_Entrega": "2025-01-02", "Versao": "1", "Categoria": "Escritura"}])
+    baixados = []
+    monkeypatch.setattr(ingest_ipe, "download_year", lambda ano: baixados.append(ano) or df)
+    ingest_rf_docs._ZIPS.clear()
+    a = ingest_rf_docs._ipe_do_zip("A", date.today().year)
+    ingest_rf_docs._ipe_do_zip("B", date.today().year)
+    assert [d["protocolo_entrega"] for d in a] == ["1"] and baixados == [date.today().year]
+
+
+def test_zip_cvm_lido_por_ler_zip_csvs():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("oferta_resolucao_160.csv", "Tipo_Ativo;CNPJ_Emissor\nDebêntures;11111111000111\n".encode("latin-1"))
+        z.writestr("../fora.csv", b"x")
+    csvs = F.ler_zip_csvs(buf.getvalue())
+    assert list(csvs) == ["oferta_resolucao_160.csv"]

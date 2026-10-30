@@ -163,3 +163,47 @@ def test_propagacao_nao_vence_a_exclusao_da_regra():
     _, fatos = t.fatos_da_empresa(pd.DataFrame(rows), ids, "C")
     anos = sorted(f[2][:4] for f in fatos if f[5] == "recompra")
     assert anos == ["2021", "2022"]
+
+
+def test_revisao_2026_10_30_demais_conceitos():
+    # dívida: derivativo, custo, parcelamento de tributo e linha líquida não são amortização
+    assert cls("6.03.04", "Pagamento de instrumentos financeiros derivativos", -1.0) is None
+    assert cls("6.03.04", "Pagamento de custo de estruturação de debêntures", -1.0) is None
+    assert cls("6.03.04", "Amortização de financiamento de impostos", -1.0) is None
+    assert cls("6.03.04", "Pagamento de refin. de imp. e cont. - principal", -1.0) is None
+    assert cls("6.03.04", "Amortização de empréstimos, financiamentos e direitos de uso", -1.0) is None
+    assert cls("6.03.04", "Pagamento de empréstimos e financiamentos", -1.0) == "amort_divida"
+    assert cls("6.03.04", "Emissão/pagamento de debêntures") == "divida_liquida_fluxo"
+    assert cls("6.03.01", "Recebimento de empréstimos para partes relacionadas", 1.0) is None
+    assert cls("6.03.01", "Captação de empréstimos e financiamentos", 1.0) == "capt_divida"
+    # juros: principal junto, arrendamento e encargo setorial ficam fora
+    assert cls("6.03.05", "Pagamento de principal e juros sobre empréstimos", -1.0) is None
+    assert cls("6.03.05", "Juros de arredamento pagos", -1.0) is None
+    assert cls("6.03.05", "Pagamento encargos da Reserva Global de Reversão", -1.0) is None
+    assert cls("6.03.05", "Juros pagos sobre empréstimos e financiamentos", -1.0) == "juros_pagos"
+    # IR: IRRF sobre JCP não é IR sobre o lucro
+    assert cls("6.01.02.01", "Imposto de renda na fonte do juros sobre capital próprio pago", -1.0) is None
+    assert cls("6.01.02.01", "Imposto de renda e contribuição social pagos", -1.0) == "ir_pago"
+    # D&A: custo de captação e impairment fora; direito de uso escrito de outro jeito vai para o seu conceito
+    assert cls("6.01.01.03", "Amortização de custo de captação") is None
+    assert cls("6.01.01.03", "Depreciação, amortização e impairment") is None
+    assert cls("6.01.01.03", "Depreciação IFRS 16") == "da_direito_uso"
+    assert cls("6.01.01.03", "Depreciação de direitos de uso") == "da_direito_uso"
+    assert cls("6.01.01.03", "Prov. p/ perdas de investimentos/amortização de ágio") is None
+    # capex: a isenção de linha líquida só neutraliza baixa/venda
+    assert cls("6.02.01", "Aquisição intangível por alienação de ações tesouraria", -1.0) is None
+    assert cls("6.02.01", "Aquisição de imobilizado e intangível - ágio e mais valia", -1.0) is None
+
+
+def test_regra_do_proprio_nome_vence_o_voto():
+    # "Pagamento de empréstimos" ligado pela Etapa 6 a uma linha de juros continua amortização
+    rows, ids = [], {}
+    anos = [(a, "Juros pagos") for a in range(2019, 2023)] + [(2023, "Pagamento de empréstimos")]   # 4 de 5: maioria
+    for a, nome in anos:
+        data = f"{a}-12-31"
+        rows += _filing("DFP", data, [("6.03", "Caixa de Financiamento", -10.0, "S"), ("6.03.05", nome, -10.0, "N")],
+                        ini=f"{a}-01-01")
+        ids[("DFP", data, "6.03.05")] = "L1"
+    _, fatos = t.fatos_da_empresa(pd.DataFrame(rows), ids, "C")
+    por = {(f[2][:4], f[5]) for f in fatos if f[5] in ("juros_pagos", "amort_divida")}
+    assert por == {(str(a), "juros_pagos") for a in range(2019, 2023)} | {("2023", "amort_divida")}

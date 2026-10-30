@@ -65,45 +65,56 @@ CONTAS_S = {"receita_liquida": ("DRE", "3.01"), "resultado_bruto": ("DRE", "3.03
             "ativo_total": ("BPA", "1"), "patrimonio_liquido": ("BPP", "2.03")}
 
 # conceito: (prefixos aceitos do código, padrão, exclusão)
-_DEBITO = r"(emprest|financ|debent|nota|bond|cedula|cri|cra)"
+_DEBITO = r"(emprest|financ(?!eir)|debent|nota|bond|cedula|cri|cra)"
 REGRAS = {
     "da_ex_ppa": (("6.01.01",), r"\b(deprec|amortiz|exaust)",
-                  r"(emprest|financ|debent|juros|agio|mais.?valia|custo de transac|direito de uso|arrend|concess|"
-                  r"contrato|combinacao|carteira|marca|goodwill|ganho|perda|despesas antecipadas|stand|comerciais|reversao|"
-                  r"credito|pis|cofins)"),
-    "da_direito_uso": (("6.01.01",), r"(deprec|amortiz).*(direito de uso|arrend)|direito de uso.*(deprec|amortiz)",
-                       r"(baixa|reversao|ganho|perda)"),
+                  r"(emprest|financ|debent|juros|agio|mais.?valia|custo de transac|captac|direitos? (?:d?e |dos )?uso|"
+                  r"direitodos|ifrs ?16|arrend|concess|contrato|combinacao|carteira|marca|goodwill|ganho|perda|impairment|"
+                  r"desvaloriz|tributos|linearizac|receita|stock option|fundo|valor justo|equivalencia|contingenc|"
+                  r"despesas antecipadas|stand|comerciais|reversao|credito|pis|cofins)"),
+    "da_direito_uso": (("6.01.01",), r"(deprec|amortiz).*(direitos? (?:d?e |dos )?uso|direitodos de uso|ifrs ?16|arrend)|(direitos? (?:d?e |dos )?uso|direitodos de uso|ifrs ?16).*(deprec|amortiz)",
+                       r"(baixa|reversao|ganho|perda|custo de transac|variac)"),
     "da_ppa": (("6.01.01",), r"(deprec|amortiz).*(mais.?valia|agio|goodwill|concess|contrato|combinacao|carteira|marca)",
-               r"(emprest|financ|debent|custo de transac|juros)"),
+               r"(emprest|financ|debent|custo de transac|captac|juros|prov p perdas|provis|perda|valor presente|contas a receber)"),
     "capex_imob": (("6.02",), r"(aquisic|adic|compra|investimento|aplica|no|em).*imobiliz|^imobilizado$|ativo fixo|bens do ativo",
-                   r"(venda|alienac|recebim|baixa|intang)"),
+                   r"(venda|alienac|recebim|baixa|intang|juros|combinacao|consumidor)"),
     "capex_intang": (("6.02",), r"(aquisic|adic|compra|investimento|aplica|no|em).*intang|^intangivel$",
-                     r"(venda|alienac|recebim|imobiliz)"),
-    "capex_conjunto": (("6.02",), r"(imobiliz.*intang|intang.*imobiliz)", r"(venda|alienac|recebim|baixa|outros(?! intang))"),
-    "dividendos_pagos": (("6.03",), r"(dividend|juros sobre (o )?capital|jcp)", r"(recebid|receb|a pagar)"),
+                     r"(venda|alienac|recebim|imobiliz|tesouraria|obrigacao|agio|^baixas)"),
+    "capex_conjunto": (("6.02",), r"(imobiliz.*intang|intang.*imobiliz)", r"(venda|alienac|aienac|recebim|baixa|outros(?! intang)|agio|mais valia|ganho|incorporac)"),
+    "dividendos_pagos": (("6.03",), r"(dividend|juros sobre (o )?capital|jcp)",
+                         r"(recebid|receb|a pagar|derivativ|reversao|constituicao|reservas de lucros|aquisicao de participacao|"
+                         r"aumento de capital|^participacao dos acionistas nao controladores$)"),
     "juros_pagos": (("6.01.02", "6.01.03", "6.03"),
                     r"(juros|encargos).*(pag|liquid)|pagamento.*(juros|encargos)",
                     r"(capital proprio|sobre (o )?capital|recebid|arrend|direito de uso|provisionad|apropriad|incorrid|"
-                    r"salario|ferias|encargos (sociais|trabalhistas)|folha|a pagar)"),
+                    r"salario|ferias|encargos (sociais|trabalhistas)|folha|a pagar|principal|inclui juros|amortizados|"
+                    r"e juros pagos|juros amortiz|leasing|\barred|alugue|ifrs ?16|reserva global|^variac|"
+                    r"^pagamentos? de (parcelamentos?|derivativos|antecipacao)|nos passivos|"
+                    r"^(?!.*(juros|encarg)))"),   # o voto não leva juros_pagos a um nome sem juros nem encargos
     "capt_divida": (("6.03",), rf"(captac|obtenc|ingresso|emissao|recebimento|novos|contratac).*{_DEBITO}",
-                    r"(custo|custos|^gastos|derivativ|instrumentos financeiros|despesa)"),
-    "amort_divida": (("6.03",), rf"(amortiz|pagamento|liquidac|quitac).*{_DEBITO}", r"(juros|encargos|arrend|direito de uso|dividend)"),
+                    r"(custo|custos|^gastos|gasto com|comiss|valores pagos|derivativ|instrumentos financeiros|despesa|"
+                    r"para partes? relacionadas?|seguros|amortiz|pagto|pagamento|arrend|direito de uso|leasing|clientes)"),
+    "amort_divida": (("6.03",), rf"(amortiz|pagamento|liquidac|quitac).*{_DEBITO}",
+                     r"(juros|encargos|arrend|direitos? de uso|diretos de uso|leasing|dividend|custo|comiss|premio|impost|"
+                     r"\brefin|tribut|concedid|^captac|emissao|ingresso|recebiment|clientes)"),   # com a entrada: é líquido
     "divida_liquida_fluxo": (("6.03",), rf"{_DEBITO}.*(captac|amortiz|pagamento).*(captac|amortiz|pagamento)|"
                                         rf"(captac|ingresso).*(e|ou).*(amortiz|pagamento)|"
-                                        rf"{_DEBITO}.*\bliquid[oa]s?\b|\bliquid[oa]s?\b.*{_DEBITO}|aumento.*reducao.*{_DEBITO}",
+                                        rf"{_DEBITO}.*\bliquid[oa]s?\b|\bliquid[oa]s?\b.*{_DEBITO}|aumento.*reducao.*{_DEBITO}|"
+                                        rf"(emissao|ingressos?|captac\w*)\s+(?:e\s+)?(amortiz|pagamento).*{_DEBITO}",
                              r"(liquidad|liquidac|instrumentos? financeiros?|recebid|atividade|caixa|recursos|aumento de capital|subscri|"
                              r"partes relacionadas|ligadas|coligadas|controladas|controladora|mutuo|descontinuad|mantidos|"
                              r"investimento|custo|gastos|despesa|hedge|swap|captacoes$)"),
     "arrend_pago": (("6.03",), r"(arrend|direito de uso|lease|locac)",
                     r"(sale|leaseback|recebid|ingresso|entrada|obtido|captac|contratac|emprest|debent|deb\b|risco sac|"
-                    r"financiamentos? e arrend|avp|\badic|constituic|ganho|baixa|pre pagamento)"),
+                    r"financiamentos? e (?:arrend|direito)|avp|\badic|constituic|ganho|baixa|pre pagamento)"),
     "recompra": (("6.03",), r"(recompra|aquisicao de acoes|acoes em tesouraria)",
                  r"(venda|vendid|alienac|alientac|debent|bond|\bnotas?\b(?!\s*\d)|titulo|resultado|"
                  r"cancelamento(?!.*recompra)|ganho|perda|"
                  r"^(utilizac|exercicio)|ilp|incentivo|stock option|recebiveis|investidas|controladas)"),
     "ir_pago": (("6.01",), r"(imposto de renda|ir e cs|irpj|contribuicao social).*(pag|recolh)|"
                            r"(pag|recolh).*(imposto de renda|ir e cs|irpj|contribuicao social|tributos sobre o lucro)",
-                r"(a recolher|a pagar|provisao|provisoes|diferid|compensac|a recuperar|refinanc|parcelamento|refis)"),
+                r"(a recolher|a pagar|provisao|provisoes|diferid|compensac|a recuperar|refinanc|\brefin\b|parcelamento|refis|"
+                r"capital proprio|jcp)"),
 }
 # a regra mais específica vence a geral em vez de gerar conflito
 ESPECIFICA_SOBRE = {"divida_liquida_fluxo": {"capt_divida", "amort_divida"},
@@ -119,7 +130,10 @@ def _excluido(conceito: str, dsn: str) -> bool:
     exc = _COMP[conceito][2]
     if not (exc and exc.search(dsn)):
         return False
-    return not (conceito.startswith("capex") and _CAPEX_LIQUIDO.search(dsn))
+    if conceito.startswith("capex") and _CAPEX_LIQUIDO.search(dsn):
+        # a linha líquida neutraliza só as palavras de baixa/venda; o resto da exclusão continua valendo
+        return bool(exc.search(re.sub(r"\b(baix|vend|alienac|aienac)\w*", " ", dsn)))
+    return True
 
 DDL = """
 CREATE TABLE IF NOT EXISTS conceito (
@@ -234,8 +248,8 @@ def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str, contribuicoes:
         v = votos.get(r.linha_id)
         if v is None:
             return None
-        if r.conceito == v[0]:
-            return v[0]
+        if r.conceito is not None:
+            return r.conceito   # a regra falou sobre este nome (igual ao voto ou outro conceito): vale o nome
         # a propagação não vence a exclusão da própria regra: "alienação de ações em tesouraria" ligada pela Etapa 6
         # à linha de recompra continua fora (revisão de 2026-10-30, stress/st7_revisao.py)
         # (nesse caso a célula fica com o conceito que a regra dá ao próprio nome, se houver: "adições ao imobilizado e

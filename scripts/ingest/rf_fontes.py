@@ -40,8 +40,9 @@ URL_CVM_OFERTAS = os.environ.get(
 # {aammdd} = data do arquivo (ex.: 261030)
 URL_ANBIMA_DEB = os.environ.get(
     "RF_URL_ANBIMA_DEB", "https://www.anbima.com.br/informacoes/merc-sec-debentures/arqs/db{aammdd}.txt")
-URL_ANBIMA_CRI_CRA = os.environ.get(
-    "RF_URL_ANBIMA_CRI_CRA", "https://www.anbima.com.br/informacoes/merc-sec-cri-cra/arqs/cr{aammdd}.txt")
+# CRI/CRA: o caminho que parecia o análogo do de debêntures (merc-sec-cri-cra/arqs/cr{aammdd}.txt) deu 404 em
+# 2026-10-30. Desligado até alguém achar o link de download no site da ANBIMA e defini-lo aqui ou no ambiente.
+URL_ANBIMA_CRI_CRA = os.environ.get("RF_URL_ANBIMA_CRI_CRA", "")
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CVM-Research-Bot/1.0)"}
 
@@ -276,6 +277,14 @@ APELIDOS_CVM_OFERTA = {
     "publico_alvo":      ["Publico_Alvo", "Tipo_Investidor"],
     "lider_nome":        ["Nome_Lider", "Nome_Coordenador_Lider", "Lider"],
     "incentivada":       ["Oferta_Incentivo_Fiscal", "Titulo_Incentivado", "Incentivo_Fiscal"],
+    # só na Resolução 160
+    "status":            ["Status_Requerimento"],
+    "tipo_lastro":       ["Tipo_lastro"],
+    "descricao_garantias": ["Descricao_garantias"],
+    "descricao_lastro":  ["Descricao_lastro"],
+    "devedores":         ["Identificacao_devedores_coobrigados"],
+    "agente_fiduciario": ["Agente_fiduciario"],
+    "avaliador_risco":   ["Avaliador_Risco"],
 }
 
 
@@ -301,6 +310,13 @@ def parse_cvm_ofertas(df: pd.DataFrame, fonte: str) -> list[dict]:
             continue
         juros = texto(_valor(r, mapa, "taxa_juros"))
         atual = texto(_valor(r, mapa, "atualizacao"))
+        devedores = texto(_valor(r, mapa, "devedores"))
+        devedor_cnpj = fmt_cnpj(_valor(r, mapa, "devedor_cnpj"))
+        if not devedor_cnpj and devedores:
+            # texto livre ("Raízen S.A., CNPJ 33.453.598/0001-23"): só usa o CNPJ se houver um único
+            achados = {fmt_cnpj(m) for m in re.findall(r"\d{2}\.?\d{3}\.?\d{3}\s*/?\s*\d{4}\s*-?\s*\d{2}", devedores)}
+            achados.discard(None)
+            devedor_cnpj = achados.pop() if len(achados) == 1 else None
         linha = {
             "fonte":             fonte,
             "numero_registro":   texto(_valor(r, mapa, "numero_registro")),
@@ -309,7 +325,7 @@ def parse_cvm_ofertas(df: pd.DataFrame, fonte: str) -> list[dict]:
             "tipo_ativo":        tipo_ativo,
             "emissor_cnpj":      fmt_cnpj(_valor(r, mapa, "emissor_cnpj")),
             "emissor_nome":      texto(_valor(r, mapa, "emissor_nome")),
-            "devedor_cnpj":      fmt_cnpj(_valor(r, mapa, "devedor_cnpj")),
+            "devedor_cnpj":      devedor_cnpj,
             "devedor_nome":      texto(_valor(r, mapa, "devedor_nome")),
             "emissao":           texto(_valor(r, mapa, "emissao")),
             "serie":             texto(_valor(r, mapa, "serie")),
@@ -323,6 +339,13 @@ def parse_cvm_ofertas(df: pd.DataFrame, fonte: str) -> list[dict]:
             "publico_alvo":      texto(_valor(r, mapa, "publico_alvo")),
             "lider_nome":        texto(_valor(r, mapa, "lider_nome")),
             "incentivada_12431": _sim_nao(_valor(r, mapa, "incentivada")),
+            "status":            texto(_valor(r, mapa, "status")),
+            "tipo_lastro":       texto(_valor(r, mapa, "tipo_lastro")),
+            "descricao_garantias": texto(_valor(r, mapa, "descricao_garantias")),
+            "descricao_lastro":  texto(_valor(r, mapa, "descricao_lastro")),
+            "devedores_coobrigados": devedores,
+            "agente_fiduciario": texto(_valor(r, mapa, "agente_fiduciario")),
+            "avaliador_risco":   texto(_valor(r, mapa, "avaliador_risco")),
         }
         linha["chave"] = "|".join(str(linha[k] or "") for k in (
             "fonte", "numero_registro", "emissor_cnpj", "emissao", "serie", "isin", "codigo", "data_registro"))
@@ -428,7 +451,9 @@ def verificar() -> int:
     from datetime import timedelta
     falhas = 0
     try:
-        linhas = parse_snd(_baixar(URL_SND_CARACTERISTICAS))
+        raw = _baixar(URL_SND_CARACTERISTICAS)
+        print(f"\n   SND colunas: {list(ler_tabela_texto(raw, 'Codigo do Ativo').columns)}")
+        linhas = parse_snd(raw)
         _relatorio("SND características", URL_SND_CARACTERISTICAS, linhas,
                    ["isin", "emissor_cnpj", "data_vencimento", "valor_emissao", "remuneracao", "especie_garantia",
                     "incentivada_12431", "agente_fiduciario"])
@@ -443,14 +468,17 @@ def verificar() -> int:
             try:
                 linhas = parse_cvm_ofertas(df, nome)
                 _relatorio(f"CVM ofertas · {nome}", URL_CVM_OFERTAS, linhas,
-                           ["codigo", "isin", "devedor_cnpj", "emissao", "serie", "data_registro", "valor_total",
-                            "remuneracao"])
+                           ["devedor_cnpj", "emissao", "serie", "data_registro", "valor_total", "remuneracao",
+                            "descricao_garantias", "descricao_lastro", "devedores_coobrigados"])
             except ColunaAusente as e:
                 print(f"   {nome}: ignorado ({e})")
     except Exception as e:
         print(f"\n== CVM ofertas: FALHOU ({e})")
         falhas += 1
     for tipo in ("DEB", "CRI_CRA"):
+        if tipo == "CRI_CRA" and not URL_ANBIMA_CRI_CRA:
+            print("\n== ANBIMA CRI_CRA: desligada (RF_URL_ANBIMA_CRI_CRA vazio; ver comentário no topo do arquivo)")
+            continue
         dia, lido = date.today(), False
         for _ in range(7):   # volta até achar um dia útil publicado
             dia -= timedelta(days=1)

@@ -60,5 +60,17 @@ Não rodado contra dados reais: a sessão de criação não alcançava `dados.cv
 
 ## Resultado (2026-10-30)
 
+Primeira `rf_fontes.py --verificar` no Mac:
+
+| Fonte | Resultado | Ação |
+|---|---|---|
+| SND | 4.851 linhas; ISIN, CNPJ, vencimento, remuneração, espécie, agente ≥ 99% | volume e Lei 12.431 a 0%: o `--verificar` agora imprime o cabeçalho para casar os apelidos |
+| CVM 400/476 | 11.534 ofertas de dívida; sem código, ISIN nem devedor | casar por emissor + emissão + série |
+| CVM Resolução 160 | 4.528; sem série nem remuneração; com descrição de garantias, lastro, devedores, rating | colunas novas em `rf_ofertas`; extração por regra (`fonte = 'cvm_oferta'`) |
+| ANBIMA debêntures | 1.275 títulos/dia, taxa 94%, PU 97% | ok |
+| ANBIMA CRI/CRA | 404 no caminho suposto | desligada até achar a URL |
+
+Consequência: CRI/CRA só entram pela `rf_watchlist.csv` com securitizadora, emissão e série preenchidas à mão.
+
 Código, migração, operação (job semanal e `bootstrap.sh`), skill e testes prontos; suíte inteira verde. Itens 1–4 do
 critério de pronto pendentes da primeira execução com rede (ver `ESTADO.md`, pendência 0).

@@ -380,9 +380,12 @@ PU, % PU par, duration), `rf_partes` / `rf_garantias` / `rf_lastro` (`fonte` 'ca
 inteiro; PDFs só dos códigos de `rf_watchlist.csv`. Ingestores em `scripts/ingest/`: `ingest_rf_cadastro.py`,
 `ingest_rf_taxas.py --dias 30 --reter 30`, `ingest_rf_docs.py [--codigo X] [--listar|--protocolo P|--url U]` (roda
 `extrai_rf.py`, extração por regra) e `rf_grupo.py`; todos no job semanal e no `bootstrap.sh` (`--sem-rf` pula).
-⚠️ **Layouts das fontes não verificados na criação do módulo** (a sessão não tinha rede): antes da primeira carga,
-`cd scripts/ingest && ../../.venv/bin/python rf_fontes.py --verificar`; URL e apelidos de coluna moram só em `rf_fontes.py`
-(URLs sobrescrevíveis por `RF_URL_*`). Banco anterior: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`.
+Fontes conferidas com `rf_fontes.py --verificar` em 2026-10-30: SND lê (4.851 debêntures; volume e Lei 12.431 ainda
+sem coluna casada), ANBIMA debêntures lê (~1.275/dia), **CVM não publica código nem ISIN** e a Resolução 160 não tem série
+(casa por emissor + emissão; traz `descricao_garantias`/`descricao_lastro`/`devedores_coobrigados`, extraídas por regra com
+`fonte = 'cvm_oferta'`), **ANBIMA CRI/CRA sem URL conhecida** (desligada; `RF_URL_ANBIMA_CRI_CRA`). Por isso CRI/CRA só entram
+por `rf_watchlist.csv` com `emissor_cnpj`, `emissao` e `serie` preenchidos à mão. URL e apelidos de coluna moram só em
+`rf_fontes.py`. Banco anterior: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`.
 Base de teste fictícia (sem rede): `python tests/fixtures/rf/make_test_db.py /tmp/rf_teste.db` e `CVM_DB_PATH=/tmp/rf_teste.db`
 no MCP. Regras de resposta: `skills/cvm-research/references/renda-fixa.md`.
 

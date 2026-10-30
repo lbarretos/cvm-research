@@ -525,9 +525,11 @@ def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
     """Ficha de um título de renda fixa (debênture, CRI, CRA) pelo código (RUMOB6, ERDVB4, CRA024004SB…).
     Seções, cada uma {colunas, linhas}:
     - emissao: cadastro (SND para debêntures; oferta CVM para CRI/CRA) + última taxa indicativa.
-    - ofertas: registro(s) da oferta na CVM (rito, data, valor, líder).
+    - ofertas: registro(s) da oferta na CVM (rito, data, valor, líder); na Resolução 160 (2023+), também a descrição
+      oficial das garantias, do lastro e dos devedores/coobrigados e a agência de rating contratada.
     - partes: emissor/securitizadora, devedor, fiadores, garantidores, cedentes, agente fiduciário. `fonte` 'cadastro'
-      = campo publicado (confianca 1); 'pdf' = extraída por regra do documento, com o trecho em `evidencia`.
+      = campo publicado (confianca 1); 'pdf' = extraída por regra do documento, 'cvm_oferta' = extraída por regra da
+      descrição da oferta na CVM, as duas com o trecho em `evidencia`.
     - garantias e lastro: extraídos dos PDFs (tipo, prestador, evidência). Vazio NÃO quer dizer sem garantia: o PDF
       pode não ter sido ingerido (o aviso diz). `especie_garantia` da emissão é o campo do SND.
     - taxas: taxa indicativa ANBIMA, PU, % PU par e duration dos últimos `dias_taxa` dias (preço de referência, não negócio).
@@ -553,12 +555,18 @@ def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
         if not emis:
             avisos.append("título sem cadastro (só taxa ANBIMA): rode ingest_rf_cadastro.py")
         a = dict(zip(_ATIVO_COLS, emis[0])) if emis else {}
+        # a CVM não publica o código: casa por emissor + emissão (+ série no 400/476), como ingest_rf_cadastro.py
         cols = ["fonte", "numero_registro", "tipo_ativo", "emissao", "serie", "data_registro", "valor_total",
-                "remuneracao", "rito", "publico_alvo", "lider_nome", "devedor_nome"]
+                "remuneracao", "rito", "publico_alvo", "lider_nome", "agente_fiduciario", "avaliador_risco",
+                "tipo_lastro", "descricao_garantias", "descricao_lastro", "devedores_coobrigados"]
         out["ofertas"] = _tabular(cols, _rf(conn, f"""
-            SELECT {','.join(cols)} FROM rf_ofertas WHERE codigo = ?
-               OR (emissor_cnpj = ? AND emissao = ? AND serie = ?) ORDER BY data_registro LIMIT 10""",
-            (cod, a.get("emissor_cnpj"), a.get("emissao"), a.get("serie"))), limite=q)
+            SELECT {','.join(cols[:-3])}, substr(descricao_garantias, 1, 1500), substr(descricao_lastro, 1, 800),
+                   substr(devedores_coobrigados, 1, 800)
+            FROM rf_ofertas
+            WHERE emissor_cnpj = :emissor AND CAST(emissao AS INTEGER) = CAST(:emissao AS INTEGER)
+              AND (serie IS NULL OR :serie IS NULL OR CAST(serie AS INTEGER) = CAST(:serie AS INTEGER))
+            ORDER BY data_registro LIMIT 10""",
+            {"emissor": a.get("emissor_cnpj"), "emissao": a.get("emissao"), "serie": a.get("serie")}), limite=3 * q)
         cols = ["papel", "cnpj", "nome", "fonte", "confianca", "doc_id", "evidencia"]
         out["partes"] = _tabular(cols, _rf(conn, """
             SELECT papel, cnpj, nome, fonte, confianca, doc_id, substr(evidencia, 1, 300) FROM rf_partes
@@ -606,7 +614,9 @@ def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
                              ORDER BY d.data_entrega DESC""", (cod,))
         out["documentos"] = _tabular(cols, docs, limite=q)
         if not any(d[5] for d in docs):
-            avisos.append(f"nenhum PDF lido para {cod}: garantias, lastro e garantidores vêm só do cadastro. Para ler a "
+            origem = ("da descrição da oferta na CVM e do cadastro" if out["garantias"]["linhas"] or out["lastro"]["linhas"]
+                      else "só do cadastro")
+            avisos.append(f"nenhum PDF lido para {cod}: garantias, lastro e garantidores vêm {origem}. Para ler a "
                           f"escritura/termo: python scripts/ingest/ingest_rf_docs.py --codigo {cod}")
         if partes and not grupo:
             avisos.append("nenhuma parte tem FRE na base (empresa fora do watchlist ou fechada): grupo não calculado")

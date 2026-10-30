@@ -1,8 +1,13 @@
 # Títulos de renda fixa acompanhados sob demanda: o job semanal busca os documentos (escritura, termo de
 # securitização) e extrai partes/garantias/lastro destes códigos. Cadastro e taxas cobrem o mercado inteiro.
 # Acrescente com: python scripts/ingest/ingest_rf_docs.py --codigo CODIGO
-codigo,observacao
-RUMOB6,exemplo inicial
-ERDVB4,exemplo inicial
-CRA024004SB,exemplo inicial
-CRA02300796,exemplo inicial
+#
+# Debênture: basta o código (o SND traz o resto).
+# CRI/CRA: a CVM não publica o código de negociação, então preencha tipo, emissor_cnpj (CNPJ da securitizadora),
+# emissao e serie, copiados da página do título na ANBIMA (data.anbima.com.br) ou do termo de securitização.
+# Sem isso o título não entra em rf_ativos e get_bond não o encontra.
+codigo,tipo,emissor_cnpj,emissao,serie,observacao
+RUMOB6,,,,,exemplo inicial
+ERDVB4,,,,,exemplo inicial
+CRA024004SB,CRA,,,,exemplo inicial: falta securitizadora/emissão/série
+CRA02300796,CRA,,,,exemplo inicial: falta securitizadora/emissão/série

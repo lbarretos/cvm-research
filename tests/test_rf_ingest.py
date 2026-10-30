@@ -101,50 +101,87 @@ def test_parse_snd():
     assert linhas["ERDVB4"]["remuneracao"] == "100% do DI + 1,8000%" and linhas["ERDVB4"]["incentivada_12431"] == 0
 
 
-def _ofertas_df():
+def _distrib_df():
+    """oferta_distribuicao.csv (ritos 400/476), com as colunas reais conferidas em 2026-10-30 (subconjunto)."""
     import pandas as pd
     return pd.DataFrame([
-        {"Numero_Registro_Oferta": "R1", "Tipo_Ativo": "Certificados de Recebíveis do Agronegócio",
-         "Cod_Negociacao": "cra024004sb", "CNPJ_Emissor": "66666666000166", "Nome_Emissor": "SECURITIZADORA",
-         "CNPJ_Devedor": "77777777000177", "Nome_Devedor": "AGRO DELTA", "Emissao": "240", "Serie": "1",
-         "Data_Registro_Oferta": "01/04/2024", "Valor_Total": "600000000,00", "Quantidade_Total": "600000",
-         "Taxa_Juros": "7,10%", "Atualizacao_Monetaria": "IPCA"},
-        {"Numero_Registro_Oferta": "R2", "Tipo_Ativo": "Ações", "Cod_Negociacao": "", "CNPJ_Emissor": "1",
-         "Nome_Emissor": "X", "Emissao": "", "Serie": "", "Data_Registro_Oferta": "", "Valor_Total": "",
-         "Quantidade_Total": "", "Taxa_Juros": "", "Atualizacao_Monetaria": "", "CNPJ_Devedor": "", "Nome_Devedor": ""},
-        {"Numero_Registro_Oferta": "R3", "Tipo_Ativo": "Debêntures", "Cod_Negociacao": "RUMOB6",
-         "CNPJ_Emissor": "11111111000111", "Nome_Emissor": "ALFA", "Emissao": "6", "Serie": "1",
-         "Data_Registro_Oferta": "01/06/2022", "Valor_Total": "1", "Quantidade_Total": "1", "Taxa_Juros": "",
-         "Atualizacao_Monetaria": "", "CNPJ_Devedor": "", "Nome_Devedor": ""},
+        {"Numero_Registro_Oferta": "R2", "Tipo_Ativo": "Ações", "CNPJ_Emissor": "1", "Nome_Emissor": "X",
+         "Emissao": "", "Serie": "", "Data_Registro_Oferta": "", "Valor_Total": "", "Quantidade_Total": "",
+         "Juros": "", "Atualizacao_Monetaria": "", "Oferta_Incentivo_Fiscal": "", "Nome_Lider": ""},
+        {"Numero_Registro_Oferta": "R3", "Tipo_Ativo": "Debêntures", "CNPJ_Emissor": "11111111000111",
+         "Nome_Emissor": "ALFA", "Emissao": "6", "Serie": "1", "Data_Registro_Oferta": "01/06/2022",
+         "Valor_Total": "1500000000,00", "Quantidade_Total": "1500000", "Juros": "6,0000%",
+         "Atualizacao_Monetaria": "IPCA", "Oferta_Incentivo_Fiscal": "S", "Nome_Lider": "BANCO TESTE"},
     ])
 
 
-def test_parse_cvm_ofertas_so_divida():
-    linhas = F.parse_cvm_ofertas(_ofertas_df(), "cvm_160")
-    assert [l["numero_registro"] for l in linhas] == ["R1", "R3"]
-    cra = linhas[0]
-    assert cra["codigo"] == "CRA024004SB" and cra["devedor_cnpj"] == "77.777.777/0001-77"
-    assert cra["remuneracao"] == "IPCA 7,10%" and cra["valor_total"] == 6e8
-    assert len({l["chave"] for l in linhas}) == 2
+def _r160_df():
+    """oferta_resolucao_160.csv: sem série, sem código, com a descrição de garantias, lastro e devedores."""
+    import pandas as pd
+    return pd.DataFrame([
+        {"Numero_Requerimento": "Q1", "Status_Requerimento": "Oferta Encerrada",
+         "Valor_Mobiliario": "Certificados de Recebíveis do Agronegócio", "CNPJ_Emissor": "66666666000166",
+         "Nome_Emissor": "SECURITIZADORA", "Emissao": "240", "Data_Registro": "2024-04-01",
+         "Valor_Total_Registrado": "600000000", "Qtde_Total_Registrada": "600000", "Publico_alvo": "Profissional",
+         "Tipo_lastro": "CPR-F",
+         "Descricao_garantias": "Fiança prestada pela controladora e cessão fiduciária de recebíveis.",
+         "Descricao_lastro": "Cédula de Produto Rural Financeira emitida pela Devedora.",
+         "Identificacao_devedores_coobrigados": "AGRO DELTA S.A., CNPJ 77.777.777/0001-77",
+         "Titulo_incentivado": "Sim", "Agente_fiduciario": "AGENTE TESTE", "Avaliador_Risco": "AGÊNCIA TESTE"},
+    ])
+
+
+def test_parse_cvm_ofertas_so_divida_e_devedor_do_texto():
+    distrib = F.parse_cvm_ofertas(_distrib_df(), "cvm_distrib")
+    assert [l["numero_registro"] for l in distrib] == ["R3"]            # ações ficam fora
+    assert distrib[0]["remuneracao"] == "IPCA 6,0000%" and distrib[0]["incentivada_12431"] == 1
+    cra = F.parse_cvm_ofertas(_r160_df(), "cvm_160")[0]
+    assert cra["codigo"] is None and cra["serie"] is None             # a CVM não publica
+    assert cra["devedor_cnpj"] == "77.777.777/0001-77"                # tirado do texto livre (CNPJ único)
+    assert cra["tipo_lastro"] == "CPR-F" and "Fiança" in cra["descricao_garantias"]
+    assert cra["avaliador_risco"] == "AGÊNCIA TESTE" and cra["incentivada_12431"] == 1
+
+
+def test_devedor_do_texto_ambiguo_fica_vazio():
+    df = _r160_df()
+    df.loc[0, "Identificacao_devedores_coobrigados"] = "A, CNPJ 77.777.777/0001-77; B, CNPJ 88.888.888/0001-88"
+    assert F.parse_cvm_ofertas(df, "cvm_160")[0]["devedor_cnpj"] is None
 
 
 # ── ingest_rf_cadastro ───────────────────────────────────────────────────────
 
-def test_cadastro_snd_tem_precedencia_e_cvm_completa(conn, monkeypatch):
+def test_cadastro_snd_manual_e_oferta(conn, monkeypatch, tmp_path):
+    w = tmp_path / "rf.csv"
+    w.write_text("# comentário\ncodigo,tipo,emissor_cnpj,emissao,serie,observacao\n"
+                 "RUMOB6,,,,,só código\nCRA024004SB,CRA,66.666.666/0001-66,240,1,da página da ANBIMA\n")
+    monkeypatch.setattr(ingest_rf_cadastro, "RF_WATCHLIST", w)
     monkeypatch.setattr(ingest_rf_cadastro, "get_db", lambda: conn)
     monkeypatch.setattr(ingest_rf_cadastro, "baixar_snd", lambda: F.parse_snd(SND.encode("latin-1")))
-    monkeypatch.setattr(ingest_rf_cadastro, "baixar_ofertas", lambda: F.parse_cvm_ofertas(_ofertas_df(), "cvm_160"))
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_ofertas", lambda: F.parse_cvm_ofertas(_distrib_df(), "cvm_distrib")
+                        + F.parse_cvm_ofertas(_r160_df(), "cvm_160"))
     monkeypatch.setattr(sys, "argv", ["x"])
     ingest_rf_cadastro.main()
     ingest_rf_cadastro.main()   # idempotente
-    rows = {r[0]: r[1:] for r in conn.execute("SELECT codigo, tipo, fonte, devedor_cnpj FROM rf_ativos")}
-    assert rows["RUMOB6"] == ("DEB", "snd", None)              # a oferta não sobrescreve o SND
-    assert rows["CRA024004SB"] == ("CRA", "cvm_oferta", "77.777.777/0001-77")
+    rows = {r[0]: r[1:] for r in conn.execute(
+        "SELECT codigo, tipo, fonte, devedor_cnpj, valor_emissao, agente_fiduciario FROM rf_ativos")}
+    assert rows["RUMOB6"][:2] == ("DEB", "snd")                       # SND prevalece; o manual sem CNPJ é ignorado
+    assert rows["RUMOB6"][4] == "AGENTE TESTE"                        # o SND tem o seu; a oferta não sobrescreve
+    assert rows["CRA024004SB"] == ("CRA", "manual", "77.777.777/0001-77", 6e8, "AGENTE TESTE")
     assert conn.execute("SELECT COUNT(*) FROM rf_ofertas").fetchone()[0] == 2
-    papeis = {(c, p) for c, p in conn.execute("SELECT codigo, papel FROM rf_partes")}
+    garantias = {r[0] for r in conn.execute(
+        "SELECT tipo FROM rf_garantias WHERE codigo = 'CRA024004SB' AND fonte = 'cvm_oferta'")}
+    assert garantias == {"fianca", "cessao_fiduciaria"}
+    assert conn.execute("SELECT tipo_lastro FROM rf_lastro WHERE codigo = 'CRA024004SB'").fetchall() == [("CPR-F",)]
+    papeis = {(c, p) for c, p in conn.execute("SELECT codigo, papel FROM rf_partes WHERE fonte = 'cadastro'")}
     assert {("CRA024004SB", "securitizadora"), ("CRA024004SB", "devedor"), ("RUMOB6", "emissor"),
             ("RUMOB6", "agente_fiduciario")} <= papeis
-    assert conn.execute("SELECT COUNT(*) FROM rf_partes").fetchone()[0] == len(papeis)
+
+
+def test_manual_nao_sobrescreve_snd(conn):
+    conn.execute("INSERT INTO rf_ativos (codigo, tipo, emissor_cnpj, fonte) VALUES ('RUMOB6', 'DEB', 'x', 'snd')")
+    n = ingest_rf_cadastro.cadastrar_manuais(conn, [{"codigo": "RUMOB6", "tipo": "DEB", "emissor_cnpj": "y",
+                                                     "emissao": "6", "serie": None}])
+    assert n == 0 and conn.execute("SELECT emissor_cnpj FROM rf_ativos").fetchone() == ("x",)
 
 
 def test_cadastro_falha_total_sai_com_erro(conn, monkeypatch):
@@ -277,6 +314,7 @@ def test_relevancia_cra_exige_emissao_e_serie():
 def test_watchlist_aditiva(tmp_path):
     w = tmp_path / "rf.csv"
     ingest_rf_docs.acrescentar_watchlist(["RUMOB6"], w)
+    assert w.read_text().splitlines()[0] == "codigo,tipo,emissor_cnpj,emissao,serie,observacao"
     ingest_rf_docs.acrescentar_watchlist(["RUMOB6", "ERDVB4"], w)
     assert ingest_rf_docs.ler_watchlist(w) == ["RUMOB6", "ERDVB4"]
 

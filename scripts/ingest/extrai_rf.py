@@ -158,9 +158,10 @@ def extrair(texto: str, tipo_titulo: str) -> dict:
     return {"partes": partes, "garantias": garantias, "lastro": lastro}
 
 
-def gravar(conn, doc_id: str, codigo: str, tipo_titulo: str, r: dict) -> None:
+def gravar(conn, doc_id: str, codigo: str, tipo_titulo: str, r: dict, fonte: str = "pdf") -> None:
+    """`fonte`: 'pdf' (texto do documento) ou 'cvm_oferta' (descrição do requerimento da Resolução 160)."""
     from ingest_rf_cadastro import parte
-    upsert(conn, "rf_partes", [parte(codigo, p["papel"], p["cnpj"], p["nome"], fonte="pdf", doc_id=doc_id,
+    upsert(conn, "rf_partes", [parte(codigo, p["papel"], p["cnpj"], p["nome"], fonte=fonte, doc_id=doc_id,
                                      evidencia=p["evidencia"], confianca=p["confianca"]) for p in r["partes"]],
            conflict="chave")
     prestadores = {}
@@ -170,18 +171,18 @@ def gravar(conn, doc_id: str, codigo: str, tipo_titulo: str, r: dict) -> None:
     for g in r["garantias"]:
         quem = prestadores.get({"fianca": "fiador", "aval": "avalista"}.get(g["tipo"], ""), [])
         linhas.append({
-            "chave": f"{codigo}|{g['tipo']}|pdf|{doc_id}", "codigo": codigo, "tipo": g["tipo"],
+            "chave": f"{codigo}|{g['tipo']}|{fonte}|{doc_id}", "codigo": codigo, "tipo": g["tipo"],
             "descricao": g["descricao"],
             "prestador_cnpj": quem[0]["cnpj"] if len(quem) == 1 else None,
             "prestador_nome": "; ".join(q["nome"] or q["cnpj"] for q in quem) or None,
-            "fonte": "pdf", "doc_id": doc_id, "evidencia": g["evidencia"], "confianca": g["confianca"]})
+            "fonte": fonte, "doc_id": doc_id, "evidencia": g["evidencia"], "confianca": g["confianca"]})
     upsert(conn, "rf_garantias", linhas, conflict="chave")
     devedores = prestadores.get("devedor", [])
     upsert(conn, "rf_lastro", [{
-        "chave": f"{codigo}|{l['tipo_lastro']}|pdf|{doc_id}", "codigo": codigo, "tipo_lastro": l["tipo_lastro"],
+        "chave": f"{codigo}|{l['tipo_lastro']}|{fonte}|{doc_id}", "codigo": codigo, "tipo_lastro": l["tipo_lastro"],
         "devedor_cnpj": devedores[0]["cnpj"] if len(devedores) == 1 else None,
         "devedor_nome": devedores[0]["nome"] if len(devedores) == 1 else None,
-        "descricao": None, "fonte": "pdf", "doc_id": doc_id, "evidencia": l["evidencia"],
+        "descricao": None, "fonte": fonte, "doc_id": doc_id, "evidencia": l["evidencia"],
         "confianca": l["confianca"]} for l in r["lastro"]], conflict="chave")
 
 

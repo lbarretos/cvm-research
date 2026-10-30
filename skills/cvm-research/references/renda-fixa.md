@@ -17,9 +17,9 @@ Módulo da Etapa 8. Ferramentas do MCP: `resolve_bond`, `get_bond`, `search_bond
 | Seção | Fonte | Confiável para |
 |---|---|---|
 | `emissao` | SND (`fonte = 'snd'`, debêntures) ou oferta da CVM (`cvm_oferta`, CRI/CRA) | datas, volume, remuneração, espécie (debênture), Lei 12.431 |
-| `ofertas` | CVM dados abertos (ritos 400/476 e Resolução 160) | registro, rito, público-alvo, líder |
+| `ofertas` | CVM dados abertos (ritos 400/476 e Resolução 160) | registro, rito, público-alvo, líder; na 160, descrição oficial de garantias, lastro e devedores, agência de rating |
 | `partes` `fonte='cadastro'` | campo publicado (confianca 1) | emissor/securitizadora, devedor (se a CVM informa), agente fiduciário |
-| `partes`/`garantias`/`lastro` `fonte='pdf'` | regra sobre o texto da escritura/termo (confianca 0,6–0,8) | indicar o que o documento diz; **citar `evidencia`** |
+| `partes`/`garantias`/`lastro` `fonte='pdf'` ou `'cvm_oferta'` | regra sobre o texto da escritura/termo ou da descrição da oferta na CVM (confianca 0,6–0,8) | indicar o que o documento diz; **citar `evidencia`** |
 | `taxas` | ANBIMA, mercado secundário, últimos ~30 dias | preço de referência (taxa indicativa, PU, % PU par, duration) |
 | `grupo` | FRE das companhias da base (`rf_grupo`) | cadeia de controle até onde houver FRE |
 
@@ -33,6 +33,9 @@ Módulo da Etapa 8. Ferramentas do MCP: `resolve_bond`, `get_bond`, `search_bond
   ("não contará com…"). Pode haver falso positivo em cláusula hipotética: confira o trecho antes de afirmar.
 - **CRI/CRA:** a “Emissora” é a securitizadora; o risco é do **devedor** do lastro (e de fiadores/coobrigados).
   A securitizadora não define grupo econômico e fica fora de `grupo`/`ativos_do_grupo`.
+- **CRI/CRA não têm cadastro automático.** A CVM não publica o código de negociação e a taxa ANBIMA de CRI/CRA está
+  sem fonte: o título só existe se estiver em `rf_watchlist.csv` com securitizadora, emissão e série. Se `get_bond`
+  não achar um CRA, diga isso e indique preencher a linha, sem inventar dados.
 - **Taxa indicativa ≠ negócio.** É a taxa de referência calculada pela ANBIMA; títulos sem liquidez podem não ser
   precificados (sem linha em `rf_taxas`). A base guarda só a janela recente (padrão 30 dias), atualizada no job
   semanal: a última data pode ter até uma semana.

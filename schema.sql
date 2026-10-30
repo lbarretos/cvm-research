@@ -830,8 +830,8 @@ CREATE INDEX IF NOT EXISTS idx_rf_ativos_emissor ON rf_ativos (emissor_cnpj);
 CREATE INDEX IF NOT EXISTS idx_rf_ativos_devedor ON rf_ativos (devedor_cnpj);
 CREATE INDEX IF NOT EXISTS idx_rf_ativos_isin    ON rf_ativos (isin);
 
--- Ofertas registradas na CVM (rito 400/476 e Resolução 160). `codigo` só vem quando a CVM informa
--- o código de negociação; senão casa-se com rf_ativos por emissor + emissão + série.
+-- Ofertas registradas na CVM (rito 400/476 e Resolução 160). A CVM não publica o código de negociação
+-- nem o ISIN (conferido em 2026-10-30): casa-se com rf_ativos por emissor + emissão (+ série, só no 400/476).
 -- `chave` junta os campos que identificam a linha (vários podem ser NULL; ver ingest_rf_cadastro.py).
 CREATE TABLE IF NOT EXISTS rf_ofertas (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -857,6 +857,15 @@ CREATE TABLE IF NOT EXISTS rf_ofertas (
     publico_alvo        TEXT,
     lider_nome          TEXT,
     incentivada_12431   INTEGER,
+    -- só na Resolução 160 (2023+): texto livre do requerimento, a melhor fonte estruturada de garantia e
+    -- lastro de CRI/CRA sem abrir o PDF
+    status              TEXT,
+    tipo_lastro         TEXT,
+    descricao_garantias TEXT,
+    descricao_lastro    TEXT,
+    devedores_coobrigados TEXT,
+    agente_fiduciario   TEXT,
+    avaliador_risco     TEXT,                   -- agência de rating contratada (não a nota)
     created_at          TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_rf_ofertas_emissor ON rf_ofertas (emissor_cnpj, data_registro DESC);

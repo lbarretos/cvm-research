@@ -56,9 +56,9 @@ def acrescentar_watchlist(codigos: list[str], path: Path = RF_WATCHLIST) -> None
     novo_arquivo = not path.exists()
     with open(path, "a", encoding="utf-8") as f:
         if novo_arquivo:
-            f.write("codigo,observacao\n")
+            f.write("codigo,tipo,emissor_cnpj,emissao,serie,observacao\n")
         for c in novos:
-            f.write(f"{c},adicionado em {date.today().isoformat()}\n")
+            f.write(f"{c},,,,,adicionado em {date.today().isoformat()}\n")
     print(f"  rf_watchlist.csv: +{', '.join(novos)}")
 
 
@@ -187,7 +187,8 @@ def ativo_de(conn, codigo: str) -> dict:
 def processar_codigo(conn, codigo: str, listar: bool = False) -> int:
     ativo = ativo_de(conn, codigo)
     if not ativo["emissor_cnpj"]:
-        print(f"{codigo}: sem emissor em rf_ativos (rode ingest_rf_cadastro.py, ou passe --url/--protocolo)")
+        print(f"{codigo}: sem emissor em rf_ativos. Debênture: rode ingest_rf_cadastro.py. CRI/CRA: preencha "
+              "emissor_cnpj, emissao e serie em rf_watchlist.csv e rode ingest_rf_cadastro.py; ou passe --url/--protocolo")
         return 0
     certos, talvez = candidatos(conn, ativo)
     print(f"{codigo} ({ativo['tipo']}, {ativo['emissor_nome']}): {len(certos)} documento(s) da emissão, "

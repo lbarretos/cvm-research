@@ -28,14 +28,21 @@ Módulo da Etapa 8. Ferramentas do MCP: `resolve_bond`, `get_bond`, `search_bond
 - **Garantia vazia não é "sem garantia".** As garantias vêm do PDF; se `documentos` está vazio, nada foi lido. O
   campo `especie_garantia` (SND) é a espécie legal da debênture (quirografária, real, flutuante, subordinada), não a
   lista de garantias adicionais. Só `tipo = 'sem_garantia'` com evidência afirma ausência.
-- **Extração por regra, precisão não medida por analista.** Uma parte vem do CNPJ + termo definido (“Fiadora”,
-  “Devedora”); um CNPJ sem termo definido não vira parte. Garantia vem por vocabulário, descartando a menção negada
-  ("não contará com…"). Pode haver falso positivo em cláusula hipotética: confira o trecho antes de afirmar.
-- **CRI/CRA:** a “Emissora” é a securitizadora; o risco é do **devedor** do lastro (e de fiadores/coobrigados).
-  A securitizadora não define grupo econômico e fica fora de `grupo`/`ativos_do_grupo`.
+- **Extração por regra, precisão medida só em dois termos reais.** Uma parte vem do CNPJ + termo definido
+  (“Fiadora”, “Devedora”), na qualificação ou na lista de definições; um CNPJ sem termo definido não vira parte.
+  Garantia vem por vocabulário, descartando menção negada ("não contará com…", "Coobrigação: Não há") e listas
+  genéricas (definição de “Ônus”). Nos termos da Virgo 204ª e da Eco 243ª ela acerta partes, garantias e lastro;
+  em outros documentos, confira o trecho antes de afirmar.
+- **CRI/CRA: a garantia costuma ser do lastro, não do título.** `escopo = 'titulo'` é garantia do próprio CRA/CRI;
+  `'lastro'` é do instrumento que paga (aval na CPR-F, fiança nas debêntures do lastro). Termo de CRA quase sempre
+  diz "Não serão constituídas garantias específicas, reais ou pessoais, sobre os CRA" (`sem_garantia`, escopo
+  `titulo`) e o risco fica no **devedor** e em quem garante o lastro. Responda separando os dois. A “Emissora” é a
+  securitizadora, que não define grupo econômico e fica fora de `grupo`/`ativos_do_grupo`.
 - **CRI/CRA não têm cadastro automático.** A CVM não publica o código de negociação e a taxa ANBIMA de CRI/CRA está
-  sem fonte: o título só existe se estiver em `rf_watchlist.csv` com securitizadora, emissão e série. Se `get_bond`
-  não achar um CRA, diga isso e indique preencher a linha, sem inventar dados.
+  sem fonte: o título só existe se estiver em `rf_watchlist.csv` com securitizadora e emissão (série e ISIN, se
+  conhecidos). Se `get_bond` não achar um CRA, diga isso e indique preencher a linha, sem inventar dados. **O termo
+  de securitização não cita o código de negociação**, só o ISIN por série: sem a série na watchlist, o título fica
+  ligado à emissão inteira (todas as séries), e vencimento/remuneração por série ficam em aberto.
 - **Taxa indicativa ≠ negócio.** É a taxa de referência calculada pela ANBIMA; títulos sem liquidez podem não ser
   precificados (sem linha em `rf_taxas`). A base guarda só a janela recente (padrão 30 dias), atualizada no job
   semanal: a última data pode ter até uma semana.
@@ -45,7 +52,10 @@ Módulo da Etapa 8. Ferramentas do MCP: `resolve_bond`, `get_bond`, `search_bond
   ou são o próprio controlador. É uma ligação societária, não prova de garantia cruzada: para isso, veja `garantias`.
 - **Cobertura dos PDFs:** só os códigos de `rf_watchlist.csv` (na raiz). Para acrescentar, informe o comando
   `python scripts/ingest/ingest_rf_docs.py --codigo <CODIGO>`; não rode carga sem o usuário pedir. CRI/CRA de
-  securitizadora com centenas de emissões: o script lista candidatos e pede `--protocolo` ou `--url`.
+  securitizadora com centenas de emissões: o script lista candidatos e pede `--protocolo`, `--url` ou `--arquivo`.
+  O link do PDF na aba de documentos do data.anbima.com.br é pré-assinado e expira em horas: `--url` lê na hora e
+  grava sem o token; se já expirou, baixar o PDF e usar `--arquivo`. Repita `--codigo` para ligar o termo a várias
+  séries.
 
 ## Colunas que importam
 

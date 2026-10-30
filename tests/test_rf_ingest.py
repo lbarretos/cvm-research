@@ -317,7 +317,7 @@ def test_relevancia_cra_exige_emissao_e_serie():
 def test_watchlist_aditiva(tmp_path):
     w = tmp_path / "rf.csv"
     ingest_rf_docs.acrescentar_watchlist(["RUMOB6"], w)
-    assert w.read_text().splitlines()[0] == "codigo,tipo,emissor_cnpj,emissao,serie,observacao"
+    assert w.read_text().splitlines()[0] == "codigo,tipo,emissor_cnpj,emissao,serie,isin,observacao"
     ingest_rf_docs.acrescentar_watchlist(["RUMOB6", "ERDVB4"], w)
     assert ingest_rf_docs.ler_watchlist(w) == ["RUMOB6", "ERDVB4"]
 
@@ -365,3 +365,82 @@ def test_zip_cvm_lido_por_ler_zip_csvs():
         z.writestr("../fora.csv", b"x")
     csvs = F.ler_zip_csvs(buf.getvalue())
     assert list(csvs) == ["oferta_resolucao_160.csv"]
+
+
+# ── extrai_rf contra trechos de termos reais (tests/fixtures/rf/termos_reais.py) ──────────────────────
+
+import termos_reais  # noqa: E402
+
+
+@pytest.mark.parametrize("texto, gabarito", [
+    (termos_reais.VIRGO_204, termos_reais.GABARITO_VIRGO_204),
+    (termos_reais.ECO_243, termos_reais.GABARITO_ECO_243),
+], ids=["virgo_204", "eco_243"])
+def test_termo_real_bate_com_o_gabarito(texto, gabarito):
+    r = extrai_rf.extrair(texto, "CRA")
+    assert {(p["papel"], p["cnpj"]): p["nome"] for p in r["partes"]} == gabarito["partes"]
+    assert {g["tipo"]: g["escopo"] for g in r["garantias"]} == gabarito["garantias"]
+    assert {l["tipo_lastro"] for l in r["lastro"]} == gabarito["lastro"]
+
+
+def test_termo_real_sem_os_erros_da_regra_antiga():
+    """O que a primeira versão tirava desses mesmos documentos: endereço como nome, a securitizadora de outra
+    emissão do anexo e garantias da definição de “Ônus”."""
+    for texto in (termos_reais.VIRGO_204, termos_reais.ECO_243):
+        r = extrai_rf.extrair(texto, "CRA")
+        nomes = [p["nome"] or "" for p in r["partes"]]
+        assert not any(n.startswith(("CEP", "Pinheiros")) for n in nomes)
+        assert "02.332.886/0011-78" not in {p["cnpj"] for p in r["partes"]}       # do anexo de terceiros
+        tipos = {g["tipo"] for g in r["garantias"]}
+        assert not tipos & {"hipoteca", "penhor", "alienacao_fiduciaria", "cessao_fiduciaria"}   # “Ônus”
+        assert not tipos & {"coobrigacao", "garantia_flutuante", "subordinacao"}   # "…: Não há"
+        assert not {l["tipo_lastro"] for l in r["lastro"]} & {"CDCA", "CCI"}        # do anexo
+
+
+def test_ruido_de_pagina_e_cnpj_quebrado():
+    t = extrai_rf._limpo("inscrita no CNPJ/MF Página 15 de 341 DocuSign Envelope ID: "
+                         "B9ED68B8-3255-42E6-B76D-F8C8F54F77E4 sob o nº 46.710.597/0001- 69.")
+    assert t == "inscrita no CNPJ/MF sob o nº 46.710.597/0001-69."
+
+
+def test_anexo_so_e_cortado_depois_do_indice():
+    corpo = "x " * 500
+    t = "Índice Anexo VIII - Histórico de Emissões do Agente Fiduciário " + corpo + \
+        "Anexo VIII - Histórico de Emissões do Agente Fiduciário outra emissão"
+    cortado = extrai_rf._sem_anexo_de_terceiros(t)
+    assert cortado.startswith("Índice Anexo VIII") and "outra emissão" not in cortado
+
+
+def test_gravar_guarda_escopo_e_prestador_do_lastro(conn):
+    r = extrai_rf.extrair(termos_reais.ECO_243, "CRA")
+    extrai_rf.gravar(conn, "D1", "CRA02300796", "CRA", r)
+    rows = dict(conn.execute("SELECT tipo, escopo || '|' || COALESCE(prestador_cnpj, '') FROM rf_garantias"))
+    assert rows == {"aval": "lastro|46.710.597/0001-69", "sem_garantia": "titulo|"}
+    assert conn.execute("SELECT devedor_cnpj FROM rf_lastro").fetchone() == ("20.003.699/0001-50",)
+
+
+# ── ingest_rf_docs: documento passado à mão ───────────────────────────────────────────────────────────
+
+def test_url_pre_assinada_grava_sem_token(conn, monkeypatch):
+    import extract_pdf
+    monkeypatch.setattr(extract_pdf, "fetch_pdf_text", lambda url, dominios=None: "texto do termo")
+    url = "https://s3.amazonaws.com/bucket/termo.pdf?X-Amz-Security-Token=SEGREDO&X-Amz-Signature=abc"
+    doc = ingest_rf_docs.doc_manual(url=url)
+    for c in ("CRA024004SB", "CRA02300796"):
+        ingest_rf_docs.ligar_doc(conn, c, doc, "url", None)
+    link, doc_id = conn.execute("SELECT link_download, doc_id FROM rf_docs").fetchone()
+    assert link == "https://s3.amazonaws.com/bucket/termo.pdf" and "SEGREDO" not in doc_id
+    assert conn.execute("SELECT COUNT(*) FROM rf_doc_ativo").fetchone()[0] == 2   # um termo, várias séries
+    # o mesmo link com outro token é o mesmo documento
+    assert ingest_rf_docs.doc_manual(url=url.replace("SEGREDO", "OUTRO"))["doc_id"] == doc_id
+
+
+def test_arquivo_local(tmp_path, monkeypatch):
+    import extract_pdf
+    pdf = tmp_path / "termo.pdf"
+    pdf.write_bytes(b"%PDF-1.4 conteudo")
+    monkeypatch.setattr(extract_pdf, "pdf_bytes_text", lambda b: "texto" if b.startswith(b"%PDF") else None)
+    doc = ingest_rf_docs.doc_manual(arquivo=str(pdf))
+    assert doc["doc_id"].startswith("arquivo:") and doc["link_download"] is None and doc["assunto"] == "termo.pdf"
+    (tmp_path / "x.pdf").write_bytes(b"nao e pdf")
+    assert not ingest_rf_docs.doc_manual(arquivo=str(tmp_path / "x.pdf"))

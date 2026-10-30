@@ -896,8 +896,8 @@ CREATE INDEX IF NOT EXISTS idx_rf_taxas_data ON rf_taxas (data);
 -- Documentos do título (escritura, aditamentos, termo de securitização, relatório do agente
 -- fiduciário…), com o texto extraído do PDF. Um documento serve a várias séries: rf_doc_ativo.
 CREATE TABLE IF NOT EXISTS rf_docs (
-    doc_id              TEXT PRIMARY KEY,       -- protocolo do IPE ou 'url:<sha256 do link>'
-    origem              TEXT NOT NULL,          -- 'ipe', 'url'
+    doc_id              TEXT PRIMARY KEY,       -- protocolo do IPE, 'url:<sha256 do link>' ou 'arquivo:<sha256 do PDF>'
+    origem              TEXT NOT NULL,          -- 'ipe', 'url', 'arquivo'
     cnpj_remetente      TEXT,
     categoria           TEXT,
     tipo                TEXT,
@@ -951,11 +951,14 @@ CREATE INDEX IF NOT EXISTS idx_rf_partes_cnpj   ON rf_partes (cnpj);
 -- Garantias. tipo: alienacao_fiduciaria, cessao_fiduciaria, fianca, aval, hipoteca, penhor,
 -- fundo_reserva, subordinacao, coobrigacao, garantia_flutuante, quirografaria, sem_garantia.
 -- Ausência de linha = nada encontrado (PDF não lido, ou a regra não achou), não "sem garantia".
+-- escopo: 'titulo' (garantia do próprio título) ou 'lastro' (do instrumento que paga o CRI/CRA: aval na CPR-F,
+-- fiança nas debêntures do lastro). CRA/CRI quase nunca têm garantia própria; o risco fica no lastro.
 CREATE TABLE IF NOT EXISTS rf_garantias (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     chave               TEXT NOT NULL UNIQUE,   -- codigo|tipo|fonte|doc_id
     codigo              TEXT NOT NULL,
     tipo                TEXT NOT NULL,
+    escopo              TEXT,                   -- 'titulo' ou 'lastro'
     descricao           TEXT,
     prestador_cnpj      TEXT,
     prestador_nome      TEXT,

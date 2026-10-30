@@ -374,17 +374,20 @@ conferir a linha. Gerada por `scripts/analysis/taxonomia.py` (depende de `linha_
 ### `rf_*` — renda fixa: debêntures, CRI e CRA (Etapa 8)
 `rf_ativos (codigo PK, tipo DEB/CRI/CRA, emissor_*, devedor_*, emissao, serie, data_vencimento, indexador, remuneracao,
 especie_garantia, incentivada_12431, fonte)`, `rf_ofertas` (ofertas CVM), `rf_taxas (codigo, data)` (taxa indicativa ANBIMA,
-PU, % PU par, duration), `rf_partes` / `rf_garantias` / `rf_lastro` (`fonte` 'cadastro' ou 'pdf' com `evidencia` e `confianca`),
+PU, % PU par, duration), `rf_partes` / `rf_garantias` / `rf_lastro` (`fonte` 'cadastro', 'cvm_oferta' ou 'pdf', com `evidencia` e
+`confianca`; `rf_garantias.escopo` = 'titulo' ou 'lastro': no CRA a garantia costuma ser do lastro),
 `rf_docs` + `rf_doc_ativo` + `rf_docs_fts` (escrituras e termos com texto), `rf_grupo` (cadeia de controle das partes pelo FRE),
 `vw_rf_ativo` (título + última taxa). **Não segue o `watchlist.csv`**: cadastro (SND + ofertas CVM) e taxas cobrem o mercado
 inteiro; PDFs só dos códigos de `rf_watchlist.csv`. Ingestores em `scripts/ingest/`: `ingest_rf_cadastro.py`,
-`ingest_rf_taxas.py --dias 30 --reter 30`, `ingest_rf_docs.py [--codigo X] [--listar|--protocolo P|--url U]` (roda
+`ingest_rf_taxas.py --dias 30 --reter 30`, `ingest_rf_docs.py [--codigo X …] [--listar|--protocolo P|--url U|--arquivo PDF]` (roda
 `extrai_rf.py`, extração por regra) e `rf_grupo.py`; todos no job semanal e no `bootstrap.sh` (`--sem-rf` pula).
 Fontes conferidas com `rf_fontes.py --verificar` em 2026-10-30: SND lê (4.851 debêntures; sem coluna de volume:
 `valor_emissao` = quantidade emitida × valor nominal na emissão), ANBIMA debêntures lê (~1.275/dia), **CVM não publica código nem ISIN** e a Resolução 160 não tem série
 (casa por emissor + emissão; traz `descricao_garantias`/`descricao_lastro`/`devedores_coobrigados`, extraídas por regra com
 `fonte = 'cvm_oferta'`), **ANBIMA CRI/CRA sem URL conhecida** (desligada; `RF_URL_ANBIMA_CRI_CRA`). Por isso CRI/CRA só entram
-por `rf_watchlist.csv` com `emissor_cnpj`, `emissao` e `serie` preenchidos à mão. URL e apelidos de coluna moram só em
+por `rf_watchlist.csv` com `emissor_cnpj` e `emissao` (e `serie`/`isin`, se souber) preenchidos à mão; o termo não cita o código.
+A extração por regra é testada contra trechos de dois termos reais (`tests/fixtures/rf/termos_reais.py`); para medir em mais
+PDFs: `python docs/proximos-passos/stress/st8_extrai_rf.py CRA termo.pdf`. URL e apelidos de coluna moram só em
 `rf_fontes.py`. Banco anterior: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`.
 Base de teste fictícia (sem rede): `python tests/fixtures/rf/make_test_db.py /tmp/rf_teste.db` e `CVM_DB_PATH=/tmp/rf_teste.db`
 no MCP. Regras de resposta: `skills/cvm-research/references/renda-fixa.md`.

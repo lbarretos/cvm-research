@@ -10,7 +10,11 @@ Onde procura:
   (rf_ativos.emissao), só os que citam o número dela no assunto.
 - CRI/CRA: no IPE da securitizadora, documentos de securitização que citam a emissão e a série do
   título; sem emissão/série conhecidas a securitizadora tem centenas de documentos, então só lista
-  os candidatos (--listar) e pede --protocolo ou --url.
+  os candidatos (--listar) e pede --protocolo, --url ou --arquivo.
+- à mão: --url (link do PDF, ex.: o da aba de documentos do data.anbima.com.br) ou --arquivo (PDF já baixado).
+  Um termo cobre várias séries: repita --codigo para ligá-lo a todas. O link pré-assinado do S3 que o
+  data.anbima.com.br entrega expira em horas e carrega um token: o texto é lido na hora e o link é gravado
+  sem a query string.
 O IPE vem da tabela ipe_docs quando o CNPJ está no watchlist; senão do ZIP anual da CVM, filtrado
 pelo CNPJ (sem gravar nada em ipe_docs).
 
@@ -18,7 +22,8 @@ Uso:
   python ingest_rf_docs.py                                   # todos de rf_watchlist.csv
   python ingest_rf_docs.py --codigo RUMOB6 --codigo ERDVB4
   python ingest_rf_docs.py --codigo CRA024004SB --listar     # mostra candidatos sem baixar
-  python ingest_rf_docs.py --codigo CRA024004SB --url https://…/termo.pdf
+  python ingest_rf_docs.py --codigo CRA024004SB --url 'https://…/termo.pdf?X-Amz-…'
+  python ingest_rf_docs.py --codigo CRA02300796 --arquivo ~/Downloads/termo.pdf
   python ingest_rf_docs.py --codigo CRA024004SB --protocolo 012345IPE…
 """
 import argparse
@@ -56,9 +61,9 @@ def acrescentar_watchlist(codigos: list[str], path: Path = RF_WATCHLIST) -> None
     novo_arquivo = not path.exists()
     with open(path, "a", encoding="utf-8") as f:
         if novo_arquivo:
-            f.write("codigo,tipo,emissor_cnpj,emissao,serie,observacao\n")
+            f.write("codigo,tipo,emissor_cnpj,emissao,serie,isin,observacao\n")
         for c in novos:
-            f.write(f"{c},,,,,adicionado em {date.today().isoformat()}\n")
+            f.write(f"{c},,,,,,adicionado em {date.today().isoformat()}\n")
     print(f"  rf_watchlist.csv: +{', '.join(novos)}")
 
 
@@ -135,8 +140,14 @@ def candidatos(conn, ativo: dict) -> tuple[list[dict], list[dict]]:
 
 # ── Gravação ─────────────────────────────────────────────────────────────────
 
+def sem_query(url: str) -> str:
+    """Link sem a query string: o pré-assinado do S3 traz um token de acesso que não pode ir para o banco."""
+    return url.split("?", 1)[0]
+
+
 def ligar_doc(conn, codigo: str, doc: dict, origem: str, cnpj: str | None) -> str:
-    doc_id = doc.get("protocolo_entrega") or "url:" + hashlib.sha256(doc["link_download"].encode()).hexdigest()
+    doc_id = doc.get("doc_id") or doc.get("protocolo_entrega") or \
+        "url:" + hashlib.sha256(doc["link_download"].encode()).hexdigest()
     conn.execute(
         "INSERT INTO rf_docs (doc_id, origem, cnpj_remetente, categoria, tipo, especie, assunto, data_entrega, "
         "link_download, texto_extraido, chars_extraidos, extraido_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
@@ -208,11 +219,31 @@ def processar_codigo(conn, codigo: str, listar: bool = False) -> int:
     return len(usar)
 
 
+def doc_manual(url: str | None = None, arquivo: str | None = None) -> dict | None:
+    """PDF passado à mão → registro de rf_docs com o texto já lido. Link gravado sem token; arquivo pelo hash."""
+    from extract_pdf import fetch_pdf_text, pdf_bytes_text
+    agora = date.today().isoformat()
+    if url:
+        if "X-Amz-" in url or "Signature=" in url:
+            print("  link pré-assinado: lendo agora (expira); grava-se sem o token")
+        texto = fetch_pdf_text(url, dominios=None)
+        limpo = sem_query(url)
+        return texto and {"doc_id": "url:" + hashlib.sha256(limpo.encode()).hexdigest(), "link_download": limpo,
+                          "tipo": "manual", "assunto": Path(limpo).name, "data_entrega": agora,
+                          "texto_extraido": texto}
+    conteudo = Path(arquivo).expanduser().read_bytes()
+    texto = pdf_bytes_text(conteudo)
+    return texto and {"doc_id": "arquivo:" + hashlib.sha256(conteudo).hexdigest(), "link_download": None,
+                      "tipo": "manual", "assunto": Path(arquivo).name, "data_entrega": agora,
+                      "texto_extraido": texto}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--codigo", action="append", default=[], help="código do título (repetível)")
-    p.add_argument("--url", help="link direto do PDF (com um único --codigo)")
-    p.add_argument("--protocolo", help="protocolo do IPE (com um único --codigo)")
+    p.add_argument("--url", help="link direto do PDF; lido na hora (liga a todos os --codigo)")
+    p.add_argument("--arquivo", help="PDF local (liga a todos os --codigo)")
+    p.add_argument("--protocolo", help="protocolo do IPE (liga a todos os --codigo)")
     p.add_argument("--listar", action="store_true", help="só mostra os documentos candidatos")
     p.add_argument("--limite", type=int, default=50, help="PDFs a baixar nesta execução (padrão 50)")
     a = p.parse_args()
@@ -221,14 +252,18 @@ def main():
     if not codigos:
         print("nenhum código: passe --codigo ou preencha rf_watchlist.csv")
         return
-    if (a.url or a.protocolo) and len(codigos) != 1:
-        sys.exit("--url e --protocolo pedem exatamente um --codigo")
+    if (a.url or a.arquivo or a.protocolo) and not a.codigo:
+        sys.exit("--url, --arquivo e --protocolo pedem --codigo")
     conn = get_db()
     if a.codigo and not a.listar:
         acrescentar_watchlist(codigos)
 
-    if a.url:
-        ligar_doc(conn, codigos[0], {"link_download": a.url, "tipo": "manual"}, "url", None)
+    if a.url or a.arquivo:
+        doc = doc_manual(url=a.url, arquivo=a.arquivo)
+        if not doc:
+            sys.exit("não consegui ler o PDF (link expirado? arquivo não é PDF?)")
+        for c in codigos:
+            ligar_doc(conn, c, doc, "url" if a.url else "arquivo", None)
         conn.commit()
     elif a.protocolo:
         cols = ["protocolo_entrega", "cnpj_companhia", "categoria", "tipo", "especie", "assunto", "data_entrega",
@@ -242,7 +277,8 @@ def main():
             d = achados[0]
         else:
             d = dict(zip(cols, r))
-        ligar_doc(conn, codigos[0], d, "ipe", d.get("cnpj_companhia"))
+        for c in codigos:
+            ligar_doc(conn, c, d, "ipe", d.get("cnpj_companhia"))
         conn.commit()
     else:
         for c in codigos:

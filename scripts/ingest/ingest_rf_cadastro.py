@@ -70,7 +70,7 @@ def ler_manuais(path: Path | None = None) -> list[dict]:
         if cod and F.fmt_cnpj(r.get("emissor_cnpj")):
             out.append({"codigo": cod, "tipo": (r.get("tipo") or "").strip().upper() or F.tipo_por_codigo(cod),
                         "emissor_cnpj": F.fmt_cnpj(r["emissor_cnpj"]), "emissao": F.texto(r.get("emissao")),
-                        "serie": F.texto(r.get("serie"))})
+                        "serie": F.texto(r.get("serie")), "isin": F.texto(r.get("isin"))})
     return out
 
 

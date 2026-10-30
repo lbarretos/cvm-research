@@ -6,10 +6,16 @@ forma padronizada.
 - Partes: cada CNPJ do texto, com o nome que vem antes ("RUMO S.A., sociedade por ações…") e o termo
   definido que vem depois (“Emissora”, “Fiadora”, “Devedora”, “Agente Fiduciário”…), que dá o papel.
   CNPJ sem termo definido reconhecível não vira parte.
+  Também em estilo de definição ("“Devedora” significa a FS …, inscrita no CNPJ …") e apelido designado depois
+  ("fiança pela JBS (que passará a ser designada como “Fiadora”)").
 - Garantias: vocabulário (alienação/cessão fiduciária, fiança, aval, hipoteca, penhor, fundo de reserva,
-  subordinação, coobrigação, garantia flutuante, quirografária), descartando menção negada ("não contará
-  com fiança"). Uma linha por tipo e documento, com o primeiro trecho como evidência.
-- Lastro (CRI/CRA): instrumentos citados perto de "lastro" ou "direitos creditórios".
+  subordinação, coobrigação, garantia flutuante, quirografária), descartando menção negada antes ("não contará
+  com fiança") ou depois ("Coobrigação da Emissora: Não há") e enumerações genéricas (definição de “Ônus”).
+  Uma linha por tipo e documento, com o primeiro trecho como evidência e o `escopo`: 'titulo' ou 'lastro'.
+- Lastro (CRI/CRA): instrumentos citados perto de "lastro", "direitos creditórios" ou "créditos do agronegócio".
+Antes de tudo, tira o ruído de página (DocuSign, "Página N de M") e corta o anexo com o histórico de emissões do
+agente fiduciário, que descreve outros títulos. Testado contra trechos de dois termos reais
+(tests/fixtures/rf/termos_reais.py).
 
 Tudo vai com `evidencia` e `confianca` < 1 (fonte 'pdf'). A precisão não foi medida contra revisão humana:
 quem responde deve citar o trecho. Nunca apaga nem altera o que veio do cadastro.
@@ -27,19 +33,32 @@ import rf_fontes as F
 from utils import get_db, upsert
 
 CNPJ_RE = re.compile(r"\d{2}\.?\d{3}\.?\d{3}\s*/\s*\d{4}\s*-\s*\d{2}")
-# (“Emissora”) · ("Fiadora") · (doravante denominada “Devedora”) · (em conjunto, os “Fiadores”)
+# termo definido entre parênteses depois do CNPJ: (“Emissora”) · ("Fiadora") · (doravante denominada “Devedora”)
 TERMO_RE = re.compile(r"\(\s*(?:[^()“”\"]{0,80}?)?[“\"']\s*([^”\"']{3,60}?)\s*[”\"']")
-# o nome da parte termina na vírgula que abre a qualificação ("RUMO S.A., sociedade por ações…")
-QUALIF_RE = re.compile(r",\s*(?:sociedade|companhia|institui|pessoa|empresa|fundo|com sede|inscrit|com registro)",
-                       re.I)
-# e começa depois do último separador: ';', ':', aspas, vírgula ou enumeração "(ii)" / "b)"
-SEPARADOR_RE = re.compile(r"[;:”\"“,]|\(\s*[ivxlc]+\s*\)|\b[a-h]\)")
+# termos entre aspas dentro de uma definição: “Devedora” significa…, "JBS"
+ASPAS_RE = re.compile(r"[“\"]\s*([^”\"“]{2,45}?)\s*[”\"]")
+# o nome termina na vírgula que abre a qualificação ("RUMO S.A., sociedade por ações…")
+_QUALIF = r",\s*(?:sociedade|companhia|institui|pessoa|empresa|fundo|com sede|inscrit|com registro|neste ato|atuando)"
+# definição: “Devedora” significa a FS Indústria … Ltda., sociedade…  → o nome vem depois do artigo
+# (o PDF em duas colunas às vezes cola o termo no nome: “Devedora a JBS S.A., sociedade…)
+NOME_DEF_RE = re.compile(r"(?:significa|:|,|[“\"][A-ZÀ-Ý]\w+)\s+(?:a|o)\s+([A-ZÀ-Ý][^,;:“”\"()]{1,140}?)" + _QUALIF)
+# qualificação: VIRGO COMPANHIA DE SECURITIZAÇÃO, sociedade por ações…  → o primeiro nome com qualificação
+NOME_QUAL_RE = re.compile(r"(?<![\w.])([A-ZÀ-Ý][^,;:“”\"()]{1,140}?)" + _QUALIF)
+# pedaços de endereço também vêm antes de ", inscrita no CNPJ": não são nome
+NAO_NOME_RE = re.compile(r"^(?:CEP|Bairro|Rua|Av\.?|Avenida|Estrada|Rodovia|Distrito|Sala|Estado|Cidade)\b|\bn[ºo°]\s*\d"
+                         r"|^[\d\s.-]+$")
+# onde começa a cláusula de uma parte: ';', fim de definição antes de aspas, ':' de "as partes:", enumeração
+INICIO_CLAUSULA_RE = re.compile(r";|\.\s+(?=[“\"])|:\s|\(\s*[ivxlc]+\s*\)|\b[a-h]\)")
+# apelido designado depois: "fiança pela JBS (que passará a ser designada como “Fiadora”)"
+DESIGNACAO_RE = re.compile(
+    r"\b(?:pela|pelo|da|do|a|o)\s+([A-ZÀ-Ý][\w.&-]{1,30})\s*\(\s*(?:que\s+passar[áa]\s+a\s+ser\s+)?"
+    r"(?:designad[ao]|denominad[ao])\s+(?:como\s+)?[“\"]([^”\"]{3,40})[”\"]")
 
 # termo definido (normalizado) → papel; a ordem importa ("agente fiduciário" antes de qualquer outro)
 PAPEIS = [
     (r"agente fiduci", "agente_fiduciario"),
     (r"securitizador", "securitizadora"),
-    (r"\bemissora\b|\bcompanhia\b|\bemitente\b", "emissor"),
+    (r"^emissora$|^companhia$|^emitente$", "emissor"),
     (r"devedor", "devedor"),
     (r"fiador", "fiador"),
     (r"avalista", "avalista"),
@@ -60,12 +79,20 @@ GARANTIAS = [
     ("coobrigacao",          r"\bcoobriga[çc][ãa]o\b"),
     ("garantia_flutuante",   r"garantia flutuante"),
     ("quirografaria",        r"quirograf[áa]ri"),
-    ("sem_garantia",         r"(?:n[ãa]o contar[ãa]o?|n[ãa]o ser[ãa]o?) (?:com )?(?:qualquer |nenhuma )?garantia"),
+    ("sem_garantia",         r"n[ãa]o (?:contar[ãa]o com|haver[áa]|h[áa]|ser[ãa]o constitu[íi]das|ser[ãa]o?)\s+"
+                             r"(?:com\s+)?(?:quaisquer\s+|qualquer\s+|nenhuma\s+)?garantias?"
+                             r"(?:\s+(?:espec[íi]ficas|reais|pessoais|fidejuss[óo]rias))"),
 ]
-NEGACAO = re.compile(r"\b(n[ãa]o|sem|nenhuma|inexist\w*|exceto)\b[^.;]{0,40}$")
+_TIPOS_ENUMERAVEIS = [t for t, _ in GARANTIAS if t not in ("sem_garantia", "quirografaria")]
+# "não conversíveis em ações" descreve a debênture, não nega a garantia que vem depois
+NEGACAO_ANTES = re.compile(r"\b(n[ãa]o(?! convers[íi]ve)|sem|nenhuma|inexist\w*|exceto)\b[^.;]{0,40}$")
+# "Coobrigação da Emissora: Não há" · "Garantia Flutuante: Não haverá"
+NEGACAO_DEPOIS = re.compile(r"^[^.;]{0,25}?:\s*n[ãa]o\b|^\s*n[ãa]o\s+h[áa]\b")
+# definição genérica ("“Ônus” significa qualquer hipoteca, penhor…"): não é garantia do título
+DEFINICAO_GENERICA = re.compile(r"[“\"](?:[ÔôOo]nus|Gravames?|Onerar)[”\"]")
 
 LASTRO = [
-    ("CPR-F",          r"\bCPR[- ]?F\b|c[ée]dulas? de produto rural financeira"),
+    ("CPR-F",          r"\bCPR[- ]?F(?:inanceiras?)?\b|c[ée]dulas? de produto rural financeira"),
     ("CPR",            r"c[ée]dulas? de produto rural(?! financeira)"),
     ("CDCA",           r"\bCDCAs?\b|certificados? de direitos credit[óo]rios do agroneg[óo]cio"),
     ("CCB",            r"\bCCBs?\b|c[ée]dulas? de cr[ée]dito banc[áa]rio"),
@@ -75,11 +102,39 @@ LASTRO = [
     ("debenture",      r"debêntures?"),
     ("locacao",        r"contratos? de loca[çc][ãa]o|alugu[ée]is"),
 ]
-GATILHO_LASTRO = re.compile(r"lastro|direitos credit[óo]rios", re.I)
+GATILHO_LASTRO = re.compile(r"lastro|direitos credit[óo]rios|cr[ée]ditos do agroneg[óo]cio|cr[ée]ditos imobili[áa]rios",
+                            re.I)
+# frase sobre o lastro (e não sobre o título): a garantia é do instrumento que paga o CRI/CRA
+FRASE_LASTRO = re.compile(r"\bCPR|CDCA|\bCCB|\bCCI|lastro|direitos credit[óo]rios|cr[ée]ditos do agroneg|debêntures|"
+                          r"escritura de emiss|avalista|devedora|nota comercial", re.I)
+FRASE_TITULO = re.compile(r"sobre os CR[AI]\b|\bdos CR[AI]\b|os CR[AI] (?:n[ãa]o )?contar", re.I)
+
+# ruído que o PDF intercala no meio das frases
+_RUIDO = [
+    re.compile(r"DocuSign Envelope ID:\s*[0-9A-F-]{36}", re.I),
+    re.compile(r"P[áa]gina \d+ de \d+", re.I),
+]
+# anexo com outras emissões do agente fiduciário: tudo dali é de outros títulos
+_ANEXO_TERCEIROS = re.compile(r"hist[óo]rico de emiss[õo]es|emiss[õo]es (?:de valores mobili[áa]rios )?em que "
+                              r"(?:o agente fiduci[áa]rio )?(?:atua|tenha atuado)", re.I)
 
 
 def _limpo(texto: str) -> str:
-    return re.sub(r"\s+", " ", texto or "")
+    t = texto or ""
+    for r in _RUIDO:
+        t = r.sub(" ", t)
+    t = re.sub(r"\s+", " ", t)
+    # CNPJ quebrado na linha: "46.710.597/0001- 69"
+    return re.sub(r"(\d{4})\s*-\s+(\d{2})\b", r"\1-\2", t)
+
+
+def _sem_anexo_de_terceiros(t: str) -> str:
+    """Corta no anexo com o histórico de emissões do agente fiduciário. Só depois de 30% do texto: o índice, no
+    começo, também cita o anexo."""
+    for m in _ANEXO_TERCEIROS.finditer(t):
+        if m.start() > 0.3 * len(t):
+            return t[:m.start()]
+    return t
 
 
 def _papel(termo: str, tipo_titulo: str) -> str | None:
@@ -92,70 +147,131 @@ def _papel(termo: str, tipo_titulo: str) -> str | None:
     return None
 
 
-def _nome(antes: str) -> str | None:
-    """Texto antes do CNPJ → nome da parte, ou None se não houver a qualificação societária."""
-    # a qualificação tem várias vírgulas (", sociedade anônima, inscrita…"): da última para a primeira, o nome
-    # é o primeiro segmento que começa em maiúscula
-    for q in reversed(list(QUALIF_RE.finditer(antes))):
-        seg = SEPARADOR_RE.split(antes[:q.start()])[-1].strip()
-        seg = re.sub(r"^(?:e|ainda|bem como|de um lado|de outro lado)\s+", "", seg).strip()
-        if 3 <= len(seg) <= 150 and seg[0].isupper():
-            return seg
+def _nome(clausula: str) -> str | None:
+    """Primeiro nome com qualificação societária na cláusula (definição antes de qualificação)."""
+    for regex in (NOME_DEF_RE, NOME_QUAL_RE):
+        for m in regex.finditer(clausula):
+            nome = re.sub(r"^(?:e|ainda|bem como|de um lado|de outro lado)\s+", "", m.group(1)).strip()
+            if 3 <= len(nome) <= 150 and not NAO_NOME_RE.search(nome):
+                return nome
     return None
+
+
+def _clausula(t: str, fim: int) -> str:
+    """Texto da cláusula que termina no CNPJ: do início de cláusula mais próximo que ainda contenha um nome com
+    qualificação (até 700 caracteres atrás). Há ':' dentro da própria definição ("“Companhia”: operacional")."""
+    trecho = t[max(0, fim - 700):fim]
+    for m in reversed(list(INICIO_CLAUSULA_RE.finditer(trecho))):
+        if _nome(trecho[m.start():]):
+            return trecho[m.start():]
+    return trecho
 
 
 def _trecho(t: str, ini: int, fim: int, folga: int = 160) -> str:
     return t[max(0, ini - folga):min(len(t), fim + folga)].strip()
 
 
-def extrair(texto: str, tipo_titulo: str) -> dict:
-    """Texto de um documento → {'partes': [...], 'garantias': [...], 'lastro': [...]} (sem tocar no banco)."""
-    t = _limpo(texto)
-    partes, vistos = [], set()
+def _frase(t: str, ini: int, fim: int) -> str:
+    a = max(t.rfind(". ", 0, ini), t.rfind("; ", 0, ini))
+    b = min([x for x in (t.find(". ", fim), t.find("; ", fim)) if x >= 0] or [len(t)])
+    return t[a + 1:b]
+
+
+def _partes(t: str, tipo_titulo: str) -> list[dict]:
+    partes, vistos, apelidos = [], set(), {}
     cnpjs = list(CNPJ_RE.finditer(t))
     for i, m in enumerate(cnpjs):
-        prox = cnpjs[i + 1].start() if i + 1 < len(cnpjs) else len(t)
-        depois = t[m.end():min(prox, m.end() + 700)]
-        termo = TERMO_RE.search(depois)
-        papel = _papel(termo.group(1), tipo_titulo) if termo else None
-        if not papel:
-            continue
         cnpj = F.fmt_cnpj(m.group(0))
+        if not cnpj:
+            continue
+        clausula = _clausula(t, m.start())
+        prox = cnpjs[i + 1].start() if i + 1 < len(cnpjs) else len(t)
+        # 1) termo entre parênteses logo depois do CNPJ (qualificação); 2) termos da própria definição, antes dele
+        depois = TERMO_RE.search(t[m.end():min(prox, m.end() + 400)])
+        termos = ([depois.group(1)] if depois else []) + ASPAS_RE.findall(clausula)
+        papeis = []
+        for termo in termos:
+            papel = _papel(termo, tipo_titulo)
+            if papel and papel not in papeis:
+                papeis.append(papel)
+        nome = _nome(clausula)
+        for termo in ASPAS_RE.findall(clausula):
+            apelidos.setdefault(F.norm(termo), (cnpj, nome))
+        if nome:
+            apelidos.setdefault(F.norm(nome.split()[0]), (cnpj, nome))
+        if not papeis:
+            continue
+        papel = papeis[0]   # o termo mais próximo do CNPJ manda; "Emissora" e "Securitizadora" dão no mesmo
         if (papel, cnpj) in vistos:
             continue
         vistos.add((papel, cnpj))
-        nome = _nome(t[max(0, m.start() - 450):m.start()])
         partes.append({"papel": papel, "cnpj": cnpj, "nome": nome,
-                       "evidencia": _trecho(t, m.start(), m.end() + (termo.end() if termo else 0), 120),
-                       "confianca": 0.8})
+                       "evidencia": _trecho(t, m.start(), m.end(), 160), "confianca": 0.8})
+    # apelido designado depois ("fiança pela JBS (que passará a ser designada como “Fiadora”)")
+    for m in DESIGNACAO_RE.finditer(t):
+        papel = _papel(m.group(2), tipo_titulo)
+        alvo = apelidos.get(F.norm(m.group(1)))
+        if not papel or not alvo or (papel, alvo[0]) in vistos:
+            continue
+        vistos.add((papel, alvo[0]))
+        partes.append({"papel": papel, "cnpj": alvo[0], "nome": alvo[1],
+                       "evidencia": _trecho(t, m.start(), m.end(), 120), "confianca": 0.7})
+    return partes
 
+
+def _escopo(frase: str, tipo_titulo: str, tipo: str) -> str:
+    if tipo_titulo not in ("CRI", "CRA") or tipo == "sem_garantia" or FRASE_TITULO.search(frase):
+        return "titulo"
+    return "lastro" if FRASE_LASTRO.search(frase) else "titulo"
+
+
+def _garantias(t: str, tipo_titulo: str) -> list[dict]:
     baixo = t.lower()
-    garantias = []
+    tipos_em = {tipo: [m.start() for m in re.finditer(p, baixo)] for tipo, p in GARANTIAS}
+    out = []
     for tipo, padrao in GARANTIAS:
         achados = []
         for m in re.finditer(padrao, baixo):
-            if tipo != "sem_garantia" and NEGACAO.search(baixo[max(0, m.start() - 60):m.start()]):
-                continue
+            if tipo != "sem_garantia":
+                if NEGACAO_ANTES.search(baixo[max(0, m.start() - 60):m.start()]):
+                    continue
+                if NEGACAO_DEPOIS.search(baixo[m.end():m.end() + 40]):
+                    continue
+                # enumeração de tipos (definição de “Ônus”, lista de vedações): não descreve garantia alguma
+                vizinhos = {o for o in _TIPOS_ENUMERAVEIS
+                            if any(abs(x - m.start()) <= 150 for x in tipos_em[o])}
+                if len(vizinhos) >= 3 or DEFINICAO_GENERICA.search(t[max(0, m.start() - 200):m.start()]):
+                    continue
             achados.append(m)
         if achados:
             m = achados[0]
-            garantias.append({"tipo": tipo, "descricao": f"{len(achados)} menção(ões) no documento",
-                              "evidencia": _trecho(t, m.start(), m.end()), "confianca": 0.6})
+            out.append({"tipo": tipo, "descricao": f"{len(achados)} menção(ões) no documento",
+                        "escopo": _escopo(_frase(t, m.start(), m.end()), tipo_titulo, tipo),
+                        "evidencia": _trecho(t, m.start(), m.end()), "confianca": 0.6})
+    return out
 
+
+def _lastro(t: str) -> list[dict]:
+    janelas = [(max(0, g.start() - 400), g.end() + 400) for g in GATILHO_LASTRO.finditer(t)]
     lastro = []
-    if tipo_titulo in ("CRI", "CRA"):
-        janelas = [(max(0, g.start() - 400), g.end() + 400) for g in GATILHO_LASTRO.finditer(t)]
-        for tipo, padrao in LASTRO:
-            for ini, fim in janelas:
-                m = re.search(padrao, t[ini:fim], re.I)
-                if m:
-                    lastro.append({"tipo_lastro": tipo, "evidencia": _trecho(t, ini + m.start(), ini + m.end()),
-                                   "confianca": 0.6})
-                    break
-        # "CPR" genérico também casa dentro de "CPR-F": fica só o mais específico
-        if any(l["tipo_lastro"] == "CPR-F" for l in lastro):
-            lastro = [l for l in lastro if l["tipo_lastro"] != "CPR"]
-    return {"partes": partes, "garantias": garantias, "lastro": lastro}
+    for tipo, padrao in LASTRO:
+        for ini, fim in janelas:
+            m = re.search(padrao, t[ini:fim], re.I)
+            if m:
+                lastro.append({"tipo_lastro": tipo, "evidencia": _trecho(t, ini + m.start(), ini + m.end()),
+                               "confianca": 0.6})
+                break
+    # "CPR" genérico também casa dentro de "CPR-F": fica só o mais específico
+    if any(l["tipo_lastro"] == "CPR-F" for l in lastro):
+        lastro = [l for l in lastro if l["tipo_lastro"] != "CPR"]
+    return lastro
+
+
+def extrair(texto: str, tipo_titulo: str) -> dict:
+    """Texto de um documento → {'partes': [...], 'garantias': [...], 'lastro': [...]} (sem tocar no banco)."""
+    t = _sem_anexo_de_terceiros(_limpo(texto))
+    return {"partes": _partes(t, tipo_titulo), "garantias": _garantias(t, tipo_titulo),
+            "lastro": _lastro(t) if tipo_titulo in ("CRI", "CRA") else []}
 
 
 def gravar(conn, doc_id: str, codigo: str, tipo_titulo: str, r: dict, fonte: str = "pdf") -> None:
@@ -170,9 +286,11 @@ def gravar(conn, doc_id: str, codigo: str, tipo_titulo: str, r: dict, fonte: str
     linhas = []
     for g in r["garantias"]:
         quem = prestadores.get({"fianca": "fiador", "aval": "avalista"}.get(g["tipo"], ""), [])
+        if not quem and g["tipo"] in ("fianca", "aval"):
+            quem = prestadores.get("coobrigado", []) or prestadores.get("garantidor", [])
         linhas.append({
             "chave": f"{codigo}|{g['tipo']}|{fonte}|{doc_id}", "codigo": codigo, "tipo": g["tipo"],
-            "descricao": g["descricao"],
+            "escopo": g.get("escopo"), "descricao": g["descricao"],
             "prestador_cnpj": quem[0]["cnpj"] if len(quem) == 1 else None,
             "prestador_nome": "; ".join(q["nome"] or q["cnpj"] for q in quem) or None,
             "fonte": fonte, "doc_id": doc_id, "evidencia": g["evidencia"], "confianca": g["confianca"]})

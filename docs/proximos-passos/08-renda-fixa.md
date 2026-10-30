@@ -72,5 +72,24 @@ Primeira `rf_fontes.py --verificar` no Mac:
 
 Consequência: CRI/CRA só entram pela `rf_watchlist.csv` com securitizadora, emissão e série preenchidas à mão.
 
+### Extração por regra em dois termos de securitização reais
+
+O usuário mandou os termos da Virgo 204ª (CRA, devedora JBS, lastro em debêntures, 178 p.) e da Eco 243ª (CRA, devedora FS
+Indústria de Biocombustíveis, lastro em CPR-F, 210 p.), da aba de documentos do data.anbima.com.br. A primeira versão da regra:
+
+| Erro | Exemplo | Correção |
+|---|---|---|
+| endereço como nome | "CEP 05501-900", "Pinheiros" | nome = primeiro segmento com qualificação na cláusula, nunca CEP/rua/bairro |
+| devedor e avalista não achados | “Devedora” significa a FS …, CNPJ … | padrão de definição (termo antes do CNPJ) e apelido designado depois (“Fiadora”) |
+| partes e garantias de outros títulos | anexo "Histórico de Emissões do Agente Fiduciário" (~78% do texto) | corta o anexo depois de 30% do texto |
+| garantias de definição genérica | “Ônus” significa qualquer hipoteca, penhor… | descarta enumeração de ≥ 3 tipos e definições de Ônus/Gravame |
+| negação depois do termo | "Coobrigação da Emissora: Não há" | negação antes ou depois |
+| garantia do lastro misturada com a do título | aval na CPR-F | `rf_garantias.escopo` (`titulo`/`lastro`) |
+| ruído de página e CNPJ quebrado | "CNPJ/MF Página 15 de 341 DocuSign … sob o nº", "0001- 69" | limpeza antes de tudo |
+
+Depois da correção, os trechos dos dois termos (`tests/fixtures/rf/termos_reais.py`) batem 100% com o gabarito (partes,
+garantias com escopo, lastro). É um teste de 2 documentos e com os trechos que motivaram as regras: não mede precisão geral.
+`stress/st8_extrai_rf.py` roda a extração em PDFs locais para medir em mais termos.
+
 Código, migração, operação (job semanal e `bootstrap.sh`), skill e testes prontos; suíte inteira verde. Itens 1–4 do
 critério de pronto pendentes da primeira execução com rede (ver `ESTADO.md`, pendência 0).

@@ -31,8 +31,11 @@ arquivos de cada etapa e no `README.md` desta pasta.
 
 ## Pendências (em ordem de valor)
 
-0. **Etapa 8**: 1ª verificação feita (ver `08-renda-fixa.md`); faltam a URL de
-   CRI/CRA da ANBIMA e emissor/emissão/série dos dois CRAs em `rf_watchlist.csv`. **Primeira carga real**: no Mac, `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`,
+0. **Etapa 8**: 1ª verificação feita (ver `08-renda-fixa.md`); os dois CRAs estão na `rf_watchlist.csv` com securitizadora e
+   emissão, **sem série** (o usuário não confirmou qual). Faltam a URL das taxas de CRI/CRA da ANBIMA e a automação da busca do
+   termo no data.anbima.com.br: na página do título, DevTools → Network, achar a requisição JSON que lista os documentos e
+   devolve o link S3 pré-assinado; com ela, um `ingest_rf_docs.py --anbima` busca o termo pelo código (a sessão de nuvem não
+   alcança o domínio). Até lá: `ingest_rf_docs.py --codigo X --arquivo termo.pdf`. **Primeira carga real**: no Mac, `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`,
    `cd scripts/ingest && ../../.venv/bin/python rf_fontes.py --verificar` e corrigir só `rf_fontes.py` (apelidos/URLs) até as
    três fontes lerem; depois `ingest_rf_cadastro.py`, `ingest_rf_taxas.py`, `ingest_rf_docs.py`, `rf_grupo.py`. Conferir os
    quatro exemplos (`RUMOB6`, `ERDVB4`, `CRA024004SB`, `CRA02300796`) contra o site da ANBIMA e a escritura.

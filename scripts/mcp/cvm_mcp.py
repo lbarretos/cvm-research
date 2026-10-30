@@ -530,8 +530,9 @@ def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
     - partes: emissor/securitizadora, devedor, fiadores, garantidores, cedentes, agente fiduciário. `fonte` 'cadastro'
       = campo publicado (confianca 1); 'pdf' = extraída por regra do documento, 'cvm_oferta' = extraída por regra da
       descrição da oferta na CVM, as duas com o trecho em `evidencia`.
-    - garantias e lastro: extraídos dos PDFs (tipo, prestador, evidência). Vazio NÃO quer dizer sem garantia: o PDF
-      pode não ter sido ingerido (o aviso diz). `especie_garantia` da emissão é o campo do SND.
+    - garantias e lastro: extraídos dos PDFs (tipo, prestador, evidência). `escopo` diz de quem é a garantia: 'titulo'
+      (do próprio CRI/CRA/debênture) ou 'lastro' (do instrumento que paga o CRI/CRA, ex.: aval na CPR-F). Vazio NÃO quer
+      dizer sem garantia: o PDF pode não ter sido ingerido (o aviso diz). `especie_garantia` da emissão é o campo do SND.
     - taxas: taxa indicativa ANBIMA, PU, % PU par e duration dos últimos `dias_taxa` dias (preço de referência, não negócio).
     - grupo: cadeia de controle de cada parte com FRE na base (nível 1 = controlador direto), atravessando holdings.
     - ativos_do_grupo: outros títulos cujas partes têm o mesmo controlador (ou são o próprio controlador).
@@ -571,10 +572,12 @@ def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
         out["partes"] = _tabular(cols, _rf(conn, """
             SELECT papel, cnpj, nome, fonte, confianca, doc_id, substr(evidencia, 1, 300) FROM rf_partes
             WHERE codigo = ? ORDER BY fonte <> 'cadastro', papel""", (cod,)), limite=2 * q)
-        cols = ["tipo", "prestador_nome", "prestador_cnpj", "descricao", "fonte", "confianca", "doc_id", "evidencia"]
+        cols = ["tipo", "escopo", "prestador_nome", "prestador_cnpj", "descricao", "fonte", "confianca", "doc_id",
+                "evidencia"]
         out["garantias"] = _tabular(cols, _rf(conn, f"""
-            SELECT tipo, prestador_nome, prestador_cnpj, descricao, fonte, confianca, doc_id, substr(evidencia, 1, 400)
-            FROM rf_garantias WHERE codigo = ? ORDER BY tipo""", (cod,)), limite=2 * q)
+            SELECT tipo, escopo, prestador_nome, prestador_cnpj, descricao, fonte, confianca, doc_id,
+                   substr(evidencia, 1, 400)
+            FROM rf_garantias WHERE codigo = ? ORDER BY escopo DESC, tipo""", (cod,)), limite=2 * q)
         cols = ["tipo_lastro", "devedor_nome", "devedor_cnpj", "fonte", "confianca", "doc_id", "evidencia"]
         out["lastro"] = _tabular(cols, _rf(conn, """
             SELECT tipo_lastro, devedor_nome, devedor_cnpj, fonte, confianca, doc_id, substr(evidencia, 1, 300)

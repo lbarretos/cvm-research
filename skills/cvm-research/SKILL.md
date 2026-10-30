@@ -10,8 +10,20 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
 (demonstrações estruturadas, com camadas de consistência e série trimestral) e notas explicativas.
 
 - **Projeto:** `/Users/lucasbarreto/Documents/Coding/cvm-research` (Python em `.venv/bin/python`)
-- **Banco:** `cvm_research.db` (SQLite). Consulte **só pelo MCP `cvm-research`**, nesta ordem:
-  1. `resolve_company(texto)` para achar a empresa (ticker, nome ou CNPJ → CNPJ; avisa se não está na base);
+- **Banco:** `cvm_research.db` (SQLite). Consulte **só pelo MCP `cvm-research`**. Cada turno relê ~60 mil tokens
+  de contexto: **o custo de uma pergunta é o número de turnos**. Por isso:
+  - **Mande no mesmo turno as chamadas que não dependem uma da outra** (várias consultas, `get_financials` de
+    duas empresas, `search_docs` e uma consulta de dados).
+  - **Com o ticker exato, vá direto aos dados**: as views (`vw_dre`, `vw_dre_acumulada`, `vw_balanco`,
+    `vw_dre_financeiro`, `vw_dre_seguradora`, `vw_acionistas_diretos`) têm a coluna `ticker` (`WHERE ticker =
+    'PETR4'`), e `get_financials`/`search_docs` aceitam ticker. Se voltar vazio, aí sim `resolve_company`.
+  - Nas tabelas (sem `ticker`), filtre `cnpj_companhia = (SELECT cnpj FROM companies WHERE ticker = 'PETR4')`
+    em vez de resolver antes; a subconsulta custa ~1 s, um turno custa ~60 mil tokens.
+  - Não chame `list_tables`/`describe_table` para o que esta skill já documenta.
+
+  As ferramentas, por tema:
+  1. `resolve_company(texto)` quando a pergunta dá **nome** ou CNPJ, ou o ticker não bateu (ticker, nome ou CNPJ →
+     CNPJ; avisa se não está na base);
   2. as views prontas (`vw_dre`, `vw_balanco`, `demonstrativos_trimestrais`…) e as receitas de
      `references/receitas-sql.md` por `query(sql)`;
   3. **Demonstrações comparáveis entre empresas** (D&A, capex, dividendos pagos, juros, dívida, arrendamento, recompra,
@@ -87,9 +99,10 @@ futuro, e em alguns documentos vem com o ano errado na fonte.
 
 ### 2. Empresa → CNPJ
 
-Todo filtro de dados usa CNPJ, nunca ticker ou nome. **Use `resolve_company`**: ela já tenta o ticker
-exato, a raiz (ITUB3 → ITUB4), o nome sem acento e o CNPJ, e devolve aviso quando há mais de uma empresa
-ou nenhuma. O SQL abaixo é o que ela faz por dentro.
+Nas views, filtre pela coluna `ticker` (`WHERE ticker = 'PETR4'`); nas tabelas, pelo CNPJ
+(`cnpj_companhia = (SELECT cnpj FROM companies WHERE ticker = 'PETR4')`). Nunca filtre pelo nome. Se o ticker
+exato não achar nada, **use `resolve_company`**: ela tenta a raiz (ITUB3 → ITUB4), o nome sem acento e o CNPJ,
+e devolve aviso quando há mais de uma empresa ou nenhuma. O SQL abaixo é o que ela faz por dentro.
 
 ```sql
 SELECT cnpj, ticker, nome_cvm, setor FROM companies WHERE ticker = 'WEGE3';

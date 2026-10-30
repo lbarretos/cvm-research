@@ -96,3 +96,23 @@ usuário, ~60 mil por turno) relido a cada turno. O que as ferramentas economiza
 ganho. A alavanca de tokens é cortar turnos, não bytes: a próxima iteração é fazer a skill mandar `resolve_company` e a
 consulta de dados em paralelo, ou mandar a consulta direto pelo ticker nas views, e voltar a medir. A meta de 30% foi
 posta antes de se saber que o prefixo domina; revê-la para "turnos por pergunta" é mais honesto.
+
+## Segunda iteração: menos turnos (2026-10-30)
+
+Na execução da Etapa 7 (v0, 28 perguntas), os tokens por pergunta são quase exatamente turnos × ~55–60 mil: q001 (receita
+da GGBR4) gastou 3 turnos e 180 mil tokens; a média foi 6,1 turnos e 317 mil. O que entrou para cortar turnos:
+
+- **`ticker` nas views** de demonstração (`vw_dre`, `vw_dre_acumulada`, `vw_dre_financeiro`, `vw_dre_seguradora`,
+  `vw_balanco`) e em `vw_acionistas_diretos`, logo depois do CNPJ, por JOIN com `companies`. `WHERE ticker = 'PETR4'` usa
+  `idx_companies_ticker` e responde em ~10 ms (o filtro por subconsulta de CNPJ não é empurrado para dentro da view:
+  1,1 s na DRE e 4,5 s no balanço; o LEFT JOIN leva 1,4 s). O JOIN é interno: filing de empresa fora de `companies`
+  some das views; na base montada pelo bootstrap a diferença é zero. Migração `2026-10-30_views_ticker.sql` (só views).
+- **Skill**: o custo de uma pergunta é o número de turnos; chamadas independentes no mesmo turno; com o ticker exato, ir
+  direto às views/`get_financials`/`search_docs` sem `resolve_company`; nas tabelas, a subconsulta de CNPJ no lugar de um
+  turno de resolução; nada de `list_tables`/`describe_table` para o que a skill documenta. Receitas e `query` dizem o mesmo.
+- **`run_eval.py`** grava `sequencia` (ferramentas por mensagem do assistente; chamadas na mesma mensagem saíram em
+  paralelo), para a próxima medição mostrar onde estão os turnos.
+
+**Medição pendente**: `run_eval.py --golden v0 --rotulo etapa3-turnos` (~US$ 14, ~10 min) contra
+`runs/2026-10-15_etapa7.json`. Critério revisto: turnos por pergunta abaixo de 4,6 (o da baseline pré-Etapa 3) com o
+mesmo acerto.

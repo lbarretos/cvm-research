@@ -111,7 +111,11 @@ Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linh
 
 ## Como identificar uma empresa
 
-Sempre use CNPJ como chave. `resolve_company` faz isso sem SQL; o equivalente:
+Nas tabelas, a chave é o CNPJ. As views de demonstração e `vw_acionistas_diretos` têm também a coluna `ticker`
+(`WHERE ticker = 'PETR4'`, ~10 ms pelo índice de `companies`; JOIN interno, então filing de empresa fora de `companies`
+não aparece). Com o ticker exato, consulte direto, sem `resolve_company` antes: cada turno a menos poupa ~60 mil tokens.
+Banco anterior às colunas: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_views_ticker.sql` (só views).
+`resolve_company` resolve nome, CNPJ ou ticker que não bateu; o equivalente:
 ```sql
 -- Por ticker
 SELECT cnpj, nome_cvm FROM companies WHERE ticker = 'WEGE3';

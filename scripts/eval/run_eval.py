@@ -87,12 +87,16 @@ def claude(prompt: str, mcp: str | None, modelo: str | None, timeout: int) -> li
 def resumir(eventos: list[dict]) -> dict:
     chamadas, erros_sql, abortadas, resposta, chars_res = 0, 0, 0, "", 0
     r = {}
+    # ferramentas por mensagem do assistente: chamadas na mesma mensagem saíram em paralelo, no mesmo turno
+    por_msg: dict[str, list[str]] = {}
     for e in eventos:
         msg = e.get("message") or {}
         conteudo = msg.get("content") if isinstance(msg.get("content"), list) else []
         for c in conteudo:
             if e.get("type") == "assistant" and c.get("type") == "tool_use":
                 chamadas += 1
+                por_msg.setdefault(msg.get("id") or str(len(por_msg)), []).append(
+                    (c.get("name") or "").replace("mcp__cvm-research__", ""))
             if e.get("type") == "user" and c.get("type") == "tool_result":
                 chars_res += len(json.dumps(c.get("content"), ensure_ascii=False))
             if e.get("type") == "user" and c.get("type") == "tool_result" and c.get("is_error"):
@@ -107,6 +111,7 @@ def resumir(eventos: list[dict]) -> dict:
     return {
         "resposta": resposta,
         "chamadas_ferramenta": chamadas,
+        "sequencia": list(por_msg.values()),
         "erros_ferramenta": erros_sql,
         "consultas_abortadas": abortadas,
         "chars_resultados": chars_res,

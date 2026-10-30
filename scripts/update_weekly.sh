@@ -218,6 +218,13 @@ fi
 # Trechos da camada quente (Etapa 4): incremental, só os documentos que acabaram de ganhar texto,
 # e recalcula versões vigentes. Falhar aqui não derruba o resto (a busca por documento segue valendo).
 run_step "build_chunks" build_chunks.py
+# Renda fixa (Etapa 8): cadastro do mercado inteiro (SND + ofertas CVM), taxas ANBIMA do último mês,
+# PDFs dos códigos de rf_watchlist.csv (com a extração por regra) e a cadeia de controle das partes,
+# que lê o FRE recém-atualizado. Independentes do resto: falha aqui não invalida a semana do IPE/DFP.
+run_step "rf_cadastro" ingest_rf_cadastro.py
+run_step "rf_taxas"    ingest_rf_taxas.py --dias "${RF_TAXAS_DIAS:-30}" --reter "${RF_TAXAS_RETER:-30}"
+run_step "rf_docs"     ingest_rf_docs.py
+run_step "rf_grupo"    rf_grupo.py
 
 # Esvazia o WAL no banco principal. Um leitor pendurado (outra sessão, o MCP) impede o
 # checkpoint e o -wal cresce sem limite: em 30/09/2026 chegou a 12,5 GB e as views

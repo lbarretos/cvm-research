@@ -1,15 +1,16 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: SQLite local (`cvm_research.db`) · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda).
+Banco: SQLite local (`cvm_research.db`) · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda)
++ renda fixa (SND, ofertas CVM, taxas ANBIMA do último mês, escrituras sob demanda).
 Cobertura e período são escolhidos na carga (ver a seção seguinte); nesta instalação, confira com
 `SELECT COUNT(*) FROM companies` e `SELECT MIN(data_referencia) FROM ipe_docs`.
 Montar do zero: `bash bootstrap.sh --universo ibov`. Manter: `bash scripts/update_weekly.sh` (manual)
 ou job launchd toda segunda 9h, com recuperação no login e a cada 4 h se a segunda foi perdida
 (`scripts/install_weekly_launchd.sh`).
 
-**Roadmap de desenvolvimento:** `docs/proximos-passos/README.md`. São sete etapas numeradas na ordem de
-execução (desempenho → avaliação → MCP → texto/RAG → template CVM → linha econômica → taxonomia), cada uma
+**Roadmap de desenvolvimento:** `docs/proximos-passos/README.md`. São oito etapas numeradas na ordem de
+execução (desempenho → avaliação → MCP → texto/RAG → template CVM → linha econômica → taxonomia → renda fixa), cada uma
 com avaliação, proposta, stress test e critério de pronto. Ao trabalhar numa etapa, leia o arquivo dela e
 atualize o veredito no README ao terminar.
 
@@ -103,7 +104,8 @@ Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 e
 `get_financials(ticker, conceitos?, fonte?, desde?, ate?)` (fatos padronizados com `metodo` e `checagem`; veja `fato_padronizado`),
 `search_docs(consulta, ticker?, categorias?, desde?, ate?, k?)` (busca por trecho na camada quente do IPE, sem repetição,
 só versões vigentes), `read_doc(protocolo, ordem?)` (lê a partir de um trecho),
-`list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. A saída é tabular
+`resolve_bond(texto)` / `get_bond(codigo)` / `search_bonds(…)` / `search_bond_docs(consulta, codigo?)` / `read_bond_doc(doc_id)`
+(renda fixa, ver `rf_ativos`), `list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. A saída é tabular
 (`{colunas, linhas, aviso?}`), cada resposta cabe em 30 mil caracteres (o excesso é cortado com aviso) e todas abortam em 20 s.
 Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linhas tem a tabela ipe_docs?"* deve responder um número acima de 160.000.
 
@@ -368,6 +370,31 @@ não tem a linha (ou o sinal não bateu), não valor zero. Só plano padrão; s�
 das regras não validada por analista** (~90% em revisão própria): `divida_liquida_fluxo`, `arrend_pago` e `recompra` merecem
 conferir a linha. Gerada por `scripts/analysis/taxonomia.py` (depende de `linha_empresa`; ~1 min na base inteira). Banco anterior:
 `sqlite3 cvm_research.db < scripts/migrations/2026-10-16_taxonomia.sql` e `python taxonomia.py --full`.
+
+### `rf_*` — renda fixa: debêntures, CRI e CRA (Etapa 8)
+`rf_ativos (codigo PK, tipo DEB/CRI/CRA, emissor_*, devedor_*, emissao, serie, data_vencimento, indexador, remuneracao,
+especie_garantia, incentivada_12431, fonte)`, `rf_ofertas` (ofertas CVM), `rf_taxas (codigo, data)` (taxa indicativa ANBIMA,
+PU, % PU par, duration), `rf_partes` / `rf_garantias` / `rf_lastro` (`fonte` 'cadastro', 'cvm_oferta' ou 'pdf', com `evidencia` e
+`confianca`; `rf_garantias.escopo` = 'titulo' ou 'lastro': no CRA a garantia costuma ser do lastro),
+`rf_docs` + `rf_doc_ativo` + `rf_docs_fts` (escrituras e termos com texto), `rf_grupo` (cadeia de controle das partes pelo FRE),
+`vw_rf_ativo` (título + última taxa). **Não segue o `watchlist.csv`**: cadastro (SND + ofertas CVM) e taxas cobrem o mercado
+inteiro; PDFs só dos códigos de `rf_watchlist.csv`. Ingestores em `scripts/ingest/`: `ingest_rf_cadastro.py`,
+`ingest_rf_taxas.py --dias 30 --reter 30`, `ingest_rf_docs.py [--codigo X …] [--listar|--protocolo P|--url U|--arquivo PDF]` (roda
+`extrai_rf.py`, extração por regra) e `rf_grupo.py`; todos no job semanal e no `bootstrap.sh` (`--sem-rf` pula).
+Fontes conferidas com `rf_fontes.py --verificar` em 2026-10-30: SND lê (4.851 debêntures; sem coluna de volume:
+`valor_emissao` = quantidade emitida × valor nominal na emissão), ANBIMA debêntures lê (~1.275/dia), **CVM não publica código nem ISIN** e a Resolução 160 não tem série
+(casa por emissor + emissão; traz `descricao_garantias`/`descricao_lastro`/`devedores_coobrigados`, extraídas por regra com
+`fonte = 'cvm_oferta'`), **ANBIMA CRI/CRA sem URL fixa**: o dataset público "CRIs e CRAs - Precificação ANBIMA"
+(data.anbima.com.br → Datasets) sai por formulário, é baixado à mão (.xlsx com extensão .xls, últimos 5 dias úteis, mercado
+inteiro) e lido por `ingest_rf_taxas.py --arquivo X.xls`: grava `rf_taxas` e cria em `rf_ativos` (`fonte = 'anbima'`) os CRI/CRA
+com emissor, devedor, série, emissão, vencimento e remuneração (CNPJ da securitizadora pelo nome nas ofertas CVM, ~65%). Sem
+esse download semanal, CRI/CRA ficam sem taxa e só entram por `rf_watchlist.csv`; o termo não cita o código.
+A extração por regra é testada contra trechos de dois termos reais (`tests/fixtures/rf/termos_reais.py`); para medir em mais
+PDFs: `python docs/proximos-passos/stress/st8_extrai_rf.py CRA termo.pdf`. URL e apelidos de coluna moram só em
+`rf_fontes.py`. Banco anterior à Etapa 8: os ingestores `rf_*` criam as tabelas sozinhos na primeira execução
+(`rf_fontes.garantir_schema_rf`, só `IF NOT EXISTS`); à mão: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`.
+Base de teste fictícia (sem rede): `python tests/fixtures/rf/make_test_db.py /tmp/rf_teste.db` e `CVM_DB_PATH=/tmp/rf_teste.db`
+no MCP. Regras de resposta: `skills/cvm-research/references/renda-fixa.md`.
 
 ### `cd_conta_ds_timeline` — trilha temporal de cada linha (pai + nome) entre filings (Camada 5)
 `run_id, cnpj_companhia, tipo_doc, fonte, data_referencia (filing atual), cd_conta, ds_conta, st_conta_fixa, cd_conta_pai,`

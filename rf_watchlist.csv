@@ -1,0 +1,13 @@
+# Títulos de renda fixa acompanhados sob demanda: o job semanal busca os documentos (escritura, termo de
+# securitização) e extrai partes/garantias/lastro destes códigos. Cadastro e taxas cobrem o mercado inteiro.
+# Acrescente com: python scripts/ingest/ingest_rf_docs.py --codigo CODIGO
+#
+# Debênture: basta o código (o SND traz o resto).
+# CRI/CRA: a CVM não publica o código de negociação, então preencha tipo, emissor_cnpj (CNPJ da securitizadora),
+# emissao e, se souber, serie e isin, tirados do termo de securitização ou da página do título no data.anbima.com.br.
+# Sem emissor_cnpj e emissao o título não entra em rf_ativos e get_bond não o encontra.
+codigo,tipo,emissor_cnpj,emissao,serie,isin,observacao
+RUMOB6,,,,,,exemplo inicial
+ERDVB4,,,,,,exemplo inicial
+CRA024004SB,CRA,08.769.451/0001-08,204,3,BRIMWLCRA820,"Virgo (hoje Riza) 204ª, 3ª série (devedora JBS), termo de 26/04/2024; série e ISIN conferidos no data.anbima.com.br em 2026-10-30"
+CRA02300796,CRA,10.753.164/0001-43,243,2,BRECOACRACZ3,"Eco 243ª, 2ª série (devedora FS Ind. de Biocombustíveis), termo de 24/03/2023; série e ISIN conferidos no data.anbima.com.br em 2026-10-30"

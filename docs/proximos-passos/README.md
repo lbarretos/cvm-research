@@ -21,6 +21,7 @@ A numeração é a ordem recomendada. Cada etapa só depende das anteriores.
 | 5 | [Versões do template da CVM](05-template-cvm.md) | demonstrativos, L0 | 1 | **Implementada em 2026-10-14.** Versão por filing, crosswalk e Camadas 2/3/5 ajustadas; BPA 2017: `divergencia_nao_explicada` −79%, `reclassificacao` −36% (meta de ~250 estava mal calibrada); bancos ficam sem versão na DRE | S |
 | 6 | [Linha econômica por empresa](06-linha-economica.md) | demonstrativos, L1 | 5 | **Implementada em 2026-10-15 (sem 6.4).** `linha_empresa` em 84 s; fragmentação da DRE p90 2,9; DFC segue precisando do conceito (Etapa 7) | S |
 | 7 | [Taxonomia canônica](07-taxonomia-canonica.md) | demonstrativos, L2 | 5, 6 | **Implementada em 2026-10-16 com ressalvas.** 138 mil fatos, `get_financials` no MCP; D&A × DVA 89,5% (≥90% pedido) e precisão de 98% **não demonstrada** (sem modelo nem revisão humana) | M–L |
+| 8 | [Renda fixa: debêntures, CRI, CRA](08-renda-fixa.md) | nova fonte | 3, 4 (padrões), FRE | **Carga real em 2026-10-30.** Debêntures completas (SND, CVM, taxa ANBIMA, escritura e garantia conferidas em RUMOB6/ERDVB4). CRI/CRA com taxa e cadastro pelo dataset público da ANBIMA (download manual semanal, `--arquivo`); termo de CRA manual | M |
 
 ## Por que esta ordem
 

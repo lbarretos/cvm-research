@@ -44,25 +44,33 @@ HEADERS = {
 
 # ── Download e extração de texto ──────────────────────────────────────────────
 
-def fetch_pdf_text(url: str) -> str | None:
+def pdf_bytes_text(conteudo: bytes) -> str | None:
+    """Bytes de um PDF → texto reparado (None se não for PDF)."""
+    if not conteudo.startswith(b"%PDF"):
+        return None
+    with pdfplumber.open(io.BytesIO(conteudo)) as pdf:
+        pages = [p.extract_text() or "" for p in pdf.pages]
+    texto = repair_pdf_text("\n\n".join(p for p in pages if p.strip()))
+    # Remove NUL bytes — SQLite rejeita strings com NUL
+    return texto.replace("\x00", "")
+
+
+def fetch_pdf_text(url: str, dominios: tuple[str, ...] | None = ("cvm.gov.br",)) -> str | None:
+    """`dominios`: onde o PDF pode estar depois dos redirects (o IPE só serve da CVM; os documentos
+    de renda fixa também vêm da B3/Fundos.NET, ver ingest_rf_docs.py). None = qualquer host: só para
+    link passado à mão pelo usuário."""
     try:
         r = httpx.get(url, headers=HEADERS, timeout=60, follow_redirects=True)
         r.raise_for_status()
         final_host = str(r.url.host)
-        if not (final_host.endswith(".cvm.gov.br") or final_host == "cvm.gov.br"):
-            print(f"    SKIP: redirect para domínio não-CVM: {final_host}")
+        if dominios is not None and not any(final_host == d or final_host.endswith("." + d) for d in dominios):
+            print(f"    SKIP: redirect para domínio fora de {dominios}: {final_host}")
             return None
         content_length = int(r.headers.get("content-length", 0))
         if content_length > 50 * 1024 * 1024:
             print(f"    SKIP: PDF muito grande ({content_length // 1024 // 1024}MB)")
             return None
-        if not r.content.startswith(b"%PDF"):
-            return None
-        with pdfplumber.open(io.BytesIO(r.content)) as pdf:
-            pages = [p.extract_text() or "" for p in pdf.pages]
-        texto = repair_pdf_text("\n\n".join(p for p in pages if p.strip()))
-        # Remove NUL bytes — SQLite rejeita strings com NUL
-        return texto.replace("\x00", "")
+        return pdf_bytes_text(r.content)
     except Exception as e:
         print(f"    ERRO fetch: {e}")
         return None

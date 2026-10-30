@@ -1,6 +1,6 @@
 ---
 name: cvm-research
-description: Pesquisa em documentos, eventos e demonstrações financeiras de empresas abertas brasileiras (B3/CVM) numa base SQLite local acessada pelo MCP cvm-research. Use esta skill para QUALQUER pergunta sobre fatos relevantes, assembleias (AGO/AGE), atas de conselho, comunicados ao mercado, releases de resultado, dividendos/JCP, insider trading (VLMO), programas de recompra, composição acionária, remuneração de administradores, DRE/balanço/fluxo de caixa (DFP/ITR), série trimestral com 4T, reapresentações de balanço ou notas explicativas. Acione sempre que o usuário citar um ticker brasileiro (PETR4, WEGE3…), o nome de uma companhia aberta, "CVM", "RAD", "B3", ou pedir para exportar esses dados para Excel, mesmo que não diga "CVM" e mesmo que a empresa ainda não esteja na base (a skill faz o onboarding).
+description: Pesquisa em documentos, eventos e demonstrações financeiras de empresas abertas brasileiras (B3/CVM) numa base SQLite local acessada pelo MCP cvm-research. Use esta skill para QUALQUER pergunta sobre fatos relevantes, assembleias (AGO/AGE), atas de conselho, comunicados ao mercado, releases de resultado, dividendos/JCP, insider trading (VLMO), programas de recompra, composição acionária, remuneração de administradores, DRE/balanço/fluxo de caixa (DFP/ITR), série trimestral com 4T, reapresentações de balanço, notas explicativas ou renda fixa (debêntures, CRI, CRA: emissão, garantias, lastro, garantidores, grupo econômico, taxa indicativa ANBIMA). Acione sempre que o usuário citar um ticker brasileiro (PETR4, WEGE3…), um código de debênture/CRI/CRA (RUMOB6, CRA024004SB…), o nome de uma companhia aberta, "CVM", "RAD", "B3", ou pedir para exportar esses dados para Excel, mesmo que não diga "CVM" e mesmo que a empresa ainda não esteja na base (a skill faz o onboarding).
 ---
 
 # CVM Research
@@ -22,7 +22,8 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
      trechos (FR, CM, AVI, RCA, assembleias, press-release; versões vigentes, sem repetição) e `read_doc(protocolo,
      ordem)` lê a partir do trecho, em até 28 mil caracteres, com `proximo_ordem` para continuar. Prefira-as ao FTS
      por documento (seção 5) e a `substr(texto_extraido…)`;
-  5. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
+  5. **Renda fixa** (debênture, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)`; ver `references/renda-fixa.md`;
+  6. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
   A saída é tabular `{colunas, linhas, aviso?}`; cada resposta cabe em 30 mil caracteres e o `aviso`
   diz quando foi cortada. Se as ferramentas não aparecerem, carregue com `ToolSearch`
   (`select:mcp__cvm-research__query,...`); se o servidor não existir, aponte o `INSTALL.md` do projeto.
@@ -209,6 +210,10 @@ vier vazio — ausência também é informação.
 - **Acionistas e remuneração:** `references/fre.md`.
 - **Demonstrações financeiras, reapresentações, série trimestral, notas explicativas:**
   `references/demonstrativos.md`.
+- **Renda fixa (debêntures, CRI, CRA):** leia `references/renda-fixa.md`. Resumo: `get_bond(codigo)` traz
+  emissão, partes, garantias, lastro, taxas ANBIMA, cadeia de controle e outros títulos do grupo; dado tirado do
+  PDF vem com `evidencia` e `confianca` < 1 e deve ser citado com o trecho; garantia vazia não é "sem garantia".
+  Em pesquisa ampla sobre uma empresa, `search_bonds(texto='<CNPJ>')` lista a dívida dela no mercado.
 
 **Triangulação.** Insider comprando ou vendendo perto de um fato relevante, ou durante um
 programa de recompra, é o sinal mais útil que a base produz. Com `data_movimentacao` dá para
@@ -270,6 +275,7 @@ indique outro lugar.
   DRE/balanço, camadas 1–6 de consistência, série trimestral, FTS; e as regras de resposta (itens 1–12).
 - `references/vlmo.md` — insider trading: versões, datas, tipos de movimentação, queries prontas.
 - `references/fre.md` — composição acionária (bloco controlador, free float) e remuneração.
+- `references/renda-fixa.md` — debêntures, CRI e CRA: fontes, limites, partes/garantias/lastro, grupo, taxas.
 - `references/demonstrativos.md` — DRE/balanço/DFC, trimestres com 4T, reapresentações
   (camadas de consistência), notas explicativas.
 - `references/manutencao.md` — onboarding de empresa nova, extração de PDFs, atualização

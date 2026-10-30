@@ -26,6 +26,10 @@ Ferramentas:
     search_docs(consulta…) → busca por trecho (FR, CM, AVI, RCA, assembleias, press-release), deduplicada
     read_doc(protocolo…)   → lê um documento por trechos, a partir de uma posição
     get_financials(ticker, conceitos…) → fatos padronizados (D&A, capex, dividendos, juros, dívida…) com a checagem
+    resolve_bond(texto)    → código (RUMOB6, CRA024004SB), ISIN, CNPJ ou nome de emissor/devedor → títulos de renda fixa
+    get_bond(codigo)       → ficha do título: emissão, partes, garantias, lastro, taxas ANBIMA, grupo econômico, documentos
+    search_bonds(…)        → filtra títulos por tipo, indexador, vencimento, emissor/devedor ou grupo
+    search_bond_docs(…)    → busca no texto das escrituras/termos de securitização; read_bond_doc lê por posição
     query(sql)             → SELECT ad-hoc (somente leitura); saída tabular {colunas, linhas}
     list_tables()          → tabelas (com contagem de linhas) e views
     describe_table(name)   → colunas e tipos de uma tabela/view
@@ -100,20 +104,23 @@ def _cortar(v):
     return v
 
 
-def _tabular(colunas: list[str], linhas: list[list], aviso: str | None = None) -> dict:
+def _tabular(colunas: list[str], linhas: list[list], aviso: str | None = None,
+             limite: int | None = None) -> dict:
     """{colunas, linhas} em vez de um dict por linha (o nome de cada coluna não se repete).
-    Corta as linhas finais até caber em MAX_RESPONSE_CHARS e diz quantas ficaram de fora."""
+    Corta as linhas finais até caber em `limite` (MAX_RESPONSE_CHARS, ou a fatia de uma seção) e diz
+    quantas ficaram de fora."""
+    limite = limite or MAX_RESPONSE_CHARS
     total = len(linhas)
     usados = len(json.dumps(colunas, ensure_ascii=False))
     mantidas = []
     for l in linhas:
         n = len(json.dumps(l, ensure_ascii=False, default=str))
-        if mantidas and usados + n > MAX_RESPONSE_CHARS:
+        if mantidas and usados + n > limite:
             break
         # uma única linha maior que o orçamento: as células já foram cortadas em MAX_CELL_CHARS;
         # corta de novo para o resultado não estourar o contexto
-        if not mantidas and n > MAX_RESPONSE_CHARS:
-            l = [_cortar_para(v, max(200, MAX_RESPONSE_CHARS // max(len(l), 1))) for v in l]
+        if not mantidas and n > limite:
+            l = [_cortar_para(v, max(200, limite // max(len(l), 1))) for v in l]
             n = len(json.dumps(l, ensure_ascii=False, default=str))
         mantidas.append(l)
         usados += n
@@ -121,7 +128,7 @@ def _tabular(colunas: list[str], linhas: list[list], aviso: str | None = None) -
     avisos = [aviso] if aviso else []
     if len(mantidas) < total:
         avisos.append(f"resposta cortada em {len(mantidas)} de {total} linhas para caber em "
-                      f"{MAX_RESPONSE_CHARS} caracteres: restrinja colunas/filtros ou use LIMIT")
+                      f"{limite} caracteres: restrinja colunas/filtros ou use LIMIT")
     if avisos:
         out["aviso"] = "; ".join(avisos)
     return out
@@ -428,6 +435,311 @@ def get_financials(ticker: str, conceitos: list[str] | None = None, fonte: str =
         aviso = None if rows else "nenhum fato (empresa fora do plano padrão, conceito inexistente ou filtros)"
         return _tabular(["data_referencia", "periodo_ini", "periodo_fim", "conceito", "valor", "n_linhas", "metodo",
                          "confianca", "checagem", "publicado"], [list(x) for x in rows], aviso)
+    finally:
+        conn.close()
+
+
+# ---------- Renda fixa (Etapa 8) ----------
+
+_RF_AUSENTE = ("Tabelas de renda fixa ausentes: rode a migração 2026-10-30_renda_fixa.sql e os ingestores "
+               "ingest_rf_cadastro.py / ingest_rf_taxas.py (ver references/renda-fixa.md da skill).")
+_ATIVO_COLS = ["codigo", "tipo", "isin", "emissor_cnpj", "emissor_nome", "devedor_cnpj", "devedor_nome", "emissao",
+               "serie", "data_emissao", "data_vencimento", "valor_emissao", "indexador", "remuneracao",
+               "especie_garantia", "incentivada_12431", "agente_fiduciario", "situacao", "fonte", "taxa_data",
+               "taxa_indicativa", "pu", "pct_pu_par", "duration_du"]
+
+
+def _rf(conn, sql: str, args=()) -> list[list]:
+    try:
+        return [list(r) for r in conn.execute(sql, args).fetchall()]
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e):
+            raise ValueError(_RF_AUSENTE) from None
+        raise
+
+
+def _rf_busca(conn, texto: str) -> list[str]:
+    """Códigos que casam com o texto: código exato, ISIN, CNPJ (emissor, devedor ou parte) ou nome."""
+    t = texto.strip()
+    up = t.upper()
+    cods = [r[0] for r in _rf(conn, "SELECT codigo FROM rf_ativos WHERE codigo = ? OR isin = ?", (up, up))]
+    if cods:
+        return cods
+    if _rf(conn, "SELECT 1 FROM rf_taxas WHERE codigo = ? LIMIT 1", (up,)):
+        return [up]   # a ANBIMA precifica, mas o cadastro ainda não tem o título
+    digitos = re.sub(r"\D", "", t)
+    if len(digitos) >= 8 and re.fullmatch(r"[\d./-]+", t):
+        dig = "replace(replace(replace({c},'.',''),'/',''),'-','') LIKE ?"
+        return [r[0] for r in _rf(conn, f"""
+            SELECT codigo FROM rf_ativos WHERE {dig.format(c='emissor_cnpj')} OR {dig.format(c='devedor_cnpj')}
+            UNION SELECT codigo FROM rf_partes WHERE {dig.format(c='cnpj')}""", (digitos + "%",) * 3)]
+    alvo = _sem_acento(t)
+    return [r[0] for r in _rf(conn, "SELECT codigo, emissor_nome, devedor_nome FROM rf_ativos")
+            if alvo in _sem_acento(r[1] or "") or alvo in _sem_acento(r[2] or "")]
+
+
+@mcp.tool()
+def resolve_bond(texto: str) -> dict:
+    """Acha títulos de renda fixa (debêntures, CRI, CRA) pelo código de negociação (RUMOB6, CRA024004SB), ISIN,
+    CNPJ (do emissor, da securitizadora, do devedor ou de um garantidor) ou parte do nome do emissor/devedor.
+    Devolve até 50 títulos com tipo, emissor, devedor, vencimento, remuneração e a última taxa indicativa ANBIMA.
+    Use o `codigo` em get_bond."""
+    if not (texto or "").strip():
+        raise ValueError("Informe um código, ISIN, CNPJ ou nome.")
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        cods = _rf_busca(conn, texto)
+        if not cods:
+            return {"colunas": [], "linhas": [], "aviso": f"'{texto}' não está em rf_ativos nem em rf_taxas. "
+                    "Confira o código no site da ANBIMA/B3; se for título novo, rode ingest_rf_cadastro.py."}
+        cols = ["codigo", "tipo", "emissor_nome", "devedor_nome", "data_vencimento", "remuneracao", "taxa_data",
+                "taxa_indicativa"]
+        ph = ",".join("?" * len(cods[:200]))
+        linhas = _rf(conn, f"SELECT {','.join(cols)} FROM vw_rf_ativo WHERE codigo IN ({ph}) "
+                           "ORDER BY data_vencimento DESC LIMIT 50", cods[:200])
+        achados = {l[0] for l in linhas}
+        linhas += [[c, None, None, None, None, None, None, None] for c in cods if c not in achados][:5]
+        aviso = None
+        if len(cods) > 50:
+            aviso = f"{len(cods)} títulos; mostrando 50 (use search_bonds para filtrar)"
+        if any(l[1] is None for l in linhas):
+            aviso = "; ".join(filter(None, [aviso, "título só nas taxas ANBIMA, sem cadastro (rode ingest_rf_cadastro.py)"]))
+        return _tabular(cols, linhas, aviso)
+    finally:
+        conn.close()
+
+
+def _rf_cnpjs_partes(conn, codigo: str) -> list[list]:
+    """(papel, cnpj, nome) das partes com CNPJ: cadastro do título + rf_partes (exceto agente fiduciário)."""
+    return _rf(conn, """
+        SELECT CASE WHEN tipo IN ('CRI','CRA') THEN 'securitizadora' ELSE 'emissor' END, emissor_cnpj, emissor_nome
+          FROM rf_ativos WHERE codigo = ? AND emissor_cnpj IS NOT NULL
+        UNION SELECT 'devedor', devedor_cnpj, devedor_nome FROM rf_ativos WHERE codigo = ? AND devedor_cnpj IS NOT NULL
+        UNION SELECT papel, cnpj, nome FROM rf_partes
+          WHERE codigo = ? AND cnpj IS NOT NULL AND papel <> 'agente_fiduciario'""", (codigo,) * 3)
+
+
+@mcp.tool()
+def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
+    """Ficha de um título de renda fixa (debênture, CRI, CRA) pelo código (RUMOB6, ERDVB4, CRA024004SB…).
+    Seções, cada uma {colunas, linhas}:
+    - emissao: cadastro (SND para debêntures; oferta CVM para CRI/CRA) + última taxa indicativa.
+    - ofertas: registro(s) da oferta na CVM (rito, data, valor, líder); na Resolução 160 (2023+), também a descrição
+      oficial das garantias, do lastro e dos devedores/coobrigados e a agência de rating contratada.
+    - partes: emissor/securitizadora, devedor, fiadores, garantidores, cedentes, agente fiduciário. `fonte` 'cadastro'
+      = campo publicado (confianca 1); 'pdf' = extraída por regra do documento, 'cvm_oferta' = extraída por regra da
+      descrição da oferta na CVM, as duas com o trecho em `evidencia`.
+    - garantias e lastro: extraídos dos PDFs (tipo, prestador, evidência). `escopo` diz de quem é a garantia: 'titulo'
+      (do próprio CRI/CRA/debênture) ou 'lastro' (do instrumento que paga o CRI/CRA, ex.: aval na CPR-F). Vazio NÃO quer
+      dizer sem garantia: o PDF pode não ter sido ingerido (o aviso diz). `especie_garantia` da emissão é o campo do SND.
+    - taxas: taxa indicativa ANBIMA, PU, % PU par e duration dos últimos `dias_taxa` dias (preço de referência, não negócio).
+    - grupo: cadeia de controle de cada parte com FRE na base (nível 1 = controlador direto), atravessando holdings.
+    - ativos_do_grupo: outros títulos cujas partes têm o mesmo controlador (ou são o próprio controlador).
+    - documentos: escrituras/termos lidos (doc_id para search_bond_docs/read_bond_doc).
+    Cite sempre a fonte e, para dado de PDF, a evidência."""
+    cod = (codigo or "").strip().upper()
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        cands = _rf_busca(conn, cod)
+        if not cands:
+            return {"aviso": f"'{cod}' não encontrado (rf_ativos/rf_taxas). Use resolve_bond."}
+        if cod not in cands:
+            if len(cands) > 1:
+                return {"aviso": f"'{cod}' não é um código; candidatos: {', '.join(cands[:20])}"}
+            cod = cands[0]   # ISIN → código
+        q = MAX_RESPONSE_CHARS // 10
+        out, avisos = {}, []
+        emis = _rf(conn, f"SELECT {','.join(_ATIVO_COLS)} FROM vw_rf_ativo WHERE codigo = ?", (cod,))
+        out["emissao"] = _tabular(_ATIVO_COLS, emis, limite=q)
+        if not emis:
+            avisos.append("título sem cadastro (só taxa ANBIMA): rode ingest_rf_cadastro.py")
+        a = dict(zip(_ATIVO_COLS, emis[0])) if emis else {}
+        # a CVM não publica o código: casa por emissor + emissão (+ série no 400/476), como ingest_rf_cadastro.py
+        cols = ["fonte", "numero_registro", "tipo_ativo", "emissao", "serie", "data_registro", "valor_total",
+                "remuneracao", "rito", "publico_alvo", "lider_nome", "agente_fiduciario", "avaliador_risco",
+                "tipo_lastro", "descricao_garantias", "descricao_lastro", "devedores_coobrigados"]
+        out["ofertas"] = _tabular(cols, _rf(conn, f"""
+            SELECT {','.join(cols[:-3])}, substr(descricao_garantias, 1, 1500), substr(descricao_lastro, 1, 800),
+                   substr(devedores_coobrigados, 1, 800)
+            FROM rf_ofertas
+            WHERE emissor_cnpj = :emissor AND CAST(emissao AS INTEGER) = CAST(:emissao AS INTEGER)
+              AND (serie IS NULL OR :serie IS NULL OR CAST(serie AS INTEGER) = CAST(:serie AS INTEGER))
+            ORDER BY data_registro LIMIT 10""",
+            {"emissor": a.get("emissor_cnpj"), "emissao": a.get("emissao"), "serie": a.get("serie")}), limite=3 * q)
+        cols = ["papel", "cnpj", "nome", "fonte", "confianca", "doc_id", "evidencia"]
+        out["partes"] = _tabular(cols, _rf(conn, """
+            SELECT papel, cnpj, nome, fonte, confianca, doc_id, substr(evidencia, 1, 300) FROM rf_partes
+            WHERE codigo = ? ORDER BY fonte <> 'cadastro', papel""", (cod,)), limite=2 * q)
+        cols = ["tipo", "escopo", "prestador_nome", "prestador_cnpj", "descricao", "fonte", "confianca", "doc_id",
+                "evidencia"]
+        out["garantias"] = _tabular(cols, _rf(conn, f"""
+            SELECT tipo, escopo, prestador_nome, prestador_cnpj, descricao, fonte, confianca, doc_id,
+                   substr(evidencia, 1, 400)
+            FROM rf_garantias WHERE codigo = ? ORDER BY escopo DESC, tipo""", (cod,)), limite=2 * q)
+        cols = ["tipo_lastro", "devedor_nome", "devedor_cnpj", "fonte", "confianca", "doc_id", "evidencia"]
+        out["lastro"] = _tabular(cols, _rf(conn, """
+            SELECT tipo_lastro, devedor_nome, devedor_cnpj, fonte, confianca, doc_id, substr(evidencia, 1, 300)
+            FROM rf_lastro WHERE codigo = ?""", (cod,)), limite=q)
+        cols = ["data", "indice", "taxa_indicativa", "taxa_compra", "taxa_venda", "pu", "pct_pu_par", "duration_du",
+                "referencia"]
+        out["taxas"] = _tabular(cols, _rf(conn, f"SELECT {','.join(cols)} FROM rf_taxas WHERE codigo = ? "
+                                               "ORDER BY data DESC LIMIT ?", (cod, max(1, min(int(dias_taxa), 60)))),
+                                limite=q)
+        # a securitizadora emite CRI/CRA de devedores sem relação entre si: não define grupo econômico
+        partes = [p for p in _rf_cnpjs_partes(conn, cod) if p[0] != "securitizadora"]
+        cnpjs = sorted({p[1] for p in partes})
+        ph = ",".join("?" * len(cnpjs)) or "NULL"
+        cols = ["cnpj_origem", "nivel", "controlador_nome", "controlador_doc", "tipo_pessoa", "percentual", "via_cnpj",
+                "via_data_fre"]
+        grupo = _rf(conn, f"SELECT {','.join(cols)} FROM rf_grupo WHERE cnpj_origem IN ({ph}) "
+                          "ORDER BY cnpj_origem, nivel", cnpjs)
+        out["grupo"] = _tabular(cols, grupo, limite=q)
+        cols = ["codigo", "tipo", "papel", "cnpj", "nome", "data_vencimento", "remuneracao", "taxa_indicativa"]
+        out["ativos_do_grupo"] = _tabular(cols, _rf(conn, f"""
+            WITH ctrl AS (SELECT controlador_doc AS doc FROM rf_grupo WHERE cnpj_origem IN ({ph})
+                          UNION SELECT value FROM json_each(?)),
+                 membros AS (SELECT cnpj_origem AS cnpj FROM rf_grupo WHERE controlador_doc IN (SELECT doc FROM ctrl)
+                             UNION SELECT doc FROM ctrl),
+                 partes AS (SELECT codigo, CASE WHEN tipo IN ('CRI','CRA') THEN 'securitizadora' ELSE 'emissor' END
+                                   AS papel, emissor_cnpj AS cnpj, emissor_nome AS nome FROM rf_ativos
+                            UNION SELECT codigo, 'devedor', devedor_cnpj, devedor_nome FROM rf_ativos
+                            UNION SELECT codigo, papel, cnpj, nome FROM rf_partes WHERE papel <> 'agente_fiduciario')
+            SELECT p.codigo, v.tipo, p.papel, p.cnpj, MAX(p.nome), v.data_vencimento, v.remuneracao, v.taxa_indicativa
+            FROM partes p JOIN vw_rf_ativo v ON v.codigo = p.codigo
+            WHERE p.cnpj IN (SELECT cnpj FROM membros) AND p.codigo <> ? AND p.papel <> 'securitizadora'
+            GROUP BY p.codigo, p.papel, p.cnpj
+            ORDER BY v.data_vencimento DESC LIMIT 100""", (*cnpjs, json.dumps(cnpjs), cod)), limite=q)
+        cols = ["doc_id", "origem", "data_entrega", "tipo", "assunto", "chars_extraidos", "extracao_falhou", "link_download"]
+        docs = _rf(conn, f"""SELECT {','.join('d.' + c for c in cols)} FROM rf_docs d
+                             JOIN rf_doc_ativo x ON x.doc_id = d.doc_id WHERE x.codigo = ?
+                             ORDER BY d.data_entrega DESC""", (cod,))
+        out["documentos"] = _tabular(cols, docs, limite=q)
+        if not any(d[5] for d in docs):
+            origem = ("da descrição da oferta na CVM e do cadastro" if out["garantias"]["linhas"] or out["lastro"]["linhas"]
+                      else "só do cadastro")
+            avisos.append(f"nenhum PDF lido para {cod}: garantias, lastro e garantidores vêm {origem}. Para ler a "
+                          f"escritura/termo: python scripts/ingest/ingest_rf_docs.py --codigo {cod}")
+        if partes and not grupo:
+            avisos.append("nenhuma parte tem FRE na base (empresa fora do watchlist ou fechada): grupo não calculado")
+        if not out["taxas"]["linhas"]:
+            avisos.append("sem taxa ANBIMA na janela (título não precificado ou ingest_rf_taxas.py não rodou)")
+        if avisos:
+            out["aviso"] = "; ".join(avisos)
+        return out
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def search_bonds(texto: str | None = None, tipo: str | None = None, indexador: str | None = None,
+                 vence_de: str | None = None, vence_ate: str | None = None, incentivada: bool | None = None,
+                 grupo_de: str | None = None, so_com_taxa: bool = False, limite: int = 100) -> dict:
+    """Filtra títulos de renda fixa. texto: nome/CNPJ do emissor ou devedor (como resolve_bond). tipo: DEB, CRI ou CRA.
+    indexador: DI, IPCA, IGP-M, PRE. vence_de/vence_ate: 'YYYY-MM-DD'. incentivada: Lei 12.431. grupo_de: CNPJ de um
+    controlador (ou de uma empresa: usa os controladores dela em rf_grupo) e devolve os títulos de todo o grupo.
+    so_com_taxa: só os precificados pela ANBIMA. Até 300 linhas, ordenadas por vencimento."""
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        where, args = [], []
+        if texto:
+            cods = _rf_busca(conn, texto)
+            if not cods:
+                return {"colunas": [], "linhas": [], "aviso": f"nada casa com '{texto}'"}
+            where.append(f"codigo IN ({','.join('?' * len(cods))})")
+            args += cods
+        if tipo:
+            where.append("tipo = ?")
+            args.append(tipo.upper())
+        if indexador:
+            where.append("indexador = ?")
+            args.append(indexador.upper())
+        if vence_de:
+            where.append("data_vencimento >= ?")
+            args.append(vence_de)
+        if vence_ate:
+            where.append("data_vencimento <= ?")
+            args.append(vence_ate)
+        if incentivada is not None:
+            where.append("incentivada_12431 = ?")
+            args.append(1 if incentivada else 0)
+        if so_com_taxa:
+            where.append("taxa_indicativa IS NOT NULL")
+        if grupo_de:
+            r = _rf(conn, "SELECT controlador_doc FROM rf_grupo WHERE replace(replace(replace(cnpj_origem,'.',''),'/',''),'-','') = ?",
+                    (re.sub(r"\D", "", grupo_de),))
+            docs = [x[0] for x in r] or [grupo_de]
+            membros = [x[0] for x in _rf(conn, f"SELECT cnpj_origem FROM rf_grupo WHERE controlador_doc IN "
+                                               f"({','.join('?' * len(docs))})", docs)]
+            todos = sorted(set(membros) | set(docs) | {grupo_de})
+            ph = ",".join("?" * len(todos))
+            where.append(f"(emissor_cnpj IN ({ph}) OR devedor_cnpj IN ({ph}) OR codigo IN "
+                         f"(SELECT codigo FROM rf_partes WHERE cnpj IN ({ph}) AND papel <> 'agente_fiduciario'))")
+            args += todos * 3
+        cols = ["codigo", "tipo", "emissor_nome", "devedor_nome", "data_vencimento", "indexador", "remuneracao",
+                "especie_garantia", "incentivada_12431", "valor_emissao", "taxa_data", "taxa_indicativa", "duration_du"]
+        linhas = _rf(conn, f"SELECT {','.join(cols)} FROM vw_rf_ativo "
+                           f"{'WHERE ' + ' AND '.join(where) if where else ''} ORDER BY data_vencimento LIMIT ?",
+                     (*args, max(1, min(int(limite), 300))))
+        return _tabular(cols, linhas, None if linhas else "nenhum título com esses filtros")
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def search_bond_docs(consulta: str, codigo: str | None = None, k: int = 10) -> dict:
+    """Busca no texto das escrituras, aditamentos e termos de securitização ingeridos (rf_docs_fts). consulta: termos
+    (AND implícito) ou sintaxe FTS5 ("cessão fiduciária", NEAR(fiança controladora, 10)). codigo: restringe ao título.
+    Devolve doc_id, os títulos ligados e o trecho; leia em volta com read_bond_doc."""
+    q = _consulta_fts(consulta)
+    if not q:
+        raise ValueError("Consulta vazia.")
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        where, args = ["rf_docs_fts MATCH ?"], [f"texto_extraido : ({q})"]
+        if codigo:
+            where.append("d.doc_id IN (SELECT doc_id FROM rf_doc_ativo WHERE codigo = ?)")
+            args.append(codigo.strip().upper())
+        try:
+            linhas = _rf(conn, f"""
+                SELECT d.doc_id, (SELECT group_concat(codigo, ' ') FROM rf_doc_ativo x WHERE x.doc_id = d.doc_id),
+                       d.data_entrega, d.tipo, snippet(rf_docs_fts, 2, '[', ']', ' … ', 48)
+                FROM rf_docs_fts JOIN rf_docs d ON d.rowid = rf_docs_fts.rowid
+                WHERE {' AND '.join(where)} ORDER BY rf_docs_fts.rank LIMIT ?""",
+                (*args, max(1, min(int(k), 30))))
+        except sqlite3.OperationalError as e:
+            raise ValueError(f"Consulta FTS inválida ({e}). Use termos simples ou aspas.") from None
+        return _tabular(["doc_id", "codigos", "data_entrega", "tipo", "trecho"], linhas,
+                        None if linhas else "nenhum trecho (o PDF do título foi ingerido? ver get_bond.documentos)")
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def read_bond_doc(doc_id: str, offset: int = 0, max_chars: int = 20_000) -> dict:
+    """Lê o texto de um documento de renda fixa (rf_docs) a partir de `offset` (caracteres), até max_chars (máx. 28.000).
+    Para achar o ponto, use search_bond_docs e procure o trecho; `proximo_offset` continua a leitura."""
+    max_chars = max(500, min(int(max_chars), 28_000))
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        r = _rf(conn, "SELECT tipo, assunto, data_entrega, link_download, chars_extraidos, "
+                      "substr(texto_extraido, ?, ?) FROM rf_docs WHERE doc_id = ?",
+                (max(0, offset) + 1, max_chars, doc_id))
+        if not r:
+            raise ValueError(f"doc_id '{doc_id}' não existe em rf_docs.")
+        tipo, assunto, data, link, total, txt = r[0]
+        out = {"doc_id": doc_id, "tipo": tipo, "assunto": assunto, "data_entrega": data, "link": link,
+               "chars_total": total, "offset": offset, "texto": txt}
+        if txt:
+            fim = max(0, offset) + len(txt)
+            out["proximo_offset"] = fim if total and fim < total else None
+        else:
+            out["aviso"] = "sem texto extraído (ver link) ou offset além do fim"
+        return out
     finally:
         conn.close()
 

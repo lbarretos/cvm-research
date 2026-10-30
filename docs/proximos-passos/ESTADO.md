@@ -31,7 +31,7 @@ arquivos de cada etapa e no `README.md` desta pasta.
 
 ## Pendências (em ordem de valor)
 
-0. **Etapa 8**: 1ª verificação feita (ver `08-renda-fixa.md`); faltam o cabeçalho do SND (volume, 12.431), a URL de
+0. **Etapa 8**: 1ª verificação feita (ver `08-renda-fixa.md`); faltam a URL de
    CRI/CRA da ANBIMA e emissor/emissão/série dos dois CRAs em `rf_watchlist.csv`. **Primeira carga real**: no Mac, `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`,
    `cd scripts/ingest && ../../.venv/bin/python rf_fontes.py --verificar` e corrigir só `rf_fontes.py` (apelidos/URLs) até as
    três fontes lerem; depois `ingest_rf_cadastro.py`, `ingest_rf_taxas.py`, `ingest_rf_docs.py`, `rf_grupo.py`. Conferir os

@@ -81,14 +81,16 @@ def test_parse_anbima_varios_blocos():
     assert por["ERDVB4"]["referencia"] is None
 
 
+# Nomes de coluna do export real do SND (conferidos em 2026-10-30, com os espaços sobrando); sem coluna de volume
 SND = ("Características das debêntures\tgerado em 30/10/2026\n"
-       "Codigo do Ativo\tEmpresa\tCNPJ\tSituacao\tData de Emissao\tData de Vencimento\tEmissao\tSerie\t"
-       "Volume\tIndice\tPercentual Multiplicador/Rentabilidade\tTaxa de Juros\tEspecie\t"
-       "Artigo 2 da Lei 12.431\tAgente Fiduciario\n"
-       "RUMOB6\tALFA [TESTE]\t11111111000111\tRegistrado\t15/06/2022\t15/06/2032\t6\t1\t1.500.000.000,00\tIPCA\t\t6,0000\t"
-       "Quirografaria\tSim\tAGENTE TESTE\n"
-       "ERDVB4\tBETA [TESTE]\t55555555000155\tRegistrado\t01/03/2023\t01/03/2030\t4\t2\t800.000.000,00\tDI\t100\t1,8000\t"
-       "Quirografaria\tNao\tAGENTE TESTE\n"
+       "Codigo do Ativo\tEmpresa        \tSerie\tEmissao\tSituacao\tISIN\tData de Emissao\t Data de Vencimento\t"
+       "Garantia/Especie\tQuantidade Emitida\tValor Nominal na Emissao\tindice\t"
+       "Percentual Multiplicador/Rentabilidade\tJuros Criterio Novo - Taxa\tAgente Fiduciario\tCNPJ\t"
+       "Deb. Incent. (Lei 12.431)\n"
+       "RUMOB6\tALFA [TESTE]\t1\t6\tRegistrado\tBRTEST000001\t15/06/2022\t15/06/2032\tQuirografaria\t"
+       "1.500.000\t1.000,00\tIPCA\t\t6,0000\tAGENTE TESTE\t11111111000111\tS\n"
+       "ERDVB4\tBETA [TESTE]\t2\t4\tRegistrado\tBRTEST000002\t01/03/2023\t01/03/2030\tQuirografaria\t"
+       "800.000\t1.000,00\tDI\t100\t1,8000\tAGENTE TESTE\t55555555000155\tN\n"
        "\tlinha de total\n")
 
 
@@ -96,7 +98,8 @@ def test_parse_snd():
     linhas = {l["codigo"]: l for l in F.parse_snd(SND.encode("latin-1"))}
     assert set(linhas) == {"RUMOB6", "ERDVB4"}
     r = linhas["RUMOB6"]
-    assert r["emissor_cnpj"] == "11.111.111/0001-11" and r["valor_emissao"] == 1.5e9
+    assert r["emissor_cnpj"] == "11.111.111/0001-11" and r["valor_emissao"] == 1.5e9   # quantidade × VN
+    assert r["isin"] == "BRTEST000001" and r["data_vencimento"] == "2032-06-15" and r["emissao"] == "6"
     assert r["indexador"] == "IPCA" and r["remuneracao"] == "IPCA + 6,0000%" and r["incentivada_12431"] == 1
     assert linhas["ERDVB4"]["remuneracao"] == "100% do DI + 1,8000%" and linhas["ERDVB4"]["incentivada_12431"] == 0
 

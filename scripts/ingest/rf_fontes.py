@@ -184,13 +184,14 @@ APELIDOS_SND = {
     "serie":             ["Serie", "Série"],
     "quantidade":        ["Quantidade Emitida", "Quantidade em Mercado", "Quantidade"],
     "valor_nominal":     ["Valor Nominal na Emissao", "Valor Nominal na Emissão", "Valor Nominal"],
+    # o export do SND não tem volume (conferido em 2026-10-30): parse_snd calcula quantidade × valor nominal
     "valor_emissao":     ["Volume", "Valor Total Emitido", "Volume Emitido"],
     "indice":            ["Indice", "Índice", "Indexador", "Indice Correcao"],
     "percentual_indice": ["Percentual Multiplicador/Rentabilidade", "Percentual Multiplicador", "Percentual do Indice"],
     "juros":             ["Taxa de Juros", "Juros Criterio Novo - Taxa", "Spread"],
     "especie":           ["Especie", "Espécie", "Garantia/Especie", "Garantia"],
     "classe":            ["Classe"],
-    "incentivada":       ["Artigo 2 da Lei 12.431", "Lei 12.431", "Incentivada", "Debenture Incentivada"],
+    "incentivada":       ["Deb. Incent. (Lei 12.431)", "Artigo 2 da Lei 12.431", "Lei 12.431", "Incentivada"],
     "agente_fiduciario": ["Agente Fiduciario", "Agente Fiduciário"],
 }
 
@@ -228,6 +229,8 @@ def parse_snd(raw: bytes) -> list[dict]:
                               indice if indice and not pct else None,
                               f"+ {juros}%" if juros else None) if p]
         inc = norm(_valor(r, mapa, "incentivada"))
+        qtd, vn = num_br(_valor(r, mapa, "quantidade")), num_br(_valor(r, mapa, "valor_nominal"))
+        volume = num_br(_valor(r, mapa, "valor_emissao")) or (qtd * vn if qtd and vn else None)
         out.append({
             "codigo":            codigo,
             "isin":              texto(_valor(r, mapa, "isin")),
@@ -238,9 +241,9 @@ def parse_snd(raw: bytes) -> list[dict]:
             "serie":             texto(_valor(r, mapa, "serie")),
             "data_emissao":      data_br(_valor(r, mapa, "data_emissao")),
             "data_vencimento":   data_br(_valor(r, mapa, "data_vencimento")),
-            "valor_emissao":     num_br(_valor(r, mapa, "valor_emissao")),
-            "quantidade":        num_br(_valor(r, mapa, "quantidade")),
-            "valor_nominal":     num_br(_valor(r, mapa, "valor_nominal")),
+            "valor_emissao":     volume,
+            "quantidade":        qtd,
+            "valor_nominal":     vn,
             "indexador":         indexador_de(indice),
             "remuneracao":       " ".join(partes) or None,
             "especie_garantia":  texto(_valor(r, mapa, "especie")),

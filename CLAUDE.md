@@ -380,8 +380,8 @@ PU, % PU par, duration), `rf_partes` / `rf_garantias` / `rf_lastro` (`fonte` 'ca
 inteiro; PDFs só dos códigos de `rf_watchlist.csv`. Ingestores em `scripts/ingest/`: `ingest_rf_cadastro.py`,
 `ingest_rf_taxas.py --dias 30 --reter 30`, `ingest_rf_docs.py [--codigo X] [--listar|--protocolo P|--url U]` (roda
 `extrai_rf.py`, extração por regra) e `rf_grupo.py`; todos no job semanal e no `bootstrap.sh` (`--sem-rf` pula).
-Fontes conferidas com `rf_fontes.py --verificar` em 2026-10-30: SND lê (4.851 debêntures; volume e Lei 12.431 ainda
-sem coluna casada), ANBIMA debêntures lê (~1.275/dia), **CVM não publica código nem ISIN** e a Resolução 160 não tem série
+Fontes conferidas com `rf_fontes.py --verificar` em 2026-10-30: SND lê (4.851 debêntures; sem coluna de volume:
+`valor_emissao` = quantidade emitida × valor nominal na emissão), ANBIMA debêntures lê (~1.275/dia), **CVM não publica código nem ISIN** e a Resolução 160 não tem série
 (casa por emissor + emissão; traz `descricao_garantias`/`descricao_lastro`/`devedores_coobrigados`, extraídas por regra com
 `fonte = 'cvm_oferta'`), **ANBIMA CRI/CRA sem URL conhecida** (desligada; `RF_URL_ANBIMA_CRI_CRA`). Por isso CRI/CRA só entram
 por `rf_watchlist.csv` com `emissor_cnpj`, `emissao` e `serie` preenchidos à mão. URL e apelidos de coluna moram só em

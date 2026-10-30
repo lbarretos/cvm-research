@@ -9,5 +9,5 @@
 codigo,tipo,emissor_cnpj,emissao,serie,isin,observacao
 RUMOB6,,,,,,exemplo inicial
 ERDVB4,,,,,,exemplo inicial
-CRA024004SB,CRA,08.769.451/0001-08,204,,,"Virgo 204ª (devedora JBS), termo de 26/04/2024; série não confirmada (4 séries: ISIN BRIMWLCRA804/812/820/838)"
-CRA02300796,CRA,10.753.164/0001-43,243,,,"Eco 243ª (devedora FS Ind. de Biocombustíveis), termo de 24/03/2023; série não confirmada (ISIN BRECOACRACY6/CZ3)"
+CRA024004SB,CRA,08.769.451/0001-08,204,3,BRIMWLCRA820,"Virgo (hoje Riza) 204ª, 3ª série (devedora JBS), termo de 26/04/2024; série e ISIN conferidos no data.anbima.com.br em 2026-10-30"
+CRA02300796,CRA,10.753.164/0001-43,243,2,BRECOACRACZ3,"Eco 243ª, 2ª série (devedora FS Ind. de Biocombustíveis), termo de 24/03/2023; série e ISIN conferidos no data.anbima.com.br em 2026-10-30"

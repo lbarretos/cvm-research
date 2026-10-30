@@ -91,5 +91,36 @@ Depois da correção, os trechos dos dois termos (`tests/fixtures/rf/termos_reai
 garantias com escopo, lastro). É um teste de 2 documentos e com os trechos que motivaram as regras: não mede precisão geral.
 `stress/st8_extrai_rf.py` roda a extração em PDFs locais para medir em mais termos.
 
-Código, migração, operação (job semanal e `bootstrap.sh`), skill e testes prontos; suíte inteira verde. Itens 1–4 do
-critério de pronto pendentes da primeira execução com rede (ver `ESTADO.md`, pendência 0).
+### Primeira carga real no Mac (2026-10-30, à noite)
+
+Banco de produção (146 empresas): `rf_ativos` 4.851 DEB + 2 CRA, `rf_ofertas` 15.816, `rf_taxas` 8.877 linhas em 7 dias,
+`rf_partes` 9.719 de cadastro, `rf_grupo` 913 elos; quatro passos do job semanal com saída 0.
+
+| Achado | Efeito | Correção |
+|---|---|---|
+| `data_br('NaT')` devolvia a string `'NaT'` (o pandas não falha e `NaT.isoformat()` é `'NaT'`) | 13 mil datas `'NaT'` em `rf_ofertas`; a chave da oferta inclui a data, então a recarga duplicou 7.452 ofertas; `ingest_rf_docs` caía nos CRAs (`int('NaT')`) | `data_br`/`texto` tratam NaT; limpeza feita à mão neste banco (único com carga) |
+| `devedor_nome` = a qualificação inteira ("JBS S.A., sociedade por ações, …, CEP …") | ficha do CRA ilegível | `nome_antes_do_cnpj`: do último rótulo ("Devedora:") até a vírgula/parêntese/travessão |
+| escritura com assunto genérico ("Emissão de Valores Mobiliários") e número por extenso ("DÉCIMA SEXTA EMISSÃO") | escritura da Rumo 16ª não entrava | número por extenso em `_cita_numero`; a capa (1.500 caracteres) promove o documento |
+| garantias tiradas de prospecto (relacionamento com os coordenadores), relatório do agente fiduciário e anúncios | RUMOB6, quirografária, com 22 "garantias" (fiança, aval, alienação…) | só escritura, aditamento e termo vão para a extração (`documento_de_emissao`); os outros ficam na busca |
+| fichas de outras emissões do agente fiduciário no corpo da escritura (cláusula 8.2 da Ecorodovias) | ERDVB4 com alienação fiduciária e fiança da Holding do Araguaia | `_FICHA_TERCEIROS` tira cada ficha ("Valor Total da Emissão … Enquadramento"/"Inadimplementos no período") |
+| "não implicam … qualquer hipoteca, penhor, … ou outro gravame" | penhor na RUMOB6 | `VEDACAO_GENERICA` |
+| extração regravada não apagava a anterior | linhas velhas ficavam | apaga as linhas `pdf` do par documento × título antes |
+
+Critério de pronto:
+1. **OK**: SND, CVM e ANBIMA debêntures leem (campos-chave ≥ 94%; remuneração da CVM 400/476 14%, mas o SND cobre as
+   debêntures). ANBIMA CRI/CRA segue sem fonte pública de arquivo.
+2. **Parcial**: RUMOB6 e ERDVB4 com emissão, taxa (7 dias) e a escritura certa ligada. CRA024004SB (3ª série) e
+   CRA02300796 (2ª série), séries e ISIN conferidos na página pública do data.anbima.com.br, aparecem com securitizadora,
+   emissão e devedor (JBS pela Res. 160; FS sem devedor na CVM 400), **sem taxa e sem termo**: a Res. 160 não passa pelo
+   IPE (o IPE da Virgo/Riza para em 2022) e a taxa só existe no data.anbima.com.br.
+3. **OK nas duas debêntures**: garantia extraída = quirografária, igual ao SND e à capa; partes do PDF = Pentágono como
+   agente fiduciário (emissora vem do cadastro). Antes das correções: 22 e 10 garantias falsas.
+4. **OK**: `ingest_rf_cadastro`, `ingest_rf_taxas`, `ingest_rf_docs`, `rf_grupo` com saída 0.
+
+Observações: o diretório público de taxas da ANBIMA guarda só ~6 dias úteis (10-01 a 10-13 dão 404), então a janela de 30
+dias se forma semana a semana e uma semana sem job vira buraco. O grupo da Rumo mostra Julia Arduini (3,82%) como
+controladora direta porque é o que o FRE 2026 da Rumo declara (Maglev FIP, 20%, vem como não controlador): fiel à fonte.
+
+Pendente (decisão do usuário): o data.anbima.com.br lê de `data-api.prd.anbima.com.br/web-bff/v1/certificado-recebiveis/<código>`
+(características, preços, documentos). É a única origem de taxa e termo de CRI/CRA sem a Feed API paga, mas é uma API
+interna, não documentada; não foi automatizada. Sem ela: `ingest_rf_docs.py --codigo X --arquivo termo.pdf`.

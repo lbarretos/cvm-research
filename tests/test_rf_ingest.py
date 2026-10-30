@@ -44,6 +44,15 @@ def test_normalizacoes():
     assert F.num_br("1.234,56") == 1234.56 and F.num_br("108,5%") == 108.5 and F.num_br("-") is None
     assert F.num_br("6.4") == 6.4 and F.num_br("1.650") == 1650.0
     assert F.data_br("30/10/2026") == "2026-10-30" and F.data_br("2026-10-30") == "2026-10-30"
+    assert F.data_br("NaT") is None and F.data_br(None) is None and F.texto("NaT") is None
+    # texto livre da Resolução 160: rótulo, qualificação e travessão não entram no nome
+    assert F.nome_antes_do_cnpj("JBS S.A., sociedade por ações, inscrita no CNPJ sob o nº 02.916.265/0001-60.",
+                                "02.916.265/0001-60") == "JBS S.A."
+    assert F.nome_antes_do_cnpj("Devedora : ELLIOT EMPREENDIMENTOS LTDA _ CNPJ 49.107.103/0001-44Fiador: X",
+                                "49.107.103/0001-44") == "ELLIOT EMPREENDIMENTOS LTDA"
+    assert F.nome_antes_do_cnpj("JOÃO FORTES ENGENHARIA S.A. - EM RECUPERAÇÃO JUDICIAL - CNPJ 33.035.536/0001-00",
+                                "33.035.536/0001-00") == "JOÃO FORTES ENGENHARIA S.A."
+    assert F.nome_antes_do_cnpj("BRF S.A. (CNPJ 01.838.723/0001-27)", "60.872.504/0001-23") is None
     assert [F.tipo_por_codigo(c) for c in ("RUMOB6", "ERDVB4", "CRA024004SB", "CRI0230001X", "X")] == \
         ["DEB", "DEB", "CRA", "CRI", "OUTRO"]
     assert F.indexador_de("IPCA + 6,0%") == "IPCA" and F.indexador_de("108% do DI") == "DI"
@@ -312,6 +321,51 @@ def test_relevancia_cra_exige_emissao_e_serie():
     assert ingest_rf_docs.relevante({**doc, "assunto": "1ª Série da 240ª Emissão"}, ativo) == "certo"
     assert ingest_rf_docs.relevante({**doc, "assunto": "2ª Série da 240ª Emissão"}, ativo) == "talvez"
     assert ingest_rf_docs.relevante({**doc, "assunto": "CRA024004SB"}, ativo) == "certo"
+
+
+@pytest.mark.parametrize("texto, numero, esperado", [
+    ("escritura particular da decima sexta emissao de debentures", "016", True),
+    ("16a emissao de debentures", "16", True),
+    ("14ª (decima quarta) emissao", "14", True),
+    ("vigesima primeira emissao", "1", False),        # 'primeira' depois de dezena é outro número
+    ("decima oitava emissao", "16", False),
+])
+def test_cita_numero_por_extenso(texto, numero, esperado):
+    assert ingest_rf_docs._cita_numero(texto, numero, "emiss") is esperado
+
+
+def test_capa_promove_documento_de_assunto_generico():
+    # Rumo 16ª: categoria de escrituras, assunto "Emissão de Valores Mobiliários", a emissão só na capa
+    ativo = {"codigo": "RUMOB6", "tipo": "DEB", "emissao": "016", "serie": "002"}
+    capa = "Página 1 de 90\nESCRITURA PARTICULAR DA DÉCIMA SEXTA EMISSÃO DE DEBÊNTURES SIMPLES, DA RUMO S.A."
+    assert ingest_rf_docs._abertura_cita_emissao(capa, ativo)
+    assert not ingest_rf_docs._abertura_cita_emissao(capa.replace("SEXTA", "OITAVA"), ativo)
+
+
+def test_fichas_de_outras_emissoes_e_vedacao_generica_nao_viram_garantia():
+    # trechos da escritura da 14ª Ecorodovias (cláusula 8.2) e da 16ª Rumo, ambas quirografárias
+    texto = ("ESCRITURA DA 14ª EMISSÃO DE DEBÊNTURES SIMPLES, DA ESPÉCIE QUIROGRAFÁRIA, EM ATÉ 3 SÉRIES, PARA DISTRIBUIÇÃO PÚBLICA. "
+             "A Emissora declara que a emissão e a celebração desta Escritura (e) não "
+             "implicam na criação de qualquer hipoteca, penhor, usufruto, fideicomisso, encargo ou outro gravame. "
+             "8.2. o Agente Fiduciário presta serviços nas seguintes emissões: Emissão 1ª emissão de Debêntures da "
+             "Holding do Araguaia S.A. Valor Total da Emissão R$ 1.400.000.000,00 Quantidade 1.400.000 Espécie Real "
+             "Garantias Alienação Fiduciária de Ações; Cessão Fiduciária; Garantia Fidejussória Data de Vencimento "
+             "15/10/2036 Enquadramento Adimplência Financeira. EMISSORA RAÍZEN S.A. VOLUME TOTAL PREVISTO "
+             "1.050.000.000,00 ESPÉCIE Quirografária GARANTIAS Fiança INADIMPLEMENTOS NO PERÍODO N/A")
+    tipos = {g["tipo"] for g in extrai_rf.extrair(texto, "DEB")["garantias"]}
+    assert tipos == {"quirografaria"}
+
+
+@pytest.mark.parametrize("origem, rotulo, capa, esperado", [
+    ("ipe", "Escrituras e aditamentos de debêntures Escritura da 14ª emissão", "", True),
+    ("ipe", "Prospecto de Distribuição Pública Prospecto Preliminar referente à 16ª Emissão", "", False),
+    ("ipe", "Relatório de Agente Fiduciário Relatório Anual do Agente Fiduciário - 16a Emissão", "", False),
+    ("ipe", "Escrituras e aditamentos de debêntures Emissão de Valores Mobiliários",
+     "ESCRITURA PARTICULAR DA DÉCIMA SEXTA EMISSÃO", True),
+    ("arquivo", "manual termo.pdf", "", True),
+])
+def test_so_documento_de_emissao_vai_para_a_extracao(origem, rotulo, capa, esperado):
+    assert extrai_rf.documento_de_emissao(origem, rotulo, capa) is esperado
 
 
 def test_watchlist_aditiva(tmp_path):

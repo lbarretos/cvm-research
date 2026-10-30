@@ -90,6 +90,8 @@ NEGACAO_ANTES = re.compile(r"\b(n[ãa]o(?! convers[íi]ve)|sem|nenhuma|inexist\w
 NEGACAO_DEPOIS = re.compile(r"^[^.;]{0,25}?:\s*n[ãa]o\b|^\s*n[ãa]o\s+h[áa]\b")
 # definição genérica ("“Ônus” significa qualquer hipoteca, penhor…"): não é garantia do título
 DEFINICAO_GENERICA = re.compile(r"[“\"](?:[ÔôOo]nus|Gravames?|Onerar)[”\"]")
+# lista de vedações: "não implicam na criação de qualquer hipoteca, penhor, usufruto… ou outro gravame"
+VEDACAO_GENERICA = re.compile(r"outr[oa]s? (?:gravames?|[ôo]nus|encargos?)|qualquer (?:gravame|[ôo]nus)")
 
 LASTRO = [
     ("CPR-F",          r"\bCPR[- ]?F(?:inanceiras?)?\b|c[ée]dulas? de produto rural financeira"),
@@ -128,13 +130,20 @@ def _limpo(texto: str) -> str:
     return re.sub(r"(\d{4})\s*-\s+(\d{2})\b", r"\1-\2", t)
 
 
+# ficha de outra emissão listada pelo agente fiduciário (Resolução CVM 17, art. 6º), no corpo da escritura ou no
+# relatório anual: "Valor Total da Emissão R$ … Espécie … Garantias Fiança; … Enquadramento Adimplência Financeira"
+_FICHA_TERCEIROS = re.compile(r"(?:valor total da emiss[ãa]o|volume total previsto)\s*:?\s*R?\$?.{0,500}?"
+                              r"(?:enquadramento|inadimplementos? no per[íi]odo)", re.I)
+
+
 def _sem_anexo_de_terceiros(t: str) -> str:
-    """Corta no anexo com o histórico de emissões do agente fiduciário. Só depois de 30% do texto: o índice, no
-    começo, também cita o anexo."""
+    """Corta no anexo com o histórico de emissões do agente fiduciário (só depois de 30% do texto: o índice, no
+    começo, também cita o anexo) e tira as fichas de outras emissões que aparecem no corpo."""
     for m in _ANEXO_TERCEIROS.finditer(t):
         if m.start() > 0.3 * len(t):
-            return t[:m.start()]
-    return t
+            t = t[:m.start()]
+            break
+    return _FICHA_TERCEIROS.sub(" ", t)
 
 
 def _papel(termo: str, tipo_titulo: str) -> str | None:
@@ -240,7 +249,8 @@ def _garantias(t: str, tipo_titulo: str) -> list[dict]:
                 # enumeração de tipos (definição de “Ônus”, lista de vedações): não descreve garantia alguma
                 vizinhos = {o for o in _TIPOS_ENUMERAVEIS
                             if any(abs(x - m.start()) <= 150 for x in tipos_em[o])}
-                if len(vizinhos) >= 3 or DEFINICAO_GENERICA.search(t[max(0, m.start() - 200):m.start()]):
+                if len(vizinhos) >= 3 or DEFINICAO_GENERICA.search(t[max(0, m.start() - 200):m.start()]) \
+                        or VEDACAO_GENERICA.search(baixo[max(0, m.start() - 200):m.end() + 200]):
                     continue
             achados.append(m)
         if achados:
@@ -304,6 +314,26 @@ def gravar(conn, doc_id: str, codigo: str, tipo_titulo: str, r: dict, fonte: str
         "confianca": l["confianca"]} for l in r["lastro"]], conflict="chave")
 
 
+EMISSAO_RE = re.compile(r"escritura|aditamento|termo de securitizacao|termo de emissao")
+NAO_EMISSAO_RE = re.compile(r"prospecto|relatorio (?:anual )?d[oe] agente|anuncio de|aviso ao mercado|lamina")
+
+
+def documento_de_emissao(origem: str | None, rotulo: str, texto: str | None) -> bool:
+    """Só a escritura, o termo de securitização e os aditamentos descrevem as partes e as garantias do título. O
+    prospecto (seção de relacionamento com os coordenadores), o relatório do agente fiduciário (lista as outras
+    emissões dele) e os anúncios citam garantias de outras operações: ficam na busca, fora da extração.
+    PDF passado à mão (--url/--arquivo) conta como documento de emissão."""
+    if origem in ("url", "arquivo"):
+        return True
+    r = F.norm(rotulo)
+    if NAO_EMISSAO_RE.search(r):
+        return False
+    if EMISSAO_RE.search(r):
+        return True
+    capa = F.norm((texto or "")[:1500])
+    return bool(EMISSAO_RE.search(capa)) and not NAO_EMISSAO_RE.search(capa)
+
+
 def processar(conn, codigo: str | None = None, todos: bool = False) -> int:
     where, args = ["d.texto_extraido IS NOT NULL"], []
     if codigo:
@@ -312,15 +342,19 @@ def processar(conn, codigo: str | None = None, todos: bool = False) -> int:
     elif not todos:
         where.append("d.regras_em IS NULL")
     rows = conn.execute(
-        "SELECT d.doc_id, x.codigo, COALESCE(a.tipo, '') , d.texto_extraido FROM rf_docs d "
+        "SELECT d.doc_id, x.codigo, COALESCE(a.tipo, ''), d.texto_extraido, d.origem, "
+        "COALESCE(d.categoria, '') || ' ' || COALESCE(d.tipo, '') || ' ' || COALESCE(d.especie, '') || ' ' || "
+        "COALESCE(d.assunto, '') FROM rf_docs d "
         "JOIN rf_doc_ativo x ON x.doc_id = d.doc_id LEFT JOIN rf_ativos a ON a.codigo = x.codigo "
         f"WHERE {' AND '.join(where)}", args).fetchall()
     agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    for doc_id, cod, tipo, txt in rows:
+    for doc_id, cod, tipo, txt, origem, rotulo in rows:
         tipo = tipo or F.tipo_por_codigo(cod)
-        r = extrair(txt, tipo)
+        r = extrair(txt, tipo) if documento_de_emissao(origem, rotulo, txt) else {"partes": [], "garantias": [], "lastro": []}
         print(f"  {cod} · {doc_id}: {len(r['partes'])} partes, {len(r['garantias'])} garantias, "
               f"{len(r['lastro'])} lastros")
+        for t in ("rf_partes", "rf_garantias", "rf_lastro"):   # a regra mudou ou o doc deixou de ser de emissão
+            conn.execute(f"DELETE FROM {t} WHERE doc_id = ? AND codigo = ? AND fonte = 'pdf'", (doc_id, cod))
         gravar(conn, doc_id, cod, tipo, r)
         conn.execute("UPDATE rf_docs SET regras_em = ? WHERE doc_id = ?", (agora, doc_id))
     conn.commit()

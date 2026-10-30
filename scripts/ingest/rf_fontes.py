@@ -106,15 +106,40 @@ def data_br(v) -> str | None:
     s = str(v or "").strip()[:10]
     for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y"):
         try:
-            return pd.to_datetime(s, format=fmt).date().isoformat()
+            d = pd.to_datetime(s, format=fmt)
         except Exception:
             continue
+        if pd.isna(d):                  # 'NaT' do CSV da CVM vira NaT sem erro, e NaT.isoformat() é 'NaT'
+            return None
+        return d.date().isoformat()
     return None
 
 
 def texto(v) -> str | None:
     s = str(v).strip() if v is not None else ""
-    return None if s in ("", "nan", "-", "--", "NaN", "N/D") else s
+    return None if s in ("", "nan", "-", "--", "NaN", "NaT", "None", "N/D") else s
+
+
+CNPJ_RE = re.compile(r"\d{2}\.?\d{3}\.?\d{3}\s*/?\s*\d{4}\s*-?\s*\d{2}")
+ROTULO_DEVEDOR_RE = re.compile(r"(?:Devedor[a]?|Cedente|Originador[a]?|Emitente)\s*[:\-–]\s*", re.I)
+FIM_NOME_RE = re.compile(r",|\(|\s[-–_]\s|\s(?:devidamente|inscrit|no\s+CNPJ|CNPJ|sociedade|institui|com\s+sede)", re.I)
+
+
+def nome_antes_do_cnpj(txt: str | None, cnpj: str | None) -> str | None:
+    """Nome que antecede o CNPJ no texto livre da Resolução 160 ("Devedora: X LTDA - CNPJ …", "JBS S.A., sociedade
+    por ações…, inscrita no CNPJ sob o nº …"): do último rótulo até a primeira vírgula, parêntese, travessão ou
+    qualificação."""
+    if not (txt and cnpj):
+        return None
+    m = next((m for m in CNPJ_RE.finditer(txt) if fmt_cnpj(m.group()) == cnpj), None)
+    if not m:
+        return None
+    seg = txt[:m.start()]
+    rotulos = list(ROTULO_DEVEDOR_RE.finditer(seg))
+    if rotulos:
+        seg = seg[rotulos[-1].end():]
+    nome = FIM_NOME_RE.split(seg, maxsplit=1)[0].strip(" \t\n-–_:;")
+    return nome if 3 <= len(nome) <= 150 else None
 
 
 def tipo_por_codigo(codigo: str) -> str:
@@ -346,7 +371,7 @@ def parse_cvm_ofertas(df: pd.DataFrame, fonte: str) -> list[dict]:
             "emissor_cnpj":      fmt_cnpj(_valor(r, mapa, "emissor_cnpj")),
             "emissor_nome":      texto(_valor(r, mapa, "emissor_nome")),
             "devedor_cnpj":      devedor_cnpj,
-            "devedor_nome":      texto(_valor(r, mapa, "devedor_nome")),
+            "devedor_nome":      texto(_valor(r, mapa, "devedor_nome")) or nome_antes_do_cnpj(devedores, devedor_cnpj),
             "emissao":           texto(_valor(r, mapa, "emissao")),
             "serie":             texto(_valor(r, mapa, "serie")),
             "data_registro":     data_br(_valor(r, mapa, "data_registro")),

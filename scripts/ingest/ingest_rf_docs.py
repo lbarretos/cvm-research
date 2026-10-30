@@ -69,12 +69,30 @@ def acrescentar_watchlist(codigos: list[str], path: Path = RF_WATCHLIST) -> None
 
 # ── Relevância de um documento do IPE para o título ──────────────────────────
 
+_UNIDADES = ["", "primeir", "segund", "terceir", "quart", "quint", "sext", "setim", "oitav", "non"]
+_DEZENAS = ["", "decim", "vigesim", "trigesim", "quadragesim", "quinquagesim"]
+_NAO_DEPOIS_DE_DEZENA = "".join(rf"(?<!{d}a )(?<!{d}o )" for d in _DEZENAS[1:])
+
+
+def _extenso(n: int) -> str | None:
+    """16 → regex de 'decima sexta' / 'decimo sexto' (texto já sem acento); None fora de 1–59."""
+    if not 1 <= n < 60:
+        return None
+    partes = [p + "[ao]" for p in (_DEZENAS[n // 10], _UNIDADES[n % 10]) if p]
+    return (_NAO_DEPOIS_DE_DEZENA if n < 10 else "") + r"\b" + r"\s+".join(partes)
+
+
 def _cita_numero(texto: str, numero: str | None, palavra: str) -> bool:
-    """O texto (já normalizado) cita o número: '5ª emissao', '05a emissao', '1ª serie'."""
+    """O texto (já normalizado) cita o número: '5ª emissao', '05a emissao', '1ª serie', 'decima sexta emissao',
+    '16ª (decima sexta) emissao'."""
     n = re.sub(r"\D", "", str(numero or ""))
     if not n:
         return False
-    return re.search(rf"(?<!\d)0*{int(n)}\s*(?:a|o|ª|º)?\.?\s*{palavra}", texto) is not None
+    entre = r"\s*(?:\([^)]{0,30}\)\s*)?"
+    if re.search(rf"(?<!\d)0*{int(n)}\s*(?:a|o|ª|º)?\.?{entre}{palavra}", texto):
+        return True
+    ext = _extenso(int(n))
+    return bool(ext and re.search(rf"{ext}{entre}{palavra}", texto))
 
 
 def relevante(doc: dict, ativo: dict) -> str | None:
@@ -129,11 +147,23 @@ def documentos_ipe(conn, ativo: dict) -> list[dict]:
     return docs
 
 
+def _abertura_cita_emissao(texto: str | None, ativo: dict) -> bool:
+    """A capa do documento (primeiros 1.500 caracteres) cita a emissão — e a série, no CRI/CRA, quando conhecida."""
+    if not texto:
+        return False
+    t = F.norm(texto[:1500])
+    if not _cita_numero(t, ativo.get("emissao"), "emiss"):
+        return False
+    return ativo["tipo"] == "DEB" or not ativo.get("serie") or _cita_numero(t, ativo.get("serie"), "serie")
+
+
 def candidatos(conn, ativo: dict) -> tuple[list[dict], list[dict]]:
     """(certos, talvez) entre os documentos do IPE do emissor/securitizadora."""
     certos, talvez = [], []
     for d in documentos_ipe(conn, ativo):
         r = relevante(d, ativo)
+        if r == "talvez" and _abertura_cita_emissao(d.get("texto_extraido"), ativo):
+            r = "certo"   # assunto genérico ("Emissão de Valores Mobiliários"), mas a capa diz qual emissão
         (certos if r == "certo" else talvez if r == "talvez" else []).append(d)
     return certos, talvez
 

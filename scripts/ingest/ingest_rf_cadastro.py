@@ -110,7 +110,7 @@ def completar_com_ofertas(conn) -> int:
             "data_vencimento = COALESCE(data_vencimento, ?), valor_emissao = COALESCE(valor_emissao, ?), "
             "remuneracao = COALESCE(remuneracao, ?), incentivada_12431 = COALESCE(incentivada_12431, ?), "
             "agente_fiduciario = COALESCE(agente_fiduciario, ?) WHERE codigo = ?",
-            (o["devedor_cnpj"], o["devedores_coobrigados"] if o["devedor_cnpj"] else None, o["emissor_nome"],
+            (o["devedor_cnpj"], o["devedor_nome"], o["emissor_nome"],
              o["data_emissao"], o["data_vencimento"], o["valor_total"], o["remuneracao"], o["incentivada_12431"],
              o["agente_fiduciario"], a["codigo"]))
         n += 1

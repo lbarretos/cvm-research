@@ -39,8 +39,10 @@ arquivos de cada etapa e no `README.md` desta pasta.
 1. **Mergear o #38** (v1 da avaliação) e **rodar a baseline do v1**: `run_eval.py --golden v1 --rotulo v1-baseline --paralelo 4
    --timeout 600` (~US$ 35–40, ~15 min). Sem ela, o v1 é só um conjunto, não uma régua. A conta já bateu no limite de uso
    no meio de uma execução; se cair, refaça só as ids invalidadas com `--ids` e junte os relatórios.
-2. **Revisão por analista das regras da Etapa 7**: precisão de 98% não demonstrada (minhas duas amostras deram ~88–92%).
-   `divida_liquida_fluxo`, `arrend_pago` e `recompra` são as piores. Amostra: `st2`-style, `linha_conceito` ⨝ `linha_empresa`.
+2. **Etapa 7, regras**: os três piores (`divida_liquida_fluxo`, `recompra`, `arrend_pago`) revistos nome a nome em
+   2026-10-30 (`stress/st7_revisao.py`; ver `07-taxonomia-canonica.md`), com a propagação do voto corrigida. Falta: a mesma
+   revisão nos outros 13 conceitos (`amort_divida`, `capt_divida` e `juros_pagos` primeiro) e um analista conferir a lista
+   `ERROS` do script.
 3. **Etapa 3, tokens**: o corte de 30% não veio (prefixo fixo da sessão domina, ~300 mil tokens). A alavanca é cortar turnos
    (paralelizar `resolve_company` com a consulta; mandar direto pelo ticker nas views).
 4. **Etapa 6.4**: o visualizador ainda calcula o encadeamento; a tabela `linha_empresa` encadeia ITR+DFP juntos e ele cada

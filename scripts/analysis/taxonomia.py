@@ -79,23 +79,28 @@ REGRAS = {
                    r"(venda|alienac|recebim|baixa|intang)"),
     "capex_intang": (("6.02",), r"(aquisic|adic|compra|investimento|aplica|no|em).*intang|^intangivel$",
                      r"(venda|alienac|recebim|imobiliz)"),
-    "capex_conjunto": (("6.02",), r"(imobiliz.*intang|intang.*imobiliz)", r"(venda|alienac|recebim|baixa|outros)"),
+    "capex_conjunto": (("6.02",), r"(imobiliz.*intang|intang.*imobiliz)", r"(venda|alienac|recebim|baixa|outros(?! intang))"),
     "dividendos_pagos": (("6.03",), r"(dividend|juros sobre (o )?capital|jcp)", r"(recebid|receb|a pagar)"),
     "juros_pagos": (("6.01.02", "6.01.03", "6.03"),
                     r"(juros|encargos).*(pag|liquid)|pagamento.*(juros|encargos)",
                     r"(capital proprio|sobre (o )?capital|recebid|arrend|direito de uso|provisionad|apropriad|incorrid|"
                     r"salario|ferias|encargos (sociais|trabalhistas)|folha|a pagar)"),
     "capt_divida": (("6.03",), rf"(captac|obtenc|ingresso|emissao|recebimento|novos|contratac).*{_DEBITO}",
-                    r"(custo|custos|derivativ|instrumentos financeiros|despesa)"),
+                    r"(custo|custos|^gastos|derivativ|instrumentos financeiros|despesa)"),
     "amort_divida": (("6.03",), rf"(amortiz|pagamento|liquidac|quitac).*{_DEBITO}", r"(juros|encargos|arrend|direito de uso|dividend)"),
     "divida_liquida_fluxo": (("6.03",), rf"{_DEBITO}.*(captac|amortiz|pagamento).*(captac|amortiz|pagamento)|"
                                         rf"(captac|ingresso).*(e|ou).*(amortiz|pagamento)|"
                                         rf"{_DEBITO}.*\bliquid[oa]s?\b|\bliquid[oa]s?\b.*{_DEBITO}|aumento.*reducao.*{_DEBITO}",
                              r"(liquidad|liquidac|instrumentos? financeiros?|recebid|atividade|caixa|recursos|aumento de capital|subscri|"
-                             r"partes relacionadas|descontinuad|mantidos|investimento|custo|despesa|hedge|swap|captacoes$)"),
+                             r"partes relacionadas|ligadas|coligadas|controladas|controladora|mutuo|descontinuad|mantidos|"
+                             r"investimento|custo|gastos|despesa|hedge|swap|captacoes$)"),
     "arrend_pago": (("6.03",), r"(arrend|direito de uso|lease|locac)",
-                    r"(sale|leaseback|recebid|ingresso|entrada|obtido|captac|emprestimos|avp)"),
-    "recompra": (("6.03",), r"(recompra|aquisicao de acoes|acoes em tesouraria)", r"(venda|alienac|debent|bond|nota|titulo|resultado|cancelamento|ganho|perda)"),
+                    r"(sale|leaseback|recebid|ingresso|entrada|obtido|captac|contratac|emprest|debent|deb\b|risco sac|"
+                    r"financiamentos? e arrend|avp|\badic|constituic|ganho|baixa|pre pagamento)"),
+    "recompra": (("6.03",), r"(recompra|aquisicao de acoes|acoes em tesouraria)",
+                 r"(venda|vendid|alienac|alientac|debent|bond|\bnotas?\b(?!\s*\d)|titulo|resultado|"
+                 r"cancelamento(?!.*recompra)|ganho|perda|"
+                 r"^(utilizac|exercicio)|ilp|incentivo|stock option|recebiveis|investidas|controladas)"),
     "ir_pago": (("6.01",), r"(imposto de renda|ir e cs|irpj|contribuicao social).*(pag|recolh)|"
                            r"(pag|recolh).*(imposto de renda|ir e cs|irpj|contribuicao social|tributos sobre o lucro)",
                 r"(a recolher|a pagar|provisao|provisoes|diferid|compensac|a recuperar|refinanc|parcelamento|refis)"),
@@ -105,6 +110,16 @@ ESPECIFICA_SOBRE = {"divida_liquida_fluxo": {"capt_divida", "amort_divida"},
                     "capex_conjunto": {"capex_imob", "capex_intang"},
                     "da_direito_uso": {"da_ex_ppa"}, "da_ppa": {"da_ex_ppa"}}
 _COMP = {k: (p, re.compile(pat), re.compile(exc) if exc else None) for k, (p, pat, exc) in REGRAS.items()}
+# capex numa linha líquida ("Adições/Baixas no Imobilizado", "Baixa (Aquisição) de bens", "(Compra) venda de
+# intangível"): traz os dois lados, a exclusão de baixa/venda não vale, e o sinal (saída) decide
+_CAPEX_LIQUIDO = re.compile(r"(adic|aquisic|compra).*(baix|venda|alienac)|(baix|venda|alienac).*(adic|aquisic|compra)")
+
+
+def _excluido(conceito: str, dsn: str) -> bool:
+    exc = _COMP[conceito][2]
+    if not (exc and exc.search(dsn)):
+        return False
+    return not (conceito.startswith("capex") and _CAPEX_LIQUIDO.search(dsn))
 
 DDL = """
 CREATE TABLE IF NOT EXISTS conceito (
@@ -151,7 +166,7 @@ def classificar(cd: str, dsn: str, vl=None) -> str | None:
     Com `vl`, linha de sinal contrário ao esperado fica sem conceito: "ações em tesouraria" positiva é
     venda/exercício de opção, não recompra, e o mesmo nome muda de sentido conforme o sinal."""
     achados = {k for k, (pref, pat, exc) in _COMP.items()
-               if cd.startswith(pref) and pat.search(dsn) and not (exc and exc.search(dsn))}
+               if cd.startswith(pref) and pat.search(dsn) and not _excluido(k, dsn)}
     for forte, fracos in ESPECIFICA_SOBRE.items():
         if forte in achados:
             achados -= fracos
@@ -193,9 +208,10 @@ def votar(linhas: pd.DataFrame) -> dict:
     return out
 
 
-def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str):
+def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str, contribuicoes: list | None = None):
     """df = latest_rows da empresa (plano padrão). linha_id[(fonte, data, cd)] = linha_id da DFC.
-    Devolve (linha_conceito rows, fato rows)."""
+    Devolve (linha_conceito rows, fato rows). Com `contribuicoes` (lista), acrescenta nela cada célula que entrou
+    num fato regra: (fonte, data, cd_conta, ds_conta, conceito, valor) — para revisão (stress/st7_revisao.py)."""
     df = df[(df["ordem_exercicio"] == "Último") & (df["plano_contas"].fillna("padrao") == "padrao")].copy()
     if df.empty:
         return [], []
@@ -209,8 +225,8 @@ def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str):
         for r in g[g["st_conta_fixa"] == "N"].itertuples():
             if r.cd_conta in folhas:
                 rot.append((fonte, data, r.cd_conta, linha_id.get((fonte, data, r.cd_conta)),
-                            classificar(r.cd_conta, r.dsn, r.vl_conta if pd.notna(r.vl_conta) else None)))
-    rot = pd.DataFrame(rot, columns=["fonte", "data", "cd", "linha_id", "conceito"])
+                            classificar(r.cd_conta, r.dsn, r.vl_conta if pd.notna(r.vl_conta) else None), r.dsn))
+    rot = pd.DataFrame(rot, columns=["fonte", "data", "cd", "linha_id", "conceito", "dsn"])
     # linha sem linha_id (não deveria ocorrer) vota sozinha
     rot["linha_id"] = rot["linha_id"].fillna(rot["fonte"] + "|" + rot["data"] + "|" + rot["cd"])
     votos = votar(rot) if not rot.empty else {}
@@ -218,7 +234,15 @@ def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str):
         v = votos.get(r.linha_id)
         if v is None:
             return None
-        return v[0] if (v[3] or r.conceito == v[0]) else None
+        if r.conceito == v[0]:
+            return v[0]
+        # a propagação não vence a exclusão da própria regra: "alienação de ações em tesouraria" ligada pela Etapa 6
+        # à linha de recompra continua fora (revisão de 2026-10-30, stress/st7_revisao.py)
+        # (nesse caso a célula fica com o conceito que a regra dá ao próprio nome, se houver: "adições ao imobilizado e
+        # intangível" numa linha votada capex_imob é capex_conjunto)
+        if _excluido(v[0], r.dsn or ""):
+            return r.conceito
+        return v[0] if v[3] else None
     rot["conceito_final"] = [_final(r) for r in rot.itertuples()]
     rot["confianca"] = rot["linha_id"].map(lambda l: votos.get(l, (None, 0.0))[1])
     lc = [(cnpj, "DFC_MI", lid, c, "regra", conf, n) for lid, (c, conf, n, _p) in votos.items()]
@@ -232,6 +256,7 @@ def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str):
         ini, fim = _periodo(g)
         sel = rot[(rot["fonte"] == fonte) & (rot["data"] == data) & rot["conceito_final"].notna()]
         vl = g.set_index("cd_conta")["vl_conta"]
+        ds = dict(zip(g["cd_conta"], g["ds_conta"])) if contribuicoes is not None else {}
         por_c = defaultdict(lambda: [0.0, 0, []])
         for r in sel.itertuples():
             v = vl.get(r.cd)
@@ -242,6 +267,8 @@ def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str):
             esp = sinal[r.conceito_final]
             if esp and v and (v > 0) != (esp > 0):
                 continue   # o voto da linha econômica não vale contra o sinal desta célula (ex.: venda de tesouraria)
+            if contribuicoes is not None:
+                contribuicoes.append((fonte, data, r.cd, ds.get(r.cd), r.conceito_final, float(v)))
             por_c[r.conceito_final][0] += float(v)
             por_c[r.conceito_final][1] += 1
             por_c[r.conceito_final][2].append(r.confianca)

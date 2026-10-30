@@ -165,6 +165,35 @@ obrigatórios antes de publicar, não opcionais.
 | Identidade D&A × DVA ≥ 90% a menos de 2% | **Não atingido**: 1.468 `ok` + 77 `ok_*` de 1.730 = **89,5%** com a definição alternativa (**84,9%** só com a total). A DVA 7.04.01 não tem definição única entre empresas |
 | Precisão ≥ 98% em amostra de 100 linhas | **Não atingido**: duas rodadas de revisão **minha** (não de um analista), 97 e 140 linhas, deram ~92% e ~88% **antes** das últimas correções. Os piores: `divida_liquida_fluxo` (nome ambíguo, 3 a 7 em 10 errados), e rótulos propagados pelo voto para linhas de nome diferente. Não revisei a amostra final |
 
+### Revisão exaustiva dos três piores conceitos (2026-10-30)
+
+[`stress/st7_revisao.py`](stress/st7_revisao.py) lista **todos** os nomes de linha que entram em fatos de um conceito
+(célula a célula, depois do voto e da checagem de sinal), sem amostra; `ERROS` guarda a revisão nome a nome. Revisão
+feita por Claude, não por analista: os nomes e o motivo de cada erro estão no script, para conferir.
+
+| Conceito | Células | Erros antes | Precisão antes | Depois |
+|---|---|---|---|---|
+| `divida_liquida_fluxo` | 181 | 130 (mútuo com ligadas/coligadas; "emissão de debêntures líquida de gastos" é captação) | **28,2%** | 51 células, 0 erros |
+| `recompra` | 3.573 | 158 (exercício de opções e ILP com tesouraria, venda/alienação, "recompra de cessão de recebíveis", ações de investidas/controladas) | 95,6% | 3.415, 0 erros |
+| `arrend_pago` | 3.789 | 106 (linhas que misturam dívida e arrendamento, adição/constituição/ganho/baixa não caixa, pré-pagamento) | 97,2% | 3.691, 0 erros |
+
+A maior parte dos erros de `recompra` não vinha da regra, mas do **voto da linha econômica**: a Etapa 6 liga "Ações em
+tesouraria" e "Alienação de ações em tesouraria" na mesma linha, e o conceito majoritário era propagado para o nome que a
+própria regra exclui. Agora a propagação não vence a exclusão; a célula fica com o conceito que a regra dá ao próprio nome
+(ou nenhum). A mudança vale para todos os conceitos, comparada fato a fato contra a base anterior:
+
+- `capex_total` +18 fatos, nenhum perdido: linhas líquidas ("Adições/Baixas no Imobilizado e Intangível", "Baixa (Aquisição)
+  de bens", "(Compra) venda de intangível") passam a ser aceitas explicitamente, com o sinal decidindo; antes entravam só
+  por acidente da propagação.
+- `capt_divida` +54: "captações… líquidas dos gastos" saiu da dívida líquida e foi para captação.
+- `amort_divida` −72, `juros_pagos` −10, `ir_pago` −6: nomes que a regra já excluía (principal **e** juros na mesma linha,
+  dívida **e** arrendamento, IR a pagar/diferido/provisão) e que a propagação furava. Coerente com a definição; custa
+  cobertura em empresas que só publicam a linha mista.
+- D&A sem mudança relevante (`da_total` +3).
+
+Limites: a revisão cobre os três conceitos piores; os outros 13 seguem com a revisão amostral de 2026-10-16 (~88–92%).
+Precisão medida contra a minha leitura dos nomes, não contra o valor na nota explicativa.
+
 **Não implementado**, de propósito:
 - **Modelo supervisionado e fila de revisão humana (3.b e 3.c)**: o modelo herda os erros das regras (o stress test
   mostrou) e exige scikit-learn na venv; a revisão humana é de um analista. As discordâncias regra × modelo seguem

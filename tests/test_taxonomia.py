@@ -127,3 +127,39 @@ def test_get_financials_filtra_publicados_e_pede_checagem(tmp_path, monkeypatch)
     todos = cvm_mcp.get_financials("WEGE3", incluir_nao_publicados=True)
     assert {x[3] for x in todos["linhas"]} == {"da_total", "capex_total"}
     assert cvm_mcp.get_financials("XXXX3")["linhas"] == []
+
+
+def test_revisao_2026_10_30_regras():
+    # stress/st7_revisao.py: todos os nomes que entravam em divida_liquida_fluxo, recompra e arrend_pago
+    assert cls("6.03.04", "Financiamentos com empresas ligadas, líquido") is None          # mútuo, não dívida
+    assert cls("6.03.04", "Emissão de debêntures, líquida de gastos com emissão") == "capt_divida"
+    assert cls("6.03.04", "Aumento (redução) em empréstimos e financiamentos, líquidos") == "divida_liquida_fluxo"
+    assert cls("6.03.04", "Gastos na emissão de debêntures") is None
+    assert cls("6.03.05", "Utilização de ações em tesouraria pelo exercício de opções de compra", -1.0) is None
+    assert cls("6.03.05", "Pagamento de ILP com ações em tesouraria", -1.0) is None
+    assert cls("6.03.05", "Recompra de cessão de recebíveis", -1.0) is None
+    assert cls("6.03.05", "Recompra de ações preferenciais (nota 23)", -1.0) == "recompra"
+    assert cls("6.03.05", "(Cancelamento) recompra de ações em tesouraria", -1.0) == "recompra"
+    assert cls("6.03.06", "Amortização de empréstimos, financiamentos, arrendamentos, debêntures e risco sacado") is None
+    assert cls("6.03.06", "Adição ao passivo de arrendamento") is None
+    assert cls("6.03.06", "Pagamento de passivo de arrendamento") == "arrend_pago"
+    # capex numa linha líquida: os dois lados no nome, o sinal decide
+    assert cls("6.02.01", "Adições/Baixas no Imobilizado e Intangível", -1.0) == "capex_conjunto"
+    assert cls("6.02.01", "Baixa (Aquisição) de bens do imobilizado", -1.0) == "capex_imob"
+    assert cls("6.02.01", "Venda de ativo imobilizado", -1.0) is None
+    assert cls("6.02.01", "Adições ao imobilizado, software e outros intangíveis") == "capex_conjunto"
+
+
+def test_propagacao_nao_vence_a_exclusao_da_regra():
+    # a Etapa 6 liga "Ações em tesouraria" e "Alienação de ações em tesouraria" na mesma linha econômica; a recompra
+    # propaga para os filings sem rótulo, mas não para o nome que a regra exclui
+    filings = [("DFP", f"{a}-12-31", nome) for a, nome in ((2021, "Recompra de ações"), (2022, "Recompra de ações"),
+                                                           (2023, "Alienação de ações em tesouraria"))]
+    rows, ids = [], {}
+    for fonte, data, nome in filings:
+        rows += _filing(fonte, data, [("6.03", "Caixa de Financiamento", -10.0, "S"), ("6.03.05", nome, -10.0, "N")],
+                        ini=data[:4] + "-01-01")
+        ids[(fonte, data, "6.03.05")] = "L1"
+    _, fatos = t.fatos_da_empresa(pd.DataFrame(rows), ids, "C")
+    anos = sorted(f[2][:4] for f in fatos if f[5] == "recompra")
+    assert anos == ["2021", "2022"]

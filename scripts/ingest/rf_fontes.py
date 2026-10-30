@@ -25,6 +25,7 @@ import sys
 import unicodedata
 import zipfile
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 
@@ -45,6 +46,22 @@ URL_ANBIMA_DEB = os.environ.get(
 URL_ANBIMA_CRI_CRA = os.environ.get("RF_URL_ANBIMA_CRI_CRA", "")
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CVM-Research-Bot/1.0)"}
+
+
+# ── Schema ───────────────────────────────────────────────────────────────────
+
+MIGRACAO_RF = Path(__file__).parents[1] / "migrations" / "2026-10-30_renda_fixa.sql"
+
+
+def garantir_schema_rf(conn) -> bool:
+    """Cria as tabelas de renda fixa num banco anterior à Etapa 8. O DDL só usa IF NOT EXISTS, então é seguro;
+    roda antes de qualquer download para o job semanal não falhar por falta da migração. True = criou."""
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rf_ativos'").fetchone():
+        return False
+    ddl = "\n".join(l for l in MIGRACAO_RF.read_text(encoding="utf-8").splitlines() if not l.startswith("."))
+    conn.executescript(ddl)   # ".bail on" é comando do CLI do sqlite3, não SQL
+    print(f"  tabelas de renda fixa criadas ({MIGRACAO_RF.name})")
+    return True
 
 
 # ── Normalização ─────────────────────────────────────────────────────────────

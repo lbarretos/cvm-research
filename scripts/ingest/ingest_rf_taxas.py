@@ -52,6 +52,7 @@ def main():
     a = p.parse_args()
 
     conn = get_db()
+    F.garantir_schema_rf(conn)
     fontes = ["DEB"] * (not a.so_cri_cra) + ["CRI_CRA"] * (not a.so_deb and bool(F.URL_ANBIMA_CRI_CRA))
     if not a.so_deb and not F.URL_ANBIMA_CRI_CRA:
         print("  CRI/CRA: fonte desligada (RF_URL_ANBIMA_CRI_CRA vazio)")

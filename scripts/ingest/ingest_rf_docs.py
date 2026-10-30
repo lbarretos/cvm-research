@@ -255,6 +255,7 @@ def main():
     if (a.url or a.arquivo or a.protocolo) and not a.codigo:
         sys.exit("--url, --arquivo e --protocolo pedem --codigo")
     conn = get_db()
+    F.garantir_schema_rf(conn)
     if a.codigo and not a.listar:
         acrescentar_watchlist(codigos)
 

@@ -332,7 +332,9 @@ def main():
     p.add_argument("--codigo")
     p.add_argument("--todos", action="store_true")
     a = p.parse_args()
-    n = processar(get_db(), (a.codigo or "").upper() or None, a.todos)
+    conn = get_db()
+    F.garantir_schema_rf(conn)
+    n = processar(conn, (a.codigo or "").upper() or None, a.todos)
     print(f"{n} par(es) documento × título lido(s)")
 
 

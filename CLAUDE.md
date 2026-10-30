@@ -388,7 +388,8 @@ Fontes conferidas com `rf_fontes.py --verificar` em 2026-10-30: SND lê (4.851 d
 por `rf_watchlist.csv` com `emissor_cnpj` e `emissao` (e `serie`/`isin`, se souber) preenchidos à mão; o termo não cita o código.
 A extração por regra é testada contra trechos de dois termos reais (`tests/fixtures/rf/termos_reais.py`); para medir em mais
 PDFs: `python docs/proximos-passos/stress/st8_extrai_rf.py CRA termo.pdf`. URL e apelidos de coluna moram só em
-`rf_fontes.py`. Banco anterior: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`.
+`rf_fontes.py`. Banco anterior à Etapa 8: os ingestores `rf_*` criam as tabelas sozinhos na primeira execução
+(`rf_fontes.garantir_schema_rf`, só `IF NOT EXISTS`); à mão: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_renda_fixa.sql`.
 Base de teste fictícia (sem rede): `python tests/fixtures/rf/make_test_db.py /tmp/rf_teste.db` e `CVM_DB_PATH=/tmp/rf_teste.db`
 no MCP. Regras de resposta: `skills/cvm-research/references/renda-fixa.md`.
 

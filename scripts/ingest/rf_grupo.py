@@ -113,7 +113,9 @@ def reconstruir(conn) -> int:
 
 
 def main():
-    n = reconstruir(get_db())
+    conn = get_db()
+    F.garantir_schema_rf(conn)
+    n = reconstruir(conn)
     print(f"  rf_grupo: {n} elos de controle")
 
 

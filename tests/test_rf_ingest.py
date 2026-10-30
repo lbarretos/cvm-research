@@ -444,3 +444,50 @@ def test_arquivo_local(tmp_path, monkeypatch):
     assert doc["doc_id"].startswith("arquivo:") and doc["link_download"] is None and doc["assunto"] == "termo.pdf"
     (tmp_path / "x.pdf").write_bytes(b"nao e pdf")
     assert not ingest_rf_docs.doc_manual(arquivo=str(tmp_path / "x.pdf"))
+
+
+# ── banco anterior à Etapa 8: os ingestores criam as tabelas ──────────────────────────────────────────
+
+@pytest.fixture
+def banco_antigo():
+    """Schema atual sem nada de renda fixa, como um banco montado antes da Etapa 8."""
+    c = sqlite3.connect(":memory:")
+    c.executescript(open(os.path.join(RAIZ, "schema.sql")).read())
+    for nome, tipo in c.execute("SELECT name, type FROM sqlite_master WHERE name LIKE 'rf\\_%' ESCAPE '\\' "
+                                "OR name LIKE 'vw_rf%' ORDER BY type = 'view' DESC").fetchall():
+        if tipo in ("table", "view") and not nome.startswith("rf_docs_fts_"):
+            c.execute(f"DROP {'VIEW' if tipo == 'view' else 'TABLE'} IF EXISTS {nome}")
+    assert not c.execute("SELECT 1 FROM sqlite_master WHERE name = 'rf_ativos'").fetchone()
+    yield c
+    c.close()
+
+
+def test_garantir_schema_cria_uma_vez(banco_antigo):
+    assert F.garantir_schema_rf(banco_antigo) is True
+    assert F.garantir_schema_rf(banco_antigo) is False
+    nomes = {r[0] for r in banco_antigo.execute("SELECT name FROM sqlite_master")}
+    assert {"rf_ativos", "rf_ofertas", "rf_taxas", "rf_garantias", "rf_docs_fts", "vw_rf_ativo"} <= nomes
+
+
+def test_cadastro_em_banco_antigo_roda_ate_o_fim(banco_antigo, monkeypatch, tmp_path):
+    monkeypatch.setattr(ingest_rf_cadastro, "RF_WATCHLIST", tmp_path / "nao_existe.csv")
+    monkeypatch.setattr(ingest_rf_cadastro, "get_db", lambda: banco_antigo)
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_snd", lambda: F.parse_snd(SND.encode("latin-1")))
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_ofertas", lambda: F.parse_cvm_ofertas(_distrib_df(), "cvm_distrib"))
+    monkeypatch.setattr(sys, "argv", ["x"])
+    ingest_rf_cadastro.main()
+    assert banco_antigo.execute("SELECT COUNT(*) FROM rf_ativos").fetchone()[0] == 2
+
+
+def test_cadastro_falha_total_sai_antes_das_etapas_seguintes(conn, monkeypatch):
+    def quebra():
+        raise RuntimeError("fora do ar")
+    chamou = []
+    monkeypatch.setattr(ingest_rf_cadastro, "get_db", lambda: conn)
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_snd", quebra)
+    monkeypatch.setattr(ingest_rf_cadastro, "baixar_ofertas", quebra)
+    monkeypatch.setattr(ingest_rf_cadastro, "cadastrar_manuais", lambda *a: chamou.append(1))
+    monkeypatch.setattr(sys, "argv", ["x"])
+    with pytest.raises(SystemExit) as e:
+        ingest_rf_cadastro.main()
+    assert e.value.code == 1 and not chamou

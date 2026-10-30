@@ -153,6 +153,7 @@ def main():
     p.add_argument("--so-cvm", action="store_true")
     a = p.parse_args()
     conn = get_db()
+    F.garantir_schema_rf(conn)
     falhas = 0
 
     if not a.so_cvm:
@@ -170,12 +171,12 @@ def main():
             print(f"ERRO CVM ofertas: {e}", file=sys.stderr)
             falhas += 1
 
+    if falhas == (1 if (a.so_snd or a.so_cvm) else 2):
+        sys.exit(1)   # nenhuma fonte leu: o job semanal registra a falha
     print(f"  rf_ativos da rf_watchlist.csv (sem SND): {cadastrar_manuais(conn, ler_manuais())}")
     print(f"  rf_ativos completados pela oferta CVM: {completar_com_ofertas(conn)}")
 
     upsert(conn, "rf_partes", partes_de_cadastro(conn), conflict="chave")
-    if falhas == (1 if (a.so_snd or a.so_cvm) else 2):
-        sys.exit(1)   # nenhuma fonte leu: o job semanal registra a falha
 
 
 if __name__ == "__main__":

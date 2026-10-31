@@ -538,7 +538,8 @@ CREATE TABLE IF NOT EXISTS demonstrativos_trimestrais (
     -- Casamento da linha entre os dois filings (Camada 5, match_filings). Sem eles a
     -- subtração não é auditável: o mesmo cd_conta pode ser outra linha no filing B.
     cd_conta_b      TEXT,                 -- código desta mesma linha no filing B (subtraendo)
-    casamento       TEXT CHECK (casamento IN ('estavel','renumerado','reformulacao','ambiguo')),
+    -- 'decisao' = par decidido pelo analista em linha_decisao (linha_economica.py --decidir)
+    casamento       TEXT CHECK (casamento IN ('estavel','renumerado','reformulacao','ambiguo','decisao')),
     vl_publicado    REAL,                 -- linha trimestral do ITR (só DRE 1T–3T)
     vl_derivado     REAL,                 -- acum(Qn) − acum(Qn−1); DFP − acum(3T) no 4T; NULL se não deriva
     origem          TEXT NOT NULL CHECK (origem IN ('publicado','derivado')),

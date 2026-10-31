@@ -93,7 +93,8 @@ número na tela; para responder uma pergunta pontual, consultar o banco pelo MCP
 Somente leitura. Três visões: ITR e DFP como reportados, e a série trimestral com 4T (Camada 6).
 Cada linha é uma linha econômica, não um `cd_conta`: quando a empresa renumera a conta, a série
 segue na mesma linha e a célula mostra o código daquele filing sobrescrito. Aceita `?t=TICKER` na
-URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rodado.
+URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rodado. Nas visões ITR e DFP a linha vem de
+`linha_empresa` (respeita `linha_decisao`); empresa fora da tabela é encadeada na hora.
 
 ---
 

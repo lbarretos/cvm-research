@@ -43,8 +43,8 @@ arquivos de cada etapa e no `README.md` desta pasta.
    `divida_liquida_fluxo`, `arrend_pago` e `recompra` são as piores. Amostra: `st2`-style, `linha_conceito` ⨝ `linha_empresa`.
 3. **Etapa 3, tokens**: o corte de 30% não veio (prefixo fixo da sessão domina, ~300 mil tokens). A alavanca é cortar turnos
    (paralelizar `resolve_company` com a consulta; mandar direto pelo ticker nas views).
-4. **Etapa 6.4**: o visualizador ainda calcula o encadeamento; a tabela `linha_empresa` encadeia ITR+DFP juntos e ele cada
-   fonte à parte. Decidir qual está certa antes de ligar.
+4. **Etapa 6.4**: feita em 2026-10-30 — o visualizador lê `linha_empresa` (as duas partições discordam em ~0,25% das
+   ligações; venceu a fonte única, que respeita `linha_decisao`).
 5. **Camada 6 não lê `linha_decisao`** (ver `TODOS.md`): as decisões humanas valem para `linha_empresa`, não para
    `demonstrativos_trimestrais`.
 6. **Etapa 7, fora do escopo feito**: modelo supervisionado e fila de revisão (3.b, 3.c), DMPL, demonstrações individuais,

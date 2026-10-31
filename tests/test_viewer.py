@@ -94,3 +94,92 @@ def test_coluna_unica_e_entrada_vazia():
     assert server.encadear([]) == []
     assert series_de([col(**{"3.01": "Receita"})]) == {"3.01": ["3.01"]}
     assert server.montar([], [], []) == []
+
+
+# ── Etapa 6.4: as visões ITR/DFP leem `linha_empresa` ────────────────────────
+
+import sqlite3  # noqa: E402
+
+import pandas as pd  # noqa: E402
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "analysis"))
+import linha_economica as le  # noqa: E402
+
+CNPJ = "11.111.111/0001-11"
+SCHEMA = os.path.join(os.path.dirname(__file__), "..", "schema.sql")
+# DFC de três DFPs: renumeração (6.03.08 → 6.03.09) e um par ambíguo (sentido oposto)
+FILINGS = [("2022-12-31", {"6.03.01": ("Captação de debêntures", 100), "6.03.08": ("Dividendos pagos", -10)}),
+           ("2023-12-31", {"6.03.01": ("Pagamento de debêntures", -50), "6.03.09": ("Dividendos pagos", -12)}),
+           ("2024-12-31", {"6.03.01": ("Pagamento de debêntures", -60), "6.03.09": ("Dividendos pagos", -14)})]
+
+
+def _banco(tmp_path, monkeypatch, com_tabela=True, decisoes=None):
+    db = tmp_path / "v.db"
+    c = sqlite3.connect(db)
+    with open(SCHEMA, encoding="utf-8") as f:
+        c.executescript(f.read())
+    linhas = []
+    for data, contas in FILINGS:
+        for cd, (ds, vl) in contas.items():
+            linhas.append({"cnpj_companhia": CNPJ, "tipo_doc": "DFC_MI", "fonte": "DFP", "data_referencia": data,
+                           "versao": 1, "ordem_exercicio": "Último", "dt_ini_exerc": data[:4] + "-01-01",
+                           "dt_fim_exerc": data, "cd_conta": cd, "ds_conta": ds, "vl_conta": vl, "st_conta_fixa": "N"})
+    df = pd.DataFrame(linhas)
+    c.executemany(f"INSERT INTO demonstrativos_contabeis ({','.join(df.columns)}) VALUES ({','.join('?' * len(df.columns))})",
+                  df.itertuples(index=False, name=None))
+    if com_tabela:
+        c.executemany("INSERT INTO linha_empresa VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                      le.linhas_da_empresa(df, CNPJ, {"DFC_MI": decisoes or []}))
+    c.commit()
+    c.close()
+    monkeypatch.setattr(server, "DB", db)
+
+
+def _linhas_da_tela():
+    v = server.statement(CNPJ, "DFP", "DFC_MI", "acum", 12)
+    return v["encadeamento"], sorted((tuple(r["cds"]) for r in v["rows"]), key=repr)
+
+
+def test_visao_dfp_le_a_tabela_e_equivale_ao_linha_id(tmp_path, monkeypatch):
+    _banco(tmp_path, monkeypatch)
+    origem, tela = _linhas_da_tela()
+    assert origem == "tabela"
+    c = sqlite3.connect(server.DB)
+    por_id = {}
+    for data, cd, lid in c.execute("SELECT data_referencia, cd_conta, linha_id FROM linha_empresa"):
+        por_id.setdefault(lid, [None, None, None])[[f[0] for f in FILINGS].index(data)] = cd
+    assert tela == sorted((tuple(x) for x in por_id.values()), key=repr)
+    # renumeração vira uma linha; captação × pagamento (ambíguo) fica em duas
+    assert ("6.03.08", "6.03.09", "6.03.09") in tela
+    assert ("6.03.01", None, None) in tela and (None, "6.03.01", "6.03.01") in tela
+
+
+def test_decisao_humana_vale_na_tela(tmp_path, monkeypatch):
+    # o analista decidiu que dividendos 2022 → 2023 são linhas diferentes: a tela separa também
+    _banco(tmp_path, monkeypatch, decisoes=[("6.03.08", "2022-12-31", "6.03.09", "2023-12-31", "diferente")])
+    _, tela = _linhas_da_tela()
+    assert ("6.03.08", None, None) in tela and (None, "6.03.09", "6.03.09") in tela
+
+
+def test_sem_a_tabela_encadeia_na_hora(tmp_path, monkeypatch):
+    _banco(tmp_path, monkeypatch, com_tabela=False)
+    origem, tela = _linhas_da_tela()
+    assert origem == "calculado"
+    assert ("6.03.08", "6.03.09", "6.03.09") in tela
+
+
+def test_celula_sem_linha_id_vira_linha_propria():
+    linhas = [{"6.03.01": ("A", "N")}, {"6.03.01": ("A", "N"), "6.03.02": ("B", "N")}]
+    ids = {("d1", "6.03.01"): "x", ("d2", "6.03.01"): "x"}
+
+    class C:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def execute(self, *a): return [(k[0], k[1], v) for k, v in ids.items()]
+    orig = server.conn
+    server.conn = lambda: C()
+    try:
+        s = server.series_da_tabela(CNPJ, "DFP", "DFC_MI", ["d1", "d2"], linhas)
+    finally:
+        server.conn = orig
+    assert sorted(map(sorted, (x.items() for x in s))) == [[(0, "6.03.01"), (1, "6.03.01")], [(1, "6.03.02")]]

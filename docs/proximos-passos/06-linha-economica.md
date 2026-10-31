@@ -131,3 +131,11 @@ ele mostra, então a "equivalência" pedida no critério não existe sem decidir
 código do `encadear`.
 
 **Veredito: implementada; critério do visualizador não cumprido (6.4 adiada).**
+
+### Camada 6 lê `linha_decisao` (2026-10-30)
+
+A decisão do analista agora vale também em `demonstrativos_trimestrais`: 'mesma' casa o par (inclusive o ambíguo, que
+antes ficava sem valor) e deriva o trimestre com `casamento = 'decisao'`; 'diferente' desfaz o casamento automático. Os
+pares que a Camada 6 subtrai (1T → 2T, 3T → DFP) são filings consecutivos na ordem da `linha_empresa`, então a mesma
+chave serve. Migração `2026-10-30_trimestrais_decisao.sql` (o CHECK de `casamento` ganha 'decisao'; a tabela é
+regerada). Na base real, sem decisões gravadas, a tabela regerada é idêntica à anterior (1,8 mi de linhas, 2 min 53 s).

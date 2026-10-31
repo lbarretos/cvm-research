@@ -526,3 +526,54 @@ def test_migracao_trimestrais_reclassificacao_recria_a_tabela_pelo_schema():
     conn.executescript(schema)
     ddl = conn.execute("SELECT sql FROM sqlite_master WHERE name = 'demonstrativos_trimestrais'").fetchone()[0]
     assert "'reclassificacao_entre_filings'" in ddl
+
+
+# ── linha_decisao: a decisão do analista vale na Camada 6 ────────────────────
+
+AMB_1T = {"6.03": ("Financiamento", 100e6), "6.03.09": ("Captação de debêntures", 482.8e6)}
+AMB_2T = {"6.03": ("Financiamento", 100e6), "6.03.12": ("Emissão de debêntures", 600e6)}
+
+
+def _q2(rows, cd):
+    return {x["cd_conta"]: x for x in rows if x["trimestre"] == 2}[cd]
+
+
+def test_decisao_mesma_casa_o_par_ambiguo_e_deriva():
+    dec = {"DFC_MI": {("2026-03-31", "6.03.09", "2026-06-30", "6.03.12"): "mesma"}}
+    rows, flags, stats = dq.derive_quarters(_mult(AMB_1T, AMB_2T), decisoes=dec)
+    r = _q2(rows, "6.03.12")
+    assert (r["cd_conta_b"], r["casamento"], r["flag"]) == ("6.03.09", "decisao", None)
+    assert round(r["vl_derivado"] / 1e6, 1) == 117.2 and r["vl_final"] == r["vl_derivado"]
+    assert not [f for f in flags if f["classificacao"] == "par_ambiguo"]
+    assert stats["DFC_MI"]["par_ambiguo"] == 0
+
+
+def test_decisao_diferente_desfaz_casamento_automatico():
+    # o mesmo nome casaria sozinho ('estavel'); o analista disse que não é a mesma linha
+    c1 = {"6.03": ("Financiamento", 10e6), "6.03.01": ("Outros", 30e6)}
+    c2 = {"6.03": ("Financiamento", 10e6), "6.03.01": ("Outros", 50e6)}
+    assert _q2(dq.derive_quarters(_mult(c1, c2))[0], "6.03.01")["casamento"] == "estavel"
+    dec = {"DFC_MI": {("2026-03-31", "6.03.01", "2026-06-30", "6.03.01"): "diferente"}}
+    r = _q2(dq.derive_quarters(_mult(c1, c2), decisoes=dec)[0], "6.03.01")
+    assert (r["cd_conta_b"], r["vl_derivado"], r["flag"]) == (None, None, "linha_sem_par")
+
+
+def test_decisao_de_outro_par_de_filings_nao_vale():
+    dec = {"DFC_MI": {("2025-12-31", "6.03.09", "2026-06-30", "6.03.12"): "mesma"}}
+    r = _q2(dq.derive_quarters(_mult(AMB_1T, AMB_2T), decisoes=dec)[0], "6.03.12")
+    assert (r["casamento"], r["flag"]) == ("ambiguo", "par_ambiguo")
+
+
+def test_decisoes_lidas_do_banco_e_schema_aceita_decisao(tmp_path):
+    conn = _db()
+    assert dq.decisoes_linha(conn, CNPJ) == {}
+    conn.execute("CREATE TABLE IF NOT EXISTS linha_decisao (cnpj_companhia TEXT, tipo_doc TEXT, cd_a TEXT, data_a TEXT, "
+                 "cd_b TEXT, data_b TEXT, decisao TEXT, autor TEXT, em TEXT)")
+    conn.execute("INSERT INTO linha_decisao VALUES (?,?,?,?,?,?,?,?,?)",
+                 (CNPJ, "DFC_MI", "6.03.09", "2026-03-31", "6.03.12", "2026-06-30", "mesma", "x", "2026-10-30"))
+    dec = dq.decisoes_linha(conn, CNPJ)
+    assert dec == {"DFC_MI": {("2026-03-31", "6.03.09", "2026-06-30", "6.03.12"): "mesma"}}
+    rows, _, _ = dq.derive_quarters(_mult(AMB_1T, AMB_2T), decisoes=dec)
+    run = dq.new_run(conn, dq.LAYER, dq.CHECK_TYPE, CNPJ, {})
+    dq.write_trimestrais(conn, run, rows)   # o CHECK do schema aceita casamento 'decisao'
+    assert conn.execute("SELECT COUNT(*) FROM demonstrativos_trimestrais WHERE casamento = 'decisao'").fetchone() == (1,)

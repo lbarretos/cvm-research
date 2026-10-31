@@ -8,9 +8,9 @@ arquivos de cada etapa e no `README.md` desta pasta.
 | Item | Situação |
 |---|---|
 | Etapas 1 a 7 | Na `main` (PRs #29 a #37). Vereditos e números em cada `0N-*.md` e na tabela do [README](README.md) |
-| v1 do conjunto de avaliação | **PR #38 aberto, sem merge** (branch `eval-v1`): `avaliacao/golden_v1.json` (81 perguntas) e `stress/st2_golden_v1.py` |
+| v1 do conjunto de avaliação | Na `main` (PR #38, 2026-10-16): `avaliacao/golden_v1.json` (81 perguntas) e `stress/st2_golden_v1.py`; **baseline não rodada** |
 | Banco `cvm_research.db` | **Fora do git** (~19 GB, ignorado). Está só na máquina de origem |
-| Etapa 8 (renda fixa) | Carga real no Mac em 2026-10-30; critérios 1–4 ok (CRI/CRA por download manual semanal; termo de CRA à mão) |
+| Etapa 8 (renda fixa) | Na `main` (PR #41). Carga real em 2026-10-30; critérios 1–4 ok; garantia real medida em 366 escrituras (falso positivo 35% → 6%) |
 | Skill `cvm-research` | Versionada em `skills/cvm-research/`; a cópia sincronizada em `~/.claude/skills/synced/` é outra, e pode divergir |
 
 ## Para continuar em outra máquina
@@ -34,19 +34,19 @@ arquivos de cada etapa e no `README.md` desta pasta.
 0. **Etapa 8**: carga real feita (ver `08-renda-fixa.md`). Taxa e cadastro de CRI/CRA vêm do dataset público
    "CRIs e CRAs - Precificação ANBIMA" (data.anbima.com.br → Datasets): o usuário baixa toda semana (formulário) e roda
    `ingest_rf_taxas.py --arquivo X.xls`. A API interna do site exige token e não é usada. Falta: termo dos dois CRAs
-   (`ingest_rf_docs.py --codigo X --arquivo termo.pdf`, PDF da aba Documentos) e medir a extração em mais escrituras
-   (`stress/st8_extrai_rf.py`).
-1. **Mergear o #38** (v1 da avaliação) e **rodar a baseline do v1**: `run_eval.py --golden v1 --rotulo v1-baseline --paralelo 4
+   (`ingest_rf_docs.py --codigo X --arquivo termo.pdf`, PDF da aba Documentos); fiança/aval sem gabarito (precisão não medida).
+1. **Rodar a baseline do v1** (o #38 já está na `main`): `run_eval.py --golden v1 --rotulo v1-baseline --paralelo 4
    --timeout 600` (~US$ 35–40, ~15 min). Sem ela, o v1 é só um conjunto, não uma régua. A conta já bateu no limite de uso
    no meio de uma execução; se cair, refaça só as ids invalidadas com `--ids` e junte os relatórios.
-2. **Revisão por analista das regras da Etapa 7**: precisão de 98% não demonstrada (minhas duas amostras deram ~88–92%).
-   `divida_liquida_fluxo`, `arrend_pago` e `recompra` são as piores. Amostra: `st2`-style, `linha_conceito` ⨝ `linha_empresa`.
-3. **Etapa 3, tokens**: o corte de 30% não veio (prefixo fixo da sessão domina, ~300 mil tokens). A alavanca é cortar turnos
-   (paralelizar `resolve_company` com a consulta; mandar direto pelo ticker nas views).
-4. **Etapa 6.4**: o visualizador ainda calcula o encadeamento; a tabela `linha_empresa` encadeia ITR+DFP juntos e ele cada
-   fonte à parte. Decidir qual está certa antes de ligar.
-5. **Camada 6 não lê `linha_decisao`** (ver `TODOS.md`): as decisões humanas valem para `linha_empresa`, não para
-   `demonstrativos_trimestrais`.
+2. **Etapa 7, regras**: os 14 conceitos de regra revistos nome a nome em 2026-10-30 (`stress/st7_revisao.py`; ver
+   `07-taxonomia-canonica.md`): 0 erros nos nomes revistos, D&A × DVA 90,4%. Falta um analista conferir a lista `ERROS`,
+   e rodar `st7_revisao.py --listar` depois de cada mudança de regra (nome novo não está revisto).
+3. **Etapa 3, tokens**: feita em 2026-10-30 (PR #44): −30% de tokens por pergunta no v0 (projeção com 9 remedidas). Falta
+   uma execução completa para confirmar; `num_turns` não serve de medida (conta a injeção da skill).
+4. **Etapa 6.4**: feita em 2026-10-30 — o visualizador lê `linha_empresa` (as duas partições discordam em ~0,25% das
+   ligações; venceu a fonte única, que respeita `linha_decisao`).
+5. **Camada 6 lê `linha_decisao`** desde 2026-10-30 (migração `2026-10-30_trimestrais_decisao.sql` + Camada 6 --full em
+   toda instalação). A fila ainda não tem decisões: `linha_economica.py --listar-ambiguos --cnpj X`.
 6. **Etapa 7, fora do escopo feito**: modelo supervisionado e fila de revisão (3.b, 3.c), DMPL, demonstrações individuais,
    bancos e seguradoras (DRE de banco sem `versao_template`), safra reapresentada.
 7. **Etapa 4, 4.1 e 4.6**: texto separado em `ipe_texto` e embeddings (`sqlite-vec`) não foram feitos.

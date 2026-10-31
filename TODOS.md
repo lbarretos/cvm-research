@@ -22,7 +22,7 @@ por LLM e padronização dos demonstrativos. Cada etapa tem avaliação, propost
 
 ## Código
 
-- [~] **Fila `par_ambiguo` da Camada 6** — parte feita na Etapa 6: `linha_decisao` + `python linha_economica.py --listar-ambiguos / --decidir` guardam a decisão e o encadeamento da `linha_empresa` a respeita. Falta a Camada 6 (`demonstrativos_trimestrais`) ler `linha_decisao` para casar os pares ambíguos que ela deixou sem valor.
+- [x] **Fila `par_ambiguo` da Camada 6** — `linha_decisao` + `python linha_economica.py --listar-ambiguos / --decidir` guardam a decisão; `linha_empresa` e, desde 2026-10-30, a Camada 6 a respeitam ('mesma' casa e deriva com `casamento = 'decisao'`, 'diferente' desfaz). Depois de decidir: `linha_economica.py --cnpj X` e `run_all.py --layer 6 --cnpj X`.
 - [ ] **`text_similarity` é assimétrica** — `difflib` dá score diferente conforme a ordem dos argumentos, e em pares reais isso cruza o limiar de 0,75 (0,7532 contra 0,7273). Hoje todas as chamadas usam `(anterior, atual)`, então é consistente, mas frágil. Tornar simétrica (`max` ou média das duas ordens) exigiria re-rodar a Camada 5 inteira e revisar os limiares.
 - [ ] **Camada 5 e o plano de contas dos bancos** — `cd_conta_ds_timeline` ainda marca `estavel` quando uma conta `S` muda de nome no mesmo código, e por isso descreve a re-letragem do plano COSIF de 2017 como se nada tivesse acontecido (ver Itaú, DRE 3.01.02). A Camada 6 já não confia nisso (`codigo_fixo_confiavel=False`); avaliar se a Camada 5 deveria seguir.
 

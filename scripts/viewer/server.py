@@ -10,10 +10,14 @@ horizontal por código mistura contas diferentes numa linha só. O encadeamento 
 check_text_stability.match_filings, a mesma escada da Camada 5 que a Camada 6 usa
 para derivar os trimestres, e por isso o visualizador depende da .venv (pandas).
 
+Nas visões ITR e DFP, a linha vem pronta da tabela `linha_empresa` (Etapa 6): o mesmo
+encadeamento que o MCP e o LLM usam, feito sobre ITR e DFP juntos em ordem de data, com o
+reatamento depois de buraco e as decisões humanas de `linha_decisao`. Empresa sem linhas na
+tabela (banco anterior à Etapa 6 ou ainda não reconstruído) cai no encadeamento na hora.
 Na série trimestral, dentro de um exercício o vínculo vem pronto do banco
-(demonstrativos_trimestrais.cd_conta_b, gravado pela Camada 6); só na virada de ano
-e nas visões ITR/DFP o casamento é calculado aqui. Par de similaridade ambígua não
-encadeia: a série quebra em duas, que é o mesmo critério conservador do banco.
+(demonstrativos_trimestrais.cd_conta_b, gravado pela Camada 6); só na virada de ano o
+casamento é calculado aqui. Par de similaridade ambígua não encadeia: a série quebra em
+duas, que é o mesmo critério conservador do banco.
 """
 import argparse
 import json
@@ -87,6 +91,32 @@ def montar(series, colunas, valores, extras=None):
     return out
 
 
+def series_da_tabela(cnpj, fonte, tipo, datas, linhas):
+    """Séries {coluna: cd} agrupando as células pelo linha_id de `linha_empresa`, ou None se a tabela não tem a
+    empresa (aí o chamador encadeia na hora). Célula sem linha_id, ou com o linha_id já ocupado naquela coluna,
+    vira uma linha própria: na dúvida, duas linhas em vez de uma série inventada."""
+    with conn() as c:
+        try:
+            ids = {(r[0], r[1]): r[2] for r in c.execute(
+                f"""SELECT data_referencia, cd_conta, linha_id FROM linha_empresa
+                    WHERE cnpj_companhia = ? AND tipo_doc = ? AND fonte = ?
+                      AND data_referencia IN ({','.join('?' * len(datas))})""",
+                (cnpj, tipo, fonte, *datas))}
+        except sqlite3.OperationalError:   # banco sem a tabela
+            return None
+    if not ids:
+        return None
+    por_id, soltas = {}, []
+    for i, d in enumerate(datas):
+        for cd in sorted(linhas[i], key=natkey):
+            lid = ids.get((d, cd))
+            if lid is None or i in por_id.get(lid, {}):
+                soltas.append({i: cd})
+            else:
+                por_id.setdefault(lid, {})[i] = cd
+    return list(por_id.values()) + soltas
+
+
 # ── Visões ───────────────────────────────────────────────────────────────────
 
 def statement(cnpj, fonte, tipo, modo, n):
@@ -132,12 +162,13 @@ def statement(cnpj, fonte, tipo, modo, n):
         linhas[i].setdefault(r["cd_conta"], (r["ds_conta"], r["st_conta_fixa"]))
         valores[i].setdefault(r["cd_conta"], r["vl_conta"])
 
-    out = montar(encadear(linhas), linhas, valores)
+    series = series_da_tabela(cnpj, fonte, tipo, datas, linhas)
+    out = montar(series if series is not None else encadear(linhas), linhas, valores)
     cols = [
         {"data": d, "versao": ultima[d], "ini": escolha.get(d), "fim": fim.get(d), "tri": None}
         for d in datas
     ]
-    return {"columns": cols, "rows": out, "tri": False}
+    return {"columns": cols, "rows": out, "tri": False, "encadeamento": "tabela" if series is not None else "calculado"}
 
 
 def serie_trimestral(cnpj, tipo, safra, n):

@@ -146,7 +146,8 @@ def _cortar_para(v, n: int):
 def query(sql: str) -> dict:
     """Executa um SELECT no banco CVM Research (somente leitura, até 500 linhas).
     Devolve {"colunas": [...], "linhas": [[...]], "aviso"?}; o aviso diz quando o resultado foi cortado.
-    Para achar a empresa use resolve_company (não precisa de SQL).
+    Para achar a empresa use resolve_company (não precisa de SQL). As views de demonstração e vw_acionistas_diretos
+    têm a coluna `ticker`: com o ticker exato, consulte direto (WHERE ticker = 'PETR4'), sem resolve_company antes.
 
     Tabelas principais: companies, ipe_docs, vlmo_movimentacoes, vlmo_posicao,
     recompra_programas, fre_capital_social, fre_posicao_acionaria,
@@ -168,7 +169,7 @@ def query(sql: str) -> dict:
     Último, 'reapresentado' = Penúltimo do exercício seguinte); use vl_final e origem; 4T = DFP − acum 3T; flag
     reapresentacao_intra_ano quando publicado ≠ derivado (layer=6 em consistency_flags);
     reclassificacao_entre_filings quando os dois filings da subtração estão em layouts diferentes para a linha.
-    Sempre identifique empresas pelo CNPJ (SELECT cnpj FROM companies WHERE ticker = ?).
+    Nas tabelas, identifique empresas pelo CNPJ (cnpj_companhia = (SELECT cnpj FROM companies WHERE ticker = ?)).
     Limites: 500 linhas, 30.000 caracteres por resposta, 20 s por consulta e 25.000 caracteres por célula — texto maior volta cortado com
     o marcador "…[truncado: N chars]" (texto_extraido passa de 12 milhões de caracteres). Para textos longos
     leia em pedaços com substr(texto_extraido, inicio, tamanho), ou use o FTS:

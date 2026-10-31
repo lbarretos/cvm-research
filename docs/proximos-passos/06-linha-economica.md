@@ -131,3 +131,29 @@ ele mostra, então a "equivalência" pedida no critério não existe sem decidir
 código do `encadear`.
 
 **Veredito: implementada; critério do visualizador não cumprido (6.4 adiada).**
+
+### 6.4 feita (2026-10-30): o visualizador lê `linha_empresa`
+
+A decisão adiada foi medida. Em 40 empresas sorteadas (DRE, BPP e DFC; ITR e DFP; todos os filings: 385 mil células,
+363 mil ligações entre células consecutivas), as duas partições quase coincidem: o visualizador liga e a tabela separa
+em 855 ligações (0,24%), e o contrário em 970 (0,27%). As discordâncias, numa amostra de 24, são defensáveis dos dois
+lados: a tabela religa renumerações que o visualizador perde ("Dividendos pagos" 6.03.09 → 6.03.12, "IR pago" 6.01.03.03 →
+6.01.03.10), porque encadeia passando pelos ITRs e reata depois de buraco; o visualizador liga mesmo código com nome quase
+igual que a tabela separa, quando o DFP no meio muda o layout ("Pagamentos de Arrendamentos Mercantil" → "Pagamentos de
+Arrendamentos"), e às vezes liga o que não é a mesma coisa ("Juros pagos debêntures" → "… e empréstimos").
+
+Com qualidade equivalente, vence a fonte única: as visões ITR e DFP agrupam as células pelo `linha_id` da tabela, que é o
+que o MCP e o LLM usam e que respeita `linha_decisao`. Célula sem `linha_id` vira linha própria; empresa ausente da tabela
+(banco anterior à Etapa 6) cai no encadeamento na hora (`encadeamento: "calculado"` na API). A série trimestral continua
+com os vínculos da Camada 6. Testes em `tests/test_viewer.py`: a tela equivale ao `linha_id`, a decisão "diferente" separa
+a linha na tela, e o fallback. Na Multiplan (ITR, DFC), dividendos 6.03.08 → 6.03.09 → 6.03.06 numa linha só.
+
+**Critério do visualizador: cumprido.**
+
+### Camada 6 lê `linha_decisao` (2026-10-30)
+
+A decisão do analista agora vale também em `demonstrativos_trimestrais`: 'mesma' casa o par (inclusive o ambíguo, que
+antes ficava sem valor) e deriva o trimestre com `casamento = 'decisao'`; 'diferente' desfaz o casamento automático. Os
+pares que a Camada 6 subtrai (1T → 2T, 3T → DFP) são filings consecutivos na ordem da `linha_empresa`, então a mesma
+chave serve. Migração `2026-10-30_trimestrais_decisao.sql` (o CHECK de `casamento` ganha 'decisao'; a tabela é
+regerada). Na base real, sem decisões gravadas, a tabela regerada é idêntica à anterior (1,8 mi de linhas, 2 min 53 s).

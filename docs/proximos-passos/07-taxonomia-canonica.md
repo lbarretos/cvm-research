@@ -162,8 +162,62 @@ obrigatórios antes de publicar, não opcionais.
 | Cobertura ≥ 85% | **da_total, dividendos, capex_total**; os demais dependem de a empresa ter a linha (arrendamento, recompra, captação), sem denominador de "aplicável" |
 | Sinal trocado < 1% | **0% por construção**: linha de sinal contrário ao esperado sai do conceito (venda de tesouraria não é recompra). O custo é cobertura menor |
 | Nenhuma linha em dois conceitos | **Cumprido**: conflito vira "sem conceito" e a regra específica vence a geral |
-| Identidade D&A × DVA ≥ 90% a menos de 2% | **Não atingido**: 1.468 `ok` + 77 `ok_*` de 1.730 = **89,5%** com a definição alternativa (**84,9%** só com a total). A DVA 7.04.01 não tem definição única entre empresas |
-| Precisão ≥ 98% em amostra de 100 linhas | **Não atingido**: duas rodadas de revisão **minha** (não de um analista), 97 e 140 linhas, deram ~92% e ~88% **antes** das últimas correções. Os piores: `divida_liquida_fluxo` (nome ambíguo, 3 a 7 em 10 errados), e rótulos propagados pelo voto para linhas de nome diferente. Não revisei a amostra final |
+| Identidade D&A × DVA ≥ 90% a menos de 2% | **Atingido em 2026-10-30**: 1.477 `ok` + 76 `ok_*` de 1.717 = **90,4%** (86,0% só com a total), depois da revisão abaixo. Antes: 1.468 `ok` + 77 `ok_*` de 1.730 = **89,5%** com a definição alternativa (**84,9%** só com a total). A DVA 7.04.01 não tem definição única entre empresas |
+| Precisão ≥ 98% em amostra de 100 linhas | **Atingido em 2026-10-30 por revisão exaustiva (não amostra)**, ver abaixo; antes: duas rodadas de revisão **minha** (não de um analista), 97 e 140 linhas, deram ~92% e ~88% **antes** das últimas correções. Os piores: `divida_liquida_fluxo` (nome ambíguo, 3 a 7 em 10 errados), e rótulos propagados pelo voto para linhas de nome diferente. Não revisei a amostra final |
+
+### Revisão exaustiva dos três piores conceitos (2026-10-30)
+
+[`stress/st7_revisao.py`](stress/st7_revisao.py) lista **todos** os nomes de linha que entram em fatos de um conceito
+(célula a célula, depois do voto e da checagem de sinal), sem amostra; `ERROS` guarda a revisão nome a nome. Revisão
+feita por Claude, não por analista: os nomes e o motivo de cada erro estão no script, para conferir.
+
+| Conceito | Células | Erros antes | Precisão antes | Depois |
+|---|---|---|---|---|
+| `divida_liquida_fluxo` | 181 | 130 (mútuo com ligadas/coligadas; "emissão de debêntures líquida de gastos" é captação) | **28,2%** | 51 células, 0 erros |
+| `recompra` | 3.573 | 158 (exercício de opções e ILP com tesouraria, venda/alienação, "recompra de cessão de recebíveis", ações de investidas/controladas) | 95,6% | 3.415, 0 erros |
+| `arrend_pago` | 3.789 | 106 (linhas que misturam dívida e arrendamento, adição/constituição/ganho/baixa não caixa, pré-pagamento) | 97,2% | 3.691, 0 erros |
+
+A maior parte dos erros de `recompra` não vinha da regra, mas do **voto da linha econômica**: a Etapa 6 liga "Ações em
+tesouraria" e "Alienação de ações em tesouraria" na mesma linha, e o conceito majoritário era propagado para o nome que a
+própria regra exclui. Agora a propagação não vence a exclusão; a célula fica com o conceito que a regra dá ao próprio nome
+(ou nenhum). A mudança vale para todos os conceitos, comparada fato a fato contra a base anterior:
+
+- `capex_total` +18 fatos, nenhum perdido: linhas líquidas ("Adições/Baixas no Imobilizado e Intangível", "Baixa (Aquisição)
+  de bens", "(Compra) venda de intangível") passam a ser aceitas explicitamente, com o sinal decidindo; antes entravam só
+  por acidente da propagação.
+- `capt_divida` +54: "captações… líquidas dos gastos" saiu da dívida líquida e foi para captação.
+- `amort_divida` −72, `juros_pagos` −10, `ir_pago` −6: nomes que a regra já excluía (principal **e** juros na mesma linha,
+  dívida **e** arrendamento, IR a pagar/diferido/provisão) e que a propagação furava. Coerente com a definição; custa
+  cobertura em empresas que só publicam a linha mista.
+- D&A sem mudança relevante (`da_total` +3).
+
+**Segunda rodada, os demais conceitos (mesmo dia).** Todos os nomes dos outros 11 conceitos de regra (~1.600 nomes)
+revistos da mesma forma:
+
+| Conceito | Células | Precisão antes | Erros principais |
+|---|---|---|---|
+| `amort_divida` | 6.386 | 91,5% | derivativos ("financ" casava "instrumentos financeiros"), custo/comissão de estruturação, parcelamento de tributos, "direitos de uso"/"leasing" |
+| `da_ppa` | 705 | 91,9% | "provisão para perdas/amortização de ágio", custo de captação junto com ágio, AVP de arrendamento |
+| `juros_pagos` | 6.957 | 96,3% | principal e juros na mesma linha, "arredamento"/leasing/IFRS 16, RGR, nomes sem juros vindos do voto |
+| `da_ex_ppa` | 7.707 | 97,1% | amortização de custo de captação, direito de uso escrito de outro jeito, impairment, itens não D&A |
+| `capt_divida` | 5.001 | 98,5% | devolução de empréstimo concedido, custo da emissão, linha mista com arrendamento |
+| `ir_pago` | 5.532 | 99,3% | IRRF sobre JCP, "refin" de impostos |
+| demais (dividendos, capex, `da_direito_uso`) | — | 99,1–99,9% | não caixa, M&A (ágio), erros de digitação que escapavam da exclusão |
+
+Depois: **0 erros** em todos os 14 conceitos, nos nomes revistos. Mudanças além das regras:
+- **o nome vence o voto**: quando a regra dá ao próprio nome um conceito (igual ou outro), vale esse; o voto só rotula o que
+  a regra não reconhece. "Pagamento de empréstimos" ligado a uma linha de juros continua amortização.
+- a isenção de linha líquida de capex neutraliza só as palavras de baixa/venda (antes passava por cima de toda a exclusão);
+- `divida_liquida_fluxo` reconhece "emissão/pagamento de debêntures" e "ingressos/amortizações" (51 → 75 células).
+
+Efeito na identidade D&A × DVA (DFPs): **89,5% → 90,4%** com as definições alternativas (o critério de 90% passa a ser
+cumprido) e 84,9% → 86,0% só com a total. `da_total` perde 35 fatos de empresas que só publicam "depreciação, amortização e
+impairment" ou "outros ajustes (depreciação/tributos retidos)": perda de cobertura deliberada. `amort_divida` cai mais
+(4.927 → 4.770 fatos nas duas rodadas): linhas mistas de principal e juros ou de dívida e arrendamento ficam sem conceito.
+
+Limites: revisão do Claude, nome a nome, não de analista (a lista `ERROS` está no script para conferir); precisão contra a
+leitura do nome, não contra o valor na nota explicativa. Nome novo que aparecer numa carga futura não está revisto: rode
+`st7_revisao.py <conceito> --listar` depois de cada mudança de regra.
 
 **Não implementado**, de propósito:
 - **Modelo supervisionado e fila de revisão humana (3.b e 3.c)**: o modelo herda os erros das regras (o stress test

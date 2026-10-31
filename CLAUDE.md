@@ -93,11 +93,17 @@ número na tela; para responder uma pergunta pontual, consultar o banco pelo MCP
 Somente leitura. Três visões: ITR e DFP como reportados, e a série trimestral com 4T (Camada 6).
 Cada linha é uma linha econômica, não um `cd_conta`: quando a empresa renumera a conta, a série
 segue na mesma linha e a célula mostra o código daquele filing sobrescrito. Aceita `?t=TICKER` na
-URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rodado.
+URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rodado. Nas visões ITR e DFP a linha vem de
+`linha_empresa` (respeita `linha_decisao`); empresa fora da tabela é encadeada na hora.
 
 ---
 
 ## Acesso ao banco (MCP `cvm-research`)
+
+**Primeiro turno de uma pergunta de pesquisa**: carregue a skill `cvm-research` **e**, na mesma mensagem, as ferramentas
+(`ToolSearch` com `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc`).
+Feitas em turnos separados, as duas custam um turno a mais (~60 mil tokens): na avaliação de 2026-10-30, 11 de 28
+perguntas gastaram esse turno.
 
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
 Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 empresas), `query(sql)` (SELECT, até 500 linhas),
@@ -111,7 +117,11 @@ Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linh
 
 ## Como identificar uma empresa
 
-Sempre use CNPJ como chave. `resolve_company` faz isso sem SQL; o equivalente:
+Nas tabelas, a chave é o CNPJ. As views de demonstração e `vw_acionistas_diretos` têm também a coluna `ticker`
+(`WHERE ticker = 'PETR4'`, ~10 ms pelo índice de `companies`; JOIN interno, então filing de empresa fora de `companies`
+não aparece). Com o ticker exato, consulte direto, sem `resolve_company` antes: cada turno a menos poupa ~60 mil tokens.
+Banco anterior às colunas: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_views_ticker.sql` (só views).
+`resolve_company` resolve nome, CNPJ ou ticker que não bateu; o equivalente:
 ```sql
 -- Por ticker
 SELECT cnpj, nome_cvm FROM companies WHERE ticker = 'WEGE3';
@@ -458,6 +468,11 @@ reaproveita esta trilha. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
   (`layer = 6`, `cd_conta` NULL, `detalhe.linhas`). Na base de 2026-09-30: ~9 mil linhas de 1,8 milhão, 630 delas
   no 4T original da DRE. Banco anterior à flag: `sqlite3 cvm_research.db < scripts/migrations/2026-09-30_trimestrais_reclassificacao.sql`,
   `sqlite3 cvm_research.db < schema.sql` e `run_all.py --layer 6 --full` (a Camada 6 se recusa a rodar sem a migração).
+- `casamento = 'decisao'`: par decidido pelo analista em `linha_decisao` (`linha_economica.py --decidir`): 'mesma' casa um
+  par ambíguo e o valor passa a ser derivado; 'diferente' desfaz um casamento automático (`linha_sem_par`). Depois de
+  decidir, rode `linha_economica.py --cnpj X` e `run_all.py --layer 6 --cnpj X`. Banco anterior:
+  `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_trimestrais_decisao.sql`, `sqlite3 cvm_research.db < schema.sql`
+  e `run_all.py --layer 6 --full` (~3 min; a Camada 6 se recusa a rodar sem a migração).
 - `3.99` (lucro por ação) não está na tabela: não é aditivo. Exercício social fora do calendário: `trimestre` é a posição no exercício, não o trimestre-calendário.
 Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada). `--sim-alto`/`--sim-baixo` movem os
 limiares do casamento (padrão 0,75 e 0,55).

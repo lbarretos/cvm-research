@@ -96,3 +96,35 @@ usuário, ~60 mil por turno) relido a cada turno. O que as ferramentas economiza
 ganho. A alavanca de tokens é cortar turnos, não bytes: a próxima iteração é fazer a skill mandar `resolve_company` e a
 consulta de dados em paralelo, ou mandar a consulta direto pelo ticker nas views, e voltar a medir. A meta de 30% foi
 posta antes de se saber que o prefixo domina; revê-la para "turnos por pergunta" é mais honesto.
+
+## Segunda iteração: menos turnos (2026-10-30)
+
+Na execução da Etapa 7 (v0, 28 perguntas), os tokens por pergunta são quase exatamente turnos × ~55–60 mil: q001 (receita
+da GGBR4) gastou 3 turnos e 180 mil tokens; a média foi 6,1 turnos e 317 mil. O que entrou para cortar turnos:
+
+- **`ticker` nas views** de demonstração (`vw_dre`, `vw_dre_acumulada`, `vw_dre_financeiro`, `vw_dre_seguradora`,
+  `vw_balanco`) e em `vw_acionistas_diretos`, logo depois do CNPJ, por JOIN com `companies`. `WHERE ticker = 'PETR4'` usa
+  `idx_companies_ticker` e responde em ~10 ms (o filtro por subconsulta de CNPJ não é empurrado para dentro da view:
+  1,1 s na DRE e 4,5 s no balanço; o LEFT JOIN leva 1,4 s). O JOIN é interno: filing de empresa fora de `companies`
+  some das views; na base montada pelo bootstrap a diferença é zero. Migração `2026-10-30_views_ticker.sql` (só views).
+- **Skill**: o custo de uma pergunta é o número de turnos; chamadas independentes no mesmo turno; com o ticker exato, ir
+  direto às views/`get_financials`/`search_docs` sem `resolve_company`; nas tabelas, a subconsulta de CNPJ no lugar de um
+  turno de resolução; nada de `list_tables`/`describe_table` para o que a skill documenta. Receitas e `query` dizem o mesmo.
+- **`run_eval.py`** grava `sequencia` (ferramentas por mensagem do assistente; chamadas na mesma mensagem saíram em
+  paralelo), para a próxima medição mostrar onde estão os turnos.
+
+**Medição pendente**: `run_eval.py --golden v0 --rotulo etapa3-turnos` (~US$ 14, ~10 min) contra
+`runs/2026-10-15_etapa7.json`. Critério revisto: turnos por pergunta abaixo de 4,6 (o da baseline pré-Etapa 3) com o
+mesmo acerto.
+
+**Medição (2026-10-30, v0, `runs/2026-10-30_etapa3-turnos.json`)**: acerto 28/28 (antes 27/28), chamadas por pergunta
+4,36 → 3,07, tokens por pergunta 318 mil → 245 mil (**−23%**), custo US$ 13,92 → 12,46, 0 consultas abortadas, 1 erro de
+ferramenta, **turnos por pergunta 6,07 → 4,61**. Critério revisto (turnos < 4,6 com o mesmo acerto): empatado no limite;
+o ganho real está nos tokens (−23%) e no acerto.
+
+**Skill e ferramentas no mesmo primeiro turno** (`runs/2026-10-30_etapa3-primeiro-turno.json`, só as 9 perguntas que
+carregavam a skill num turno à parte): a skill e o `ToolSearch` passaram a sair na mesma mensagem nas 9; tokens por
+pergunta 305 mil → 242 mil (−21%), 9/9 certas. O `num_turns` do Claude Code não cai (5,78 → 5,89): ele conta a injeção da
+skill como um turno, mesmo vinda na mesma mensagem; **a medida certa é tokens**, não turnos. Trocando essas 9 na execução
+das 28: **224 mil tokens por pergunta, −30% contra os 317 mil da Etapa 7**, acerto 28/28. **Veredito: a meta original de
+30% menos tokens passa a ser cumprida** (projeção com 9 perguntas remedidas; uma execução completa confirmaria).

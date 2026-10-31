@@ -134,3 +134,26 @@ em 221 (o resto tem nome diferente na CVM). CRA024004SB: 9,5877% em 29/10, igual
 (`ingest_rf_docs.py --arquivo`, PDF da aba Documentos), pois a Resolução 160 não passa pelo IPE.
 
 Limites: o download é manual e semanal (sem URL fixa, não entra no job); semana sem download vira buraco na série de CRI/CRA.
+
+### Extração de garantias medida em 366 escrituras (2026-10-30)
+
+`stress/st8_medir_extracao.py` mede sem leitura humana: cada escritura original do IPE das empresas da base é ligada pela
+capa à debênture do SND (mesmo emissor e emissão) e a garantia real extraída é comparada com a espécie do SND. 366
+escrituras: 351 quirografárias, 13 reais, 2 flutuantes.
+
+| | antes | depois |
+|---|---|---|
+| garantia real achada em emissão Real (recall) | 12/13 | 11/13 |
+| garantia real "achada" em emissão não Real | 125/353 (35%) | 21/353 (6%); 7 delas com "garantia adicional real" na capa, então reais |
+| espécie da capa = SND | 361/366 (99%) | igual |
+
+Origem dos falsos positivos: fichas de outras emissões em layouts que a quebra de coluna do PDF embaralha ("Valor Total da
+R$… Emissão Quantidade… Espécie… Garantias…", "Espécie e garantias envolvidas:"), ônus permitidos no vencimento antecipado
+("exceto… penhor ou depósito"), definições ("project finance… cessão fiduciária"). Correção: a regra de fichas cobre os
+layouts embaralhados, e garantia real, fiança e aval só entram **amarradas ao título**: termo definido (“Cessão Fiduciária”,
+“Contrato de Alienação Fiduciária”), cláusula de espécie ou "em garantia do… pagamento / Obrigações Garantidas / em
+garantia, será constituída". A descrição da oferta na CVM dispensa o sinal (`exigir_sinal=False`). As duas emissões Real
+perdidas dizem "quirografária" na própria capa (garantia constituída depois, por aditamento, ou SND × escritura).
+
+Limite: fiança e aval (88 escrituras) não têm gabarito no SND; a precisão deles não está medida.
+

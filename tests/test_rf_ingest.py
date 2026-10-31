@@ -417,6 +417,30 @@ def test_fichas_de_outras_emissoes_e_vedacao_generica_nao_viram_garantia():
     assert tipos == {"quirografaria"}
 
 
+@pytest.mark.parametrize("trecho, esperado", [
+    # ficha de terceiro com colunas embaralhadas pelo PDF (escritura da Cemig, cláusula do agente fiduciário)
+    ("Valor Total da R$1.575.000.000,00 Emissão Quantidade 157.500 Espécie Garantia Real e com Garantia Adicional "
+     "Fidejussória Garantia Fiança e Cessão Fiduciária de Recebíveis Data de 15.06.2022 Vencimento", set()),
+    ("Espécie e garantias envolvidas: Garantia Real e Fidejussória, com Penhor de Ações e Carta de Fiança, "
+     "respectivamente Data de emissão: 15 de agosto de 2015", set()),
+    # ônus permitido no vencimento antecipado: não é garantia do título
+    ("exceto no caso de serem objeto (a) de penhor ou depósito para garantir direitos e obrigações trabalhistas", set()),
+    # garantia do próprio título: termo definido ou cláusula de garantia
+    ("em garantia do fiel, pontual e integral pagamento das Obrigações Garantidas, será constituída a alienação "
+     "fiduciária de ações de emissão da SPE (“Alienação Fiduciária de Ações”)", {"alienacao_fiduciaria"}),
+])
+def test_garantia_real_so_quando_amarrada_ao_titulo(trecho, esperado):
+    texto = "ESCRITURA DA 5ª EMISSÃO DE DEBÊNTURES SIMPLES, DA ESPÉCIE QUIROGRAFÁRIA, EM SÉRIE ÚNICA. " + "x " * 300 + trecho
+    tipos = {g["tipo"] for g in extrai_rf.extrair(texto, "DEB")["garantias"]} - {"quirografaria"}
+    assert tipos == esperado
+
+
+def test_descricao_da_oferta_dispensa_o_sinal():
+    texto = "Garantias: Fiança da controladora e cessão fiduciária de recebíveis. Lastro: CPR-F."
+    assert {g["tipo"] for g in extrai_rf.extrair(texto, "CRA", exigir_sinal=False)["garantias"]} == \
+        {"fianca", "cessao_fiduciaria"}
+
+
 @pytest.mark.parametrize("origem, rotulo, capa, esperado", [
     ("ipe", "Escrituras e aditamentos de debêntures Escritura da 14ª emissão", "", True),
     ("ipe", "Prospecto de Distribuição Pública Prospecto Preliminar referente à 16ª Emissão", "", False),

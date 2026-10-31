@@ -84,6 +84,25 @@ GARANTIAS = [
                              r"(?:\s+(?:espec[íi]ficas|reais|pessoais|fidejuss[óo]rias))"),
 ]
 _TIPOS_ENUMERAVEIS = [t for t, _ in GARANTIAS if t not in ("sem_garantia", "quirografaria")]
+# Garantias que a escritura precisa amarrar ao próprio título: medido em 366 escrituras contra a espécie do SND
+# (stress/st8_medir_extracao.py), a menção solta dava 34% de garantia real falsa em quirografárias (ônus permitidos,
+# vencimento antecipado, definições, emissões de terceiros). Sinais: termo definido (“Cessão Fiduciária”, “Contrato
+# de Alienação Fiduciária”), a cláusula de espécie ou a de "em garantia do … pagamento".
+COM_SINAL = {"alienacao_fiduciaria", "cessao_fiduciaria", "penhor", "hipoteca", "fianca", "aval"}
+_SINAL_GARANTE = re.compile(r"em garantia d[oa]s? (?:fiel|integral|pontual|cumprimento|pagamento|deb[êe]ntures|cr[ai]s?\b)"
+                            r"|em garantia,? ser[áa]o? constitu|obriga[çc][õo]es garantidas")
+_SINAL_ESPECIE = re.compile(r"esp[ée]cie (?:com garantia|quirograf|subordinada|real)|garantia adicional "
+                            r"(?:real|fidejuss)|garantia fidejuss[óo]ria")
+
+
+def _amarrada_ao_titulo(baixo: str, padrao: str) -> bool:
+    if re.search(rf"[“\"](?:contrato de |instrumento (?:particular )?de )?(?:{padrao})[^”\"]{{0,40}}[”\"]", baixo):
+        return True
+    for sinal, alcance in ((_SINAL_GARANTE, 500), (_SINAL_ESPECIE, 600)):
+        for m in sinal.finditer(baixo):
+            if re.search(padrao, baixo[m.start():m.end() + alcance]):
+                return True
+    return False
 # "não conversíveis em ações" descreve a debênture, não nega a garantia que vem depois
 NEGACAO_ANTES = re.compile(r"\b(n[ãa]o(?! convers[íi]ve)|sem|nenhuma|inexist\w*|exceto)\b[^.;]{0,40}$")
 # "Coobrigação da Emissora: Não há" · "Garantia Flutuante: Não haverá"
@@ -132,8 +151,13 @@ def _limpo(texto: str) -> str:
 
 # ficha de outra emissão listada pelo agente fiduciário (Resolução CVM 17, art. 6º), no corpo da escritura ou no
 # relatório anual: "Valor Total da Emissão R$ … Espécie … Garantias Fiança; … Enquadramento Adimplência Financeira"
-_FICHA_TERCEIROS = re.compile(r"(?:valor total da emiss[ãa]o|volume total previsto)\s*:?\s*R?\$?.{0,500}?"
-                              r"(?:enquadramento|inadimplementos? no per[íi]odo)", re.I)
+# A quebra de coluna do PDF embaralha os rótulos ("Valor Total da R$ 800.000.000,00 Emissão Quantidade … Espécie
+# Real Garantias Cessão Fiduciária e Fiança Data de 10/06/2027 Vencimento"); outro layout é "Espécie e garantias
+# envolvidas: … Data de emissão".
+_FICHA_TERCEIROS = re.compile(
+    r"(?:valor total da\b|volume total previsto).{0,700}?(?:enquadramento|inadimplementos? no per[íi]odo)"
+    r"|(?:valor total da\b|volume total previsto).{0,400}?quantidade.{0,300}?esp[ée]cie.{0,400}?vencimento"
+    r"|esp[ée]cie e garantias envolvidas:.{0,600}?data de (?:emiss|venc)", re.I)
 
 
 def _sem_anexo_de_terceiros(t: str) -> str:
@@ -234,7 +258,7 @@ def _escopo(frase: str, tipo_titulo: str, tipo: str) -> str:
     return "lastro" if FRASE_LASTRO.search(frase) else "titulo"
 
 
-def _garantias(t: str, tipo_titulo: str) -> list[dict]:
+def _garantias(t: str, tipo_titulo: str, exigir_sinal: bool = True) -> list[dict]:
     baixo = t.lower()
     tipos_em = {tipo: [m.start() for m in re.finditer(p, baixo)] for tipo, p in GARANTIAS}
     out = []
@@ -253,6 +277,8 @@ def _garantias(t: str, tipo_titulo: str) -> list[dict]:
                         or VEDACAO_GENERICA.search(baixo[max(0, m.start() - 200):m.end() + 200]):
                     continue
             achados.append(m)
+        if achados and exigir_sinal and tipo in COM_SINAL and not _amarrada_ao_titulo(baixo, padrao):
+            continue
         if achados:
             m = achados[0]
             out.append({"tipo": tipo, "descricao": f"{len(achados)} menção(ões) no documento",
@@ -277,10 +303,11 @@ def _lastro(t: str) -> list[dict]:
     return lastro
 
 
-def extrair(texto: str, tipo_titulo: str) -> dict:
-    """Texto de um documento → {'partes': [...], 'garantias': [...], 'lastro': [...]} (sem tocar no banco)."""
+def extrair(texto: str, tipo_titulo: str, exigir_sinal: bool = True) -> dict:
+    """Texto de um documento → {'partes': [...], 'garantias': [...], 'lastro': [...]} (sem tocar no banco).
+    `exigir_sinal=False` para texto que já é só sobre o título (descrição das garantias da oferta na CVM)."""
     t = _sem_anexo_de_terceiros(_limpo(texto))
-    return {"partes": _partes(t, tipo_titulo), "garantias": _garantias(t, tipo_titulo),
+    return {"partes": _partes(t, tipo_titulo), "garantias": _garantias(t, tipo_titulo, exigir_sinal),
             "lastro": _lastro(t) if tipo_titulo in ("CRI", "CRA") else []}
 
 

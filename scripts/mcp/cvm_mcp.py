@@ -399,7 +399,9 @@ def get_financials(ticker: str, conceitos: list[str] | None = None, fonte: str =
     Só plano padrão (bancos e seguradoras não têm esses conceitos). Conceitos DFC: da_total, da_ex_ppa,
     da_direito_uso, da_ppa, capex_total, capex_imob, capex_intang, capex_conjunto, dividendos_pagos, juros_pagos,
     capt_divida, amort_divida, divida_liquida_fluxo, arrend_pago, recompra, ir_pago; de contas fixas: receita_liquida,
-    resultado_bruto, ebit, lucro_liquido, cfo, cfi, cff, variacao_caixa, caixa_final, ativo_total, patrimonio_liquido.
+    resultado_bruto, ebit, lucro_liquido, cfo, cfi, cff, variacao_caixa, caixa_final, ativo_total, patrimonio_liquido;
+    da DMPL (coluna PL consolidado): dividendos_declarados (5.04.06 + 5.04.07 + contas próprias de dividendo/JCP),
+    aumento_capital (5.04.01, sem capitalização de reservas), recompra_dmpl (5.04.04, confere a recompra da DFC).
     Sem `conceitos`, devolve todos. fonte: DFP (anual) ou ITR (acumulado do ano). Fatos que falharam na checagem só
     vêm com incluir_nao_publicados=True. Ausência de um conceito num período significa que a empresa não tem linha
     dele naquela DFC (ou o sinal não bateu), não que o valor seja zero. Mostre sempre `metodo` e `checagem`."""

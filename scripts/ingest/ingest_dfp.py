@@ -2,7 +2,7 @@
 Ingere os demonstrativos financeiros anuais (DFP) da CVM no banco local.
 
 Fonte: https://dados.cvm.gov.br/dados/CIA_ABERTA/DOC/DFP/DADOS/dfp_cia_aberta_{ano}.zip
-Tipos ingeridos (consolidado): BPA, BPP, DRE, DFC_MI, DVA
+Tipos ingeridos (consolidado): BPA, BPP, DRE, DFC_MI, DVA; e a DMPL na tabela dmpl (ver dmpl.py)
 Tabela destino: demonstrativos_contabeis (fonte='DFP')
 Cobertura: 2010-atual, somente empresas da watchlist
 
@@ -17,6 +17,7 @@ from datetime import date
 
 import pandas as pd
 
+import dmpl
 from filings import rebuild_filings
 from utils import SCALE, _date, _int, download_year, get_db, upsert, vl_escalado, watchlist_cnpjs
 
@@ -111,7 +112,7 @@ def main():
     for ano in anos:
         print(f"\n── DFP {ano} ──")
         try:
-            dfs = download_year(ano, FONTE, TIPOS)
+            dfs = download_year(ano, FONTE, TIPOS + ["DMPL"])
         except Exception as e:
             print(f"  ERRO download {ano}: {e}")
             continue
@@ -128,6 +129,12 @@ def main():
                     print(f"  demonstrativos_contabeis [{tipo}]: 0 rows (watchlist sem dados)")
             except Exception as e:
                 print(f"  ERRO {tipo}: {e}")
+        # DMPL: tabela própria (matriz conta × componente do PL), ver dmpl.py
+        if "DMPL" in dfs:
+            try:
+                print(f"  dmpl: {dmpl.gravar(conn, dmpl.process(dfs['DMPL'], cnpjs, FONTE))} rows")
+            except Exception as e:
+                print(f"  ERRO DMPL: {e}")
 
     # as views de DRE/balanço leem a versão vigente e o plano de contas de `filings`
     print(f"\nfilings: {rebuild_filings(conn)} linhas")

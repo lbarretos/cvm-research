@@ -41,8 +41,8 @@ arquivos de cada etapa e no `README.md` desta pasta.
 2. **Etapa 7, regras**: os 14 conceitos de regra revistos nome a nome em 2026-10-30 (`stress/st7_revisao.py`; ver
    `07-taxonomia-canonica.md`): 0 erros nos nomes revistos, D&A × DVA 90,4%. Falta um analista conferir a lista `ERROS`,
    e rodar `st7_revisao.py --listar` depois de cada mudança de regra (nome novo não está revisto).
-3. **Etapa 3, tokens**: o corte de 30% não veio (prefixo fixo da sessão domina, ~300 mil tokens). A alavanca é cortar turnos
-   (paralelizar `resolve_company` com a consulta; mandar direto pelo ticker nas views).
+3. **Etapa 3, tokens**: feita em 2026-10-30 (PR #44): −30% de tokens por pergunta no v0 (projeção com 9 remedidas). Falta
+   uma execução completa para confirmar; `num_turns` não serve de medida (conta a injeção da skill).
 4. **Etapa 6.4**: o visualizador ainda calcula o encadeamento; a tabela `linha_empresa` encadeia ITR+DFP juntos e ele cada
    fonte à parte. Decidir qual está certa antes de ligar.
 5. **Camada 6 não lê `linha_decisao`** (ver `TODOS.md`): as decisões humanas valem para `linha_empresa`, não para

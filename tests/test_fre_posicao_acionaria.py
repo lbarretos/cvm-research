@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ing
 
 from utils import _upsert_sqlite
 import ingest_fre
+sys.path.insert(0, os.path.dirname(__file__))
+from _empresas import cadastrar_empresas  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 SCHEMA = os.path.join(ROOT, "schema.sql")
@@ -32,7 +34,7 @@ def _db():
     conn = sqlite3.connect(":memory:")
     with open(SCHEMA, encoding="utf-8") as f:
         conn.executescript(f.read())
-    return conn
+    return cadastrar_empresas(conn)
 
 
 def _csv_row(id_acionista, acionista, pct, relacionado="", data="2026-12-31", versao="2", cnpj=WEG, cpf_cnpj=""):
@@ -185,6 +187,7 @@ def test_migracao_banco_antigo():
     conn.executescript(sql)
     with open(SCHEMA, encoding="utf-8") as f:
         conn.executescript(f.read())
+    cadastrar_empresas(conn)
 
     cols = {r[1] for r in conn.execute("PRAGMA table_info(fre_posicao_acionaria)")}
     assert "id_acionista_relacionado" in cols

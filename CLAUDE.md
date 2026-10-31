@@ -99,6 +99,11 @@ URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rod
 
 ## Acesso ao banco (MCP `cvm-research`)
 
+**Primeiro turno de uma pergunta de pesquisa**: carregue a skill `cvm-research` **e**, na mesma mensagem, as ferramentas
+(`ToolSearch` com `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc`).
+Feitas em turnos separados, as duas custam um turno a mais (~60 mil tokens): na avaliação de 2026-10-30, 11 de 28
+perguntas gastaram esse turno.
+
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
 Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 empresas), `query(sql)` (SELECT, até 500 linhas),
 `get_financials(ticker, conceitos?, fonte?, desde?, ate?)` (fatos padronizados com `metodo` e `checagem`; veja `fato_padronizado`),
@@ -111,7 +116,11 @@ Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linh
 
 ## Como identificar uma empresa
 
-Sempre use CNPJ como chave. `resolve_company` faz isso sem SQL; o equivalente:
+Nas tabelas, a chave é o CNPJ. As views de demonstração e `vw_acionistas_diretos` têm também a coluna `ticker`
+(`WHERE ticker = 'PETR4'`, ~10 ms pelo índice de `companies`; JOIN interno, então filing de empresa fora de `companies`
+não aparece). Com o ticker exato, consulte direto, sem `resolve_company` antes: cada turno a menos poupa ~60 mil tokens.
+Banco anterior às colunas: `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_views_ticker.sql` (só views).
+`resolve_company` resolve nome, CNPJ ou ticker que não bateu; o equivalente:
 ```sql
 -- Por ticker
 SELECT cnpj, nome_cvm FROM companies WHERE ticker = 'WEGE3';

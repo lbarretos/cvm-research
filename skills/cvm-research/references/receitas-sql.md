@@ -1,6 +1,9 @@
 # Receitas de SQL
 
-Consultas prontas por tema, movidas do `CLAUDE.md` do projeto na Etapa 3. Use quando as ferramentas do MCP (`resolve_company`) não cobrirem; troque `<CNPJ>` pelo valor de `resolve_company`.
+Consultas prontas por tema, movidas do `CLAUDE.md` do projeto na Etapa 3. Troque `'<CNPJ>'` por
+`(SELECT cnpj FROM companies WHERE ticker = 'PETR4')` quando a pergunta der o ticker, e mande a consulta já no
+primeiro turno, sem `resolve_company` antes; nas views (`vw_*`), use `ticker = 'PETR4'` direto. Com nome da empresa,
+ou se o ticker não achar nada, resolva com `resolve_company`.
 
 ## Queries de pesquisa padrão
 

@@ -45,8 +45,8 @@ arquivos de cada etapa e no `README.md` desta pasta.
    uma execução completa para confirmar; `num_turns` não serve de medida (conta a injeção da skill).
 4. **Etapa 6.4**: feita em 2026-10-30 — o visualizador lê `linha_empresa` (as duas partições discordam em ~0,25% das
    ligações; venceu a fonte única, que respeita `linha_decisao`).
-5. **Camada 6 não lê `linha_decisao`** (ver `TODOS.md`): as decisões humanas valem para `linha_empresa`, não para
-   `demonstrativos_trimestrais`.
+5. **Camada 6 lê `linha_decisao`** desde 2026-10-30 (migração `2026-10-30_trimestrais_decisao.sql` + Camada 6 --full em
+   toda instalação). A fila ainda não tem decisões: `linha_economica.py --listar-ambiguos --cnpj X`.
 6. **Etapa 7, fora do escopo feito**: modelo supervisionado e fila de revisão (3.b, 3.c), DMPL, demonstrações individuais,
    bancos e seguradoras (DRE de banco sem `versao_template`), safra reapresentada.
 7. **Etapa 4, 4.1 e 4.6**: texto separado em `ipe_texto` e embeddings (`sqlite-vec`) não foram feitos.

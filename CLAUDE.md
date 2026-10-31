@@ -458,6 +458,11 @@ reaproveita esta trilha. Para rodar: `run_all.py --layer 5 --cnpj <CNPJ>`.
   (`layer = 6`, `cd_conta` NULL, `detalhe.linhas`). Na base de 2026-09-30: ~9 mil linhas de 1,8 milhão, 630 delas
   no 4T original da DRE. Banco anterior à flag: `sqlite3 cvm_research.db < scripts/migrations/2026-09-30_trimestrais_reclassificacao.sql`,
   `sqlite3 cvm_research.db < schema.sql` e `run_all.py --layer 6 --full` (a Camada 6 se recusa a rodar sem a migração).
+- `casamento = 'decisao'`: par decidido pelo analista em `linha_decisao` (`linha_economica.py --decidir`): 'mesma' casa um
+  par ambíguo e o valor passa a ser derivado; 'diferente' desfaz um casamento automático (`linha_sem_par`). Depois de
+  decidir, rode `linha_economica.py --cnpj X` e `run_all.py --layer 6 --cnpj X`. Banco anterior:
+  `sqlite3 cvm_research.db < scripts/migrations/2026-10-30_trimestrais_decisao.sql`, `sqlite3 cvm_research.db < schema.sql`
+  e `run_all.py --layer 6 --full` (~3 min; a Camada 6 se recusa a rodar sem a migração).
 - `3.99` (lucro por ação) não está na tabela: não é aditivo. Exercício social fora do calendário: `trimestre` é a posição no exercício, não o trimestre-calendário.
 Para rodar: `run_all.py --layer 6 --cnpj <CNPJ>` (depende da Camada 2 já executada). `--sim-alto`/`--sim-baixo` movem os
 limiares do casamento (padrão 0,75 e 0,55).

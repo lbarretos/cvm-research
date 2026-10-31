@@ -17,7 +17,9 @@ pelo cd_conta puro — a empresa renumera as contas que cria (st_conta_fixa = 'N
 entre trimestres, e o DFP usa um layout diferente do ITR. cd_conta_b e casamento
 registram qual linha do filing B foi subtraída e como ela foi encontrada.
 Par 'ambiguo' (0,55 < score < 0,75) NÃO é casado automaticamente: vira fila de
-revisão (decisão do usuário em 2026-09-18).
+revisão (decisão do usuário em 2026-09-18). A decisão do analista fica em `linha_decisao`
+(`linha_economica.py --decidir`) e vale aqui também: 'mesma' casa o par (casamento 'decisao',
+e o valor passa a ser derivado), 'diferente' desfaz o casamento automático (linha_sem_par).
 
 Por exercício (exercicio_ini) e trimestre n:
   - vl_publicado : DRE 1T–3T, linha trimestral isolada do ITR (dt_ini = início do trimestre)
@@ -66,6 +68,7 @@ Roda no job semanal (scripts/update_weekly.sh) depois da Camada 5. À mão
   python derive_quarters.py --cnpj 84.429.695/0001-11 --tipo-doc DRE --desde 2020
   python derive_quarters.py --full               # base inteira (~145 empresas)
 """
+import sqlite3
 from datetime import date
 
 import pandas as pd
@@ -188,13 +191,25 @@ def _flag_ambiguo(cnpj, tipo_doc, cd, ds, ini_q, fim_q, a, b, cd_b, score, detal
     }
 
 
-def _casar(a: dict, b: dict | None, sim_alto: float, sim_baixo: float) -> dict:
-    """{cd no acumulado atual: (cd no anterior, classe, score)}; vazio quando não há anterior."""
+def _casar(a: dict, b: dict | None, sim_alto: float, sim_baixo: float, decisoes: dict | None = None) -> dict:
+    """{cd no acumulado atual: (cd no anterior, classe, score)}; vazio quando não há anterior.
+    decisoes = {(data_anterior, cd_anterior, data_atual, cd_atual): 'mesma' | 'diferente'} (linha_decisao)."""
     if b is None:
         return {}
-    return match_filings({cd: (ds, st) for cd, (ds, _vl, st) in b["acum"].items()},
-                         {cd: (ds, st) for cd, (ds, _vl, st) in a["acum"].items()},
-                         sim_alto, sim_baixo)
+    casar = match_filings({cd: (ds, st) for cd, (ds, _vl, st) in b["acum"].items()},
+                          {cd: (ds, st) for cd, (ds, _vl, st) in a["acum"].items()},
+                          sim_alto, sim_baixo)
+    for (data_b, cd_b, data_a, cd_a), dec in (decisoes or {}).items():
+        if data_b != b["data"] or data_a != a["data"] or cd_a not in a["acum"] or cd_b not in b["acum"]:
+            continue
+        if dec == "mesma":
+            for outro, par in list(casar.items()):   # um para um: quem tinha o cd_b perde o par
+                if par[0] == cd_b and outro != cd_a:
+                    del casar[outro]
+            casar[cd_a] = (cd_b, "decisao", None)
+        elif casar.get(cd_a, (None,))[0] == cd_b:
+            del casar[cd_a]
+    return casar
 
 
 def _documentos(a: dict, b: dict, cd: str) -> tuple:
@@ -232,7 +247,7 @@ def _layouts_distintos(safra, divergencias: dict, layouts: set, tipo_doc, a: dic
 def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict, reapresentados: set,
                        tol_abs, tol_rel, sim_alto, sim_baixo, divergencias: dict | None = None,
                        outra: dict | None = None,
-                       layouts: set | None = None) -> tuple[list[dict], list[dict], dict]:
+                       layouts: set | None = None, decisoes: dict | None = None) -> tuple[list[dict], list[dict], dict]:
     """qs = {n: doc} de um exercício. Retorna (linhas, flags, contagens por flag).
     outra = {(exercicio_ini, n): doc} da outra safra (as outras versões dos mesmos períodos);
     layouts = pares de documentos marcados na safra original, compartilhado entre as duas
@@ -255,7 +270,7 @@ def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict
                 "dt_ini_exerc": ini_q, "dt_fim_exerc": fim_q, "trimestre": n, **docs_ab}
         detalhe = {"safra": safra, "trimestre": n, "exercicio_ini": exercicio_ini}
         linhas_q: list[dict] = []
-        casar = {} if falta else _casar(a, b, sim_alto, sim_baixo)
+        casar = {} if falta else _casar(a, b, sim_alto, sim_baixo, decisoes)
         for cd, (ds, va, _st) in a["acum"].items():
             cd_b = casamento = None
             if n == 1:
@@ -332,9 +347,10 @@ def _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs: dict, bpa: dict
 def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 0.01,
                     reapresentados: set | None = None, sim_alto: float = SIM_ALTO,
                     sim_baixo: float = SIM_BAIXO,
-                    divergencias: dict | None = None) -> tuple[list[dict], list[dict], dict]:
+                    divergencias: dict | None = None,
+                    decisoes: dict | None = None) -> tuple[list[dict], list[dict], dict]:
     """df = saída de latest_rows (pode incluir BPA, usado só na checagem de caixa).
-    divergencias = saída de divergencias_camada2.
+    divergencias = saída de divergencias_camada2. decisoes = saída de decisoes_linha, {tipo_doc: {...}}.
     Retorna (linhas de demonstrativos_trimestrais, flags, stats[tipo_doc])."""
     rows: list[dict] = []
     flags: list[dict] = []
@@ -364,7 +380,7 @@ def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 
                     qs = exercicios[exercicio_ini]
                     r, f, cont = _derivar_exercicio(cnpj, tipo_doc, safra, exercicio_ini, qs, bpa, reapresentados,
                                                     tol_abs, tol_rel, sim_alto, sim_baixo, divergencias,
-                                                    outra, layouts)
+                                                    outra, layouts, (decisoes or {}).get(tipo_doc))
                     st["exercicios"] += 1
                     st["trimestres"] += len(qs)
                     st["linhas"] += len(r)
@@ -376,6 +392,20 @@ def derive_quarters(df: pd.DataFrame, tol_abs: float = 1000.0, tol_rel: float = 
 
 
 # ── banco ────────────────────────────────────────────────────────────────────
+
+def decisoes_linha(conn, cnpj: str) -> dict:
+    """linha_decisao da empresa: {tipo_doc: {(data_anterior, cd_anterior, data_atual, cd_atual): decisao}}.
+    Banco sem a tabela (anterior à Etapa 6) = sem decisões."""
+    out: dict = {}
+    try:
+        rows = conn.execute("SELECT tipo_doc, data_a, cd_a, data_b, cd_b, decisao FROM linha_decisao "
+                            "WHERE cnpj_companhia = ?", (cnpj,)).fetchall()
+    except sqlite3.OperationalError:
+        return out
+    for tipo, data_a, cd_a, data_b, cd_b, dec in rows:
+        out.setdefault(tipo, {})[(data_a, cd_a, data_b, cd_b)] = dec
+    return out
+
 
 def reapresentados_camada2(conn, cnpj: str) -> set:
     """Documentos (dos dois lados) dos resumos 'reapresentacao' da Camada 2 para a empresa."""
@@ -464,6 +494,9 @@ def main(argv=None) -> str:
         # antes de apagar qualquer linha: o INSERT falharia no CHECK depois do DELETE da empresa
         raise SystemExit("demonstrativos_trimestrais não aceita a flag 'reclassificacao_entre_filings': aplique "
                          "scripts/migrations/2026-09-30_trimestrais_reclassificacao.sql (instruções no cabeçalho)")
+    if ddl and "'decisao'" not in ddl[0]:
+        raise SystemExit("demonstrativos_trimestrais não aceita casamento 'decisao' (linha_decisao): aplique "
+                         "scripts/migrations/2026-10-30_trimestrais_decisao.sql (instruções no cabeçalho)")
     if args.cnpj:
         cnpjs = [args.cnpj]
     else:
@@ -479,7 +512,8 @@ def main(argv=None) -> str:
         if args.tipo_doc:
             df = df[df["tipo_doc"].isin([args.tipo_doc, "BPA"])]
         rows, flags, stats = derive_quarters(df, args.tol_abs, args.tol_rel, reapresentados_camada2(conn, cnpj),
-                                             args.sim_alto, args.sim_baixo, divergencias_camada2(conn, cnpj))
+                                             args.sim_alto, args.sim_baixo, divergencias_camada2(conn, cnpj),
+                                             decisoes_linha(conn, cnpj))
         clear_trimestrais(conn, cnpj, args.tipo_doc)
         clear_flags(conn, LAYER, CHECK_TYPE, cnpj, args.tipo_doc)
         n = write_trimestrais(conn, run_id, rows)

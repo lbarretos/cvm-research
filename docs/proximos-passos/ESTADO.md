@@ -43,8 +43,8 @@ arquivos de cada etapa e no `README.md` desta pasta.
    e rodar `st7_revisao.py --listar` depois de cada mudança de regra (nome novo não está revisto).
 3. **Etapa 3, tokens**: feita em 2026-10-30 (PR #44): −30% de tokens por pergunta no v0 (projeção com 9 remedidas). Falta
    uma execução completa para confirmar; `num_turns` não serve de medida (conta a injeção da skill).
-4. **Etapa 6.4**: o visualizador ainda calcula o encadeamento; a tabela `linha_empresa` encadeia ITR+DFP juntos e ele cada
-   fonte à parte. Decidir qual está certa antes de ligar.
+4. **Etapa 6.4**: feita em 2026-10-30 — o visualizador lê `linha_empresa` (as duas partições discordam em ~0,25% das
+   ligações; venceu a fonte única, que respeita `linha_decisao`).
 5. **Camada 6 não lê `linha_decisao`** (ver `TODOS.md`): as decisões humanas valem para `linha_empresa`, não para
    `demonstrativos_trimestrais`.
 6. **Etapa 7, fora do escopo feito**: modelo supervisionado e fila de revisão (3.b, 3.c), DMPL, demonstrações individuais,

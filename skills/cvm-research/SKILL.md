@@ -20,6 +20,9 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
   - Nas tabelas (sem `ticker`), filtre `cnpj_companhia = (SELECT cnpj FROM companies WHERE ticker = 'PETR4')`
     em vez de resolver antes; a subconsulta custa ~1 s, um turno custa ~60 mil tokens.
   - Não chame `list_tables`/`describe_table` para o que esta skill já documenta.
+  - Se as ferramentas estiverem adiadas, carregue todas de uma vez (`ToolSearch` com
+    `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc`)
+    e, se der, já na mensagem que carrega esta skill.
 
   As ferramentas, por tema:
   1. `resolve_company(texto)` quando a pergunta dá **nome** ou CNPJ, ou o ticker não bateu (ticker, nome ou CNPJ →

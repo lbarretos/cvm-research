@@ -119,4 +119,5 @@ mesmo acerto.
 
 **Medição (2026-10-30, v0, `runs/2026-10-30_etapa3-turnos.json`)**: acerto 28/28 (antes 27/28), chamadas por pergunta
 4,36 → 3,07, tokens por pergunta 318 mil → 245 mil (**−23%**), custo US$ 13,92 → 12,46, 0 consultas abortadas, 1 erro de
-ferramenta. Critério revisto (turnos < 4,6 com o mesmo acerto): ver turnos médios no relatório.
+ferramenta, **turnos por pergunta 6,07 → 4,61**. Critério revisto (turnos < 4,6 com o mesmo acerto): empatado no limite;
+o ganho real está nos tokens (−23%) e no acerto.

@@ -99,6 +99,11 @@ URL para já abrir numa empresa. A visão trimestral depende da Camada 6 ter rod
 
 ## Acesso ao banco (MCP `cvm-research`)
 
+**Primeiro turno de uma pergunta de pesquisa**: carregue a skill `cvm-research` **e**, na mesma mensagem, as ferramentas
+(`ToolSearch` com `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc`).
+Feitas em turnos separados, as duas custam um turno a mais (~60 mil tokens): na avaliação de 2026-10-30, 11 de 28
+perguntas gastaram esse turno.
+
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
 Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 empresas), `query(sql)` (SELECT, até 500 linhas),
 `get_financials(ticker, conceitos?, fonte?, desde?, ate?)` (fatos padronizados com `metodo` e `checagem`; veja `fato_padronizado`),

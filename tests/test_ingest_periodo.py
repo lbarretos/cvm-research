@@ -16,6 +16,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ing
 
 from filings import rebuild_filings
 from utils import _upsert_sqlite
+sys.path.insert(0, os.path.dirname(__file__))
+from _empresas import cadastrar_empresas  # noqa: E402
 import ingest_itr
 import ingest_dfp
 
@@ -26,7 +28,7 @@ def _db():
     conn = sqlite3.connect(":memory:")
     with open(SCHEMA, encoding="utf-8") as f:
         conn.executescript(f.read())
-    return conn
+    return cadastrar_empresas(conn)
 
 
 def _row(dt_ini, vl, cd="3.01"):
@@ -241,6 +243,8 @@ MIGRACAO_PLANO = os.path.join(os.path.dirname(__file__), "..", "scripts", "migra
 
 MIGRACAO_FILINGS = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations",
                                 "2026-10-05_filings_views.sql")
+MIGRACAO_TICKER = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations",
+                               "2026-10-30_views_ticker.sql")
 
 
 def _dre_weg_2t26():
@@ -286,6 +290,7 @@ def test_migracao_ebt_corrige_banco_existente_e_espelha_schema():
     assert antigo_sql != migracao
     conn = sqlite3.connect(":memory:")
     conn.executescript(schema)
+    cadastrar_empresas(conn)
     conn.execute("DROP TABLE filings")
     for v in ("vw_balanco", "vw_dre_seguradora", "vw_dre_financeiro", "vw_dre_acumulada", "vw_dre", "vw_plano_contas"):
         conn.execute(f"DROP VIEW {v}")
@@ -298,7 +303,7 @@ def test_migracao_ebt_corrige_banco_existente_e_espelha_schema():
     _assert_ebt_antes_dos_tributos(conn)
 
     # as migrações seguintes, em ordem, levam as views ao schema atual
-    for caminho in (MIGRACAO_PLANO, MIGRACAO_FILINGS):
+    for caminho in (MIGRACAO_PLANO, MIGRACAO_FILINGS, MIGRACAO_TICKER):
         with open(caminho, encoding="utf-8") as f:
             conn.executescript("".join(l for l in f if not l.startswith(".")))
     _assert_ebt_antes_dos_tributos(conn)

@@ -615,6 +615,10 @@ SELECT cnpj_companhia, fonte, data_referencia, plano_contas
 FROM filings
 WHERE tipo_doc = 'DRE' AND plano_contas IS NOT NULL;
 
+-- As views de demonstração e de acionistas trazem `ticker` logo depois do CNPJ (JOIN com companies): `WHERE ticker =
+-- 'PETR4'` usa idx_companies_ticker (~7 ms) e dispensa o resolve_company antes da consulta (Etapa 3, menos turnos).
+-- O JOIN é interno: filing de empresa fora de companies não aparece (os ingestores só carregam o watchlist, que
+-- ingest_companies.py grava em companies; numa base montada pelo bootstrap a diferença é zero).
 -- vw_dre: DRE do período "curto" de cada filing — trimestre isolado no ITR
 -- (dt_ini_exerc mais recente entre as linhas do documento, filings.dt_ini_max) e
 -- exercício no DFP. Versão resolvida por documento, não por conta.
@@ -623,6 +627,7 @@ WHERE tipo_doc = 'DRE' AND plano_contas IS NOT NULL;
 CREATE VIEW IF NOT EXISTS vw_dre AS
 SELECT
     f.cnpj_companhia,
+    c.ticker,
     f.fonte,
     f.data_referencia,
     MIN(d.dt_ini_exerc) AS dt_ini_exerc,
@@ -636,18 +641,20 @@ SELECT
     MAX(CASE WHEN d.cd_conta = '3.11' AND COALESCE(f.plano_contas, 'padrao') = 'padrao' THEN d.vl_conta END) AS lucro_liquido,
     COALESCE(f.plano_contas, 'padrao') AS plano_contas  -- 'banco' → vw_dre_financeiro; 'seguradora' → vw_dre_seguradora
 FROM filings f
+JOIN companies c ON c.cnpj = f.cnpj_companhia
 JOIN demonstrativos_contabeis d
   ON  d.cnpj_companhia = f.cnpj_companhia AND d.fonte = f.fonte AND d.tipo_doc = f.tipo_doc
   AND d.data_referencia = f.data_referencia AND d.versao = f.versao AND d.ordem_exercicio = 'Último'
   AND COALESCE(d.dt_ini_exerc, '') = COALESCE(f.dt_ini_max, '')
 WHERE f.tipo_doc = 'DRE'
-GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
+GROUP BY f.cnpj_companhia, c.ticker, f.fonte, f.data_referencia;
 
 -- vw_dre_acumulada: mesma coisa com o período acumulado no ano (dt_ini_exerc
 -- mais antigo, filings.dt_ini_min). No 1T e no DFP coincide com vw_dre.
 CREATE VIEW IF NOT EXISTS vw_dre_acumulada AS
 SELECT
     f.cnpj_companhia,
+    c.ticker,
     f.fonte,
     f.data_referencia,
     MIN(d.dt_ini_exerc) AS dt_ini_exerc,
@@ -661,12 +668,13 @@ SELECT
     MAX(CASE WHEN d.cd_conta = '3.11' AND COALESCE(f.plano_contas, 'padrao') = 'padrao' THEN d.vl_conta END) AS lucro_liquido,
     COALESCE(f.plano_contas, 'padrao') AS plano_contas  -- 'banco' → vw_dre_financeiro; 'seguradora' → vw_dre_seguradora
 FROM filings f
+JOIN companies c ON c.cnpj = f.cnpj_companhia
 JOIN demonstrativos_contabeis d
   ON  d.cnpj_companhia = f.cnpj_companhia AND d.fonte = f.fonte AND d.tipo_doc = f.tipo_doc
   AND d.data_referencia = f.data_referencia AND d.versao = f.versao AND d.ordem_exercicio = 'Último'
   AND COALESCE(d.dt_ini_exerc, '') = COALESCE(f.dt_ini_min, '')
 WHERE f.tipo_doc = 'DRE'
-GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
+GROUP BY f.cnpj_companhia, c.ticker, f.fonte, f.data_referencia;
 
 -- vw_dre_financeiro: DRE dos filings no plano de bancos (filings.plano_contas = 'banco'),
 -- mesmo período de vw_dre (trimestre isolado no ITR, exercício no DFP). Dois layouts:
@@ -678,6 +686,7 @@ GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
 CREATE VIEW IF NOT EXISTS vw_dre_financeiro AS
 SELECT
     f.cnpj_companhia,
+    c.ticker,
     f.fonte,
     f.data_referencia,
     MIN(d.dt_ini_exerc) AS dt_ini_exerc,
@@ -695,12 +704,13 @@ SELECT
          THEN MAX(CASE WHEN d.cd_conta = '3.11.01' THEN d.vl_conta END)
          ELSE MAX(CASE WHEN d.cd_conta = '3.09.01' THEN d.vl_conta END) END AS lucro_controladora
 FROM filings f
+JOIN companies c ON c.cnpj = f.cnpj_companhia
 JOIN demonstrativos_contabeis d
   ON  d.cnpj_companhia = f.cnpj_companhia AND d.fonte = f.fonte AND d.tipo_doc = f.tipo_doc
   AND d.data_referencia = f.data_referencia AND d.versao = f.versao AND d.ordem_exercicio = 'Último'
   AND COALESCE(d.dt_ini_exerc, '') = COALESCE(f.dt_ini_max, '')
 WHERE f.tipo_doc = 'DRE' AND f.plano_contas = 'banco'
-GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
+GROUP BY f.cnpj_companhia, c.ticker, f.fonte, f.data_referencia;
 
 -- vw_dre_seguradora: DRE dos filings no plano de seguradoras (filings.plano_contas =
 -- 'seguradora'; IRBR3, BBSE3), mesmo período de vw_dre. Layout de 13 linhas, igual
@@ -709,6 +719,7 @@ GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
 CREATE VIEW IF NOT EXISTS vw_dre_seguradora AS
 SELECT
     f.cnpj_companhia,
+    c.ticker,
     f.fonte,
     f.data_referencia,
     MIN(d.dt_ini_exerc) AS dt_ini_exerc,
@@ -726,12 +737,13 @@ SELECT
     MAX(CASE WHEN d.cd_conta = '3.13'    THEN d.vl_conta END) AS lucro_liquido,
     MAX(CASE WHEN d.cd_conta = '3.13.01' THEN d.vl_conta END) AS lucro_controladora
 FROM filings f
+JOIN companies c ON c.cnpj = f.cnpj_companhia
 JOIN demonstrativos_contabeis d
   ON  d.cnpj_companhia = f.cnpj_companhia AND d.fonte = f.fonte AND d.tipo_doc = f.tipo_doc
   AND d.data_referencia = f.data_referencia AND d.versao = f.versao AND d.ordem_exercicio = 'Último'
   AND COALESCE(d.dt_ini_exerc, '') = COALESCE(f.dt_ini_max, '')
 WHERE f.tipo_doc = 'DRE' AND f.plano_contas = 'seguradora'
-GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
+GROUP BY f.cnpj_companhia, c.ticker, f.fonte, f.data_referencia;
 
 -- vw_balanco: BPA + BPP da versão vigente de cada um (filings.versao), plano do filing pela DRE.
 -- O ativo total é '1' em todos os planos.
@@ -742,6 +754,7 @@ GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
 CREATE VIEW IF NOT EXISTS vw_balanco AS
 SELECT
     f.cnpj_companhia,
+    c.ticker,
     f.fonte,
     f.data_referencia,
     MIN(d.dt_fim_exerc) AS dt_fim_exerc,
@@ -753,11 +766,12 @@ SELECT
     MAX(CASE WHEN d.tipo_doc = 'BPP' AND d.cd_conta = '2.03'    AND COALESCE(f.plano_contas, 'padrao') <> 'banco' THEN d.vl_conta END) AS patrimonio_liquido,
     MAX(COALESCE(f.plano_contas, 'padrao')) AS plano_contas
 FROM filings f
+JOIN companies c ON c.cnpj = f.cnpj_companhia
 JOIN demonstrativos_contabeis d
   ON  d.cnpj_companhia = f.cnpj_companhia AND d.fonte = f.fonte AND d.tipo_doc = f.tipo_doc
   AND d.data_referencia = f.data_referencia AND d.versao = f.versao AND d.ordem_exercicio = 'Último'
 WHERE f.tipo_doc IN ('BPA', 'BPP')
-GROUP BY f.cnpj_companhia, f.fonte, f.data_referencia;
+GROUP BY f.cnpj_companhia, c.ticker, f.fonte, f.data_referencia;
 
 -- vw_acionistas_diretos: só os acionistas diretos da companhia listada
 -- (id_acionista_relacionado NULL), no FRE mais recente de cada empresa
@@ -779,7 +793,7 @@ versao_max AS (
       AND p.data_referencia = d.data_referencia
     GROUP BY p.cnpj_companhia, p.data_referencia
 )
-SELECT p.cnpj_companhia, p.nome_companhia, p.data_referencia, p.versao,
+SELECT p.cnpj_companhia, c.ticker, p.nome_companhia, p.data_referencia, p.versao,
        p.id_acionista, p.acionista, p.tipo_pessoa_acionista, p.acionista_controlador,
        p.participante_acordo_acionistas,
        p.quantidade_acao_ordinaria_circulacao, p.percentual_acao_ordinaria_circulacao,
@@ -791,6 +805,7 @@ JOIN versao_max v
   ON  p.cnpj_companhia  = v.cnpj_companhia
   AND p.data_referencia = v.data_referencia
   AND p.versao          = v.versao
+JOIN companies c ON c.cnpj = p.cnpj_companhia
 WHERE p.id_acionista_relacionado IS NULL;
 
 -- ── Renda fixa: debêntures, CRI e CRA (Etapa 8) ──────────────────────────────

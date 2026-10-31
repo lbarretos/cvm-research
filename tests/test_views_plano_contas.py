@@ -11,11 +11,15 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 from filings import rebuild_filings  # noqa: E402
 
+sys.path.insert(0, os.path.dirname(__file__))
+from _empresas import cadastrar_empresas  # noqa: E402
+
 SCHEMA = os.path.join(os.path.dirname(__file__), "..", "schema.sql")
 MIGRACOES = os.path.join(os.path.dirname(__file__), "..", "scripts", "migrations")
 MIGRACAO = os.path.join(MIGRACOES, "2026-09-30_vw_plano_contas.sql")
 MIGRACAO_EBT = os.path.join(MIGRACOES, "2026-09-29_vw_dre_ebt_3_07.sql")
 MIGRACAO_FILINGS = os.path.join(MIGRACOES, "2026-10-05_filings_views.sql")
+MIGRACAO_TICKER = os.path.join(MIGRACOES, "2026-10-30_views_ticker.sql")
 
 ITUB = "60.872.504/0001-23"
 BBAS = "00.000.000/0001-91"
@@ -83,7 +87,7 @@ def _db(schema=None):
         with open(SCHEMA, encoding="utf-8") as f:
             schema = f.read()
     conn.executescript(schema)
-    return conn
+    return cadastrar_empresas(conn)
 
 
 def _migracao(caminho):
@@ -146,7 +150,7 @@ def test_vw_dre_nula_fora_do_plano_padrao():
     for view in ("vw_dre", "vw_dre_acumulada"):
         for cnpj, plano in ((ITUB, "banco"), (BBAS, "banco"), (IRBR, "seguradora")):
             r = _um(conn, f"SELECT * FROM {view} WHERE cnpj_companhia = ?", cnpj)
-            valores = {k: v for k, v in r.items() if k not in ("cnpj_companhia", "fonte", "data_referencia",
+            valores = {k: v for k, v in r.items() if k not in ("cnpj_companhia", "ticker", "fonte", "data_referencia",
                                                                  "dt_ini_exerc", "dt_fim_exerc", "plano_contas")}
             assert set(valores.values()) == {None}, (view, cnpj, valores)
             assert (r["plano_contas"], r["dt_fim_exerc"]) == (plano, "2025-12-31")   # a linha do filing continua lá
@@ -217,6 +221,7 @@ def test_migracao_plano_contas_corrige_banco_existente_e_espelha_schema():
     assert conn.execute("SELECT receita_liquida, plano_contas FROM vw_dre WHERE cnpj_companhia = ?", (ITUB,)).fetchone() == \
         (None, "banco")
     assert conn.execute("SELECT lucro_liquido FROM vw_dre_financeiro WHERE cnpj_companhia = ?", (ITUB,)).fetchone() == (45849e6,)
-    # a migração da Etapa 1 leva o banco ao estado do schema.sql atual (views leem `filings`)
+    # a migração da Etapa 1 (views leem `filings`) e a da Etapa 3 (`ticker`) levam o banco ao schema.sql atual
     conn.executescript(_migracao(MIGRACAO_FILINGS))
+    conn.executescript(_migracao(MIGRACAO_TICKER))
     assert conn.execute(views).fetchall() == _db(schema).execute(views).fetchall()

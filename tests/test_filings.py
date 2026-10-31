@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ing
 
 from filings import rebuild_filings  # noqa: E402
 from test_views_plano_contas import (BAL_B3SA, BAL_IRBR, BAL_ITUB, B3SA, BBAS, DRE_B3SA, DRE_BBAS,  # noqa: E402
-                                     DRE_IRBR, DRE_ITUB, IRBR, ITUB, MIGRACAO, MIGRACAO_FILINGS,
+                                     DRE_IRBR, DRE_ITUB, IRBR, ITUB, MIGRACAO, MIGRACAO_FILINGS, MIGRACAO_TICKER,
                                      _balanco, _db, _dre, _migracao)
 
 VIEWS = ["vw_plano_contas", "vw_dre", "vw_dre_acumulada", "vw_dre_financeiro", "vw_dre_seguradora", "vw_balanco"]
@@ -60,7 +60,9 @@ def _cenario(conn):
 
 def _todas(conn, view):
     cur = conn.execute(f"SELECT * FROM {view}")
-    return cur.fetchall()
+    nomes = [c[0] for c in cur.description]
+    # `ticker` (Etapa 3) não existe nas views antigas: compara o resto
+    return [tuple(v for n, v in zip(nomes, r) if n != "ticker") for r in cur.fetchall()]
 
 
 def test_views_novas_equivalem_as_antigas():
@@ -121,6 +123,7 @@ def test_migracao_filings_preenche_igual_ao_rebuild():
         conn.execute(f"DROP VIEW {v}")
     for _ in range(2):   # idempotente
         conn.executescript(_migracao(MIGRACAO_FILINGS))
+    conn.executescript(_migracao(MIGRACAO_TICKER))
     # versao_template (Etapa 5) não faz parte da migração de 2026-10-05
     q = ("SELECT cnpj_companhia, fonte, tipo_doc, data_referencia, versao, plano_contas, dt_ini_min, dt_ini_max, "
          "n_linhas FROM filings ORDER BY 1, 2, 3, 4")

@@ -1,0 +1,860 @@
+{
+ "rotulo": "etapa3-turnos",
+ "executado_em": "2026-10-30",
+ "golden_gerado_em": "2026-09-30",
+ "modelo": null,
+ "duracao_total_s": 180,
+ "resumo": {
+  "geral": {
+   "n": 28,
+   "acerto": 1.0,
+   "chamadas_por_pergunta": 3.07,
+   "tokens_por_pergunta": 244965,
+   "erros_ferramenta": 1,
+   "consultas_abortadas": 0,
+   "chars_lidos_por_pergunta": 2495,
+   "duracao_media_s": 15.7,
+   "custo_usd": 12.461
+  },
+  "por_tipo": {
+   "contagem": {
+    "n": 4,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 3.0,
+    "tokens_por_pergunta": 243268,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 2059,
+    "duracao_media_s": 13.8,
+    "custo_usd": 1.708
+   },
+   "documento": {
+    "n": 4,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 4.0,
+    "tokens_por_pergunta": 312646,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 6482,
+    "duracao_media_s": 15.6,
+    "custo_usd": 1.985
+   },
+   "fato": {
+    "n": 3,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 2.67,
+    "tokens_por_pergunta": 197630,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 2774,
+    "duracao_media_s": 13.2,
+    "custo_usd": 1.28
+   },
+   "numero": {
+    "n": 14,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 2.79,
+    "tokens_por_pergunta": 224972,
+    "erros_ferramenta": 1,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 1195,
+    "duracao_media_s": 13.9,
+    "custo_usd": 6.033
+   },
+   "numero_par": {
+    "n": 2,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 4.0,
+    "tokens_por_pergunta": 310228,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 4258,
+    "duracao_media_s": 33.6,
+    "custo_usd": 0.988
+   },
+   "sem_dado": {
+    "n": 1,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 3.0,
+    "tokens_por_pergunta": 272426,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 2128,
+    "duracao_media_s": 19.1,
+    "custo_usd": 0.468
+   }
+  }
+ },
+ "resultados": [
+  {
+   "id": "q001",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "67026656000.0",
+   "resposta": "A receita líquida consolidada da Gerdau (GGBR4) no DFP de 2024 foi de **R$ 67.026.656.000**, cerca de R$ 67,0 bilhões. O valor cobre o exercício de 01/01/2024 a 31/12/2024 e vem da conta 3.01.\n\nA consulta não indica se o número é consolidado ou da controladora. Ele é igual à receita consolidada que a Gerdau divulgou para 2024, cerca de R$ 67,0 bi, então tratei como consolidado.\n\nOutras linhas da mesma DRE:\n\n| Linha | R$ |\n|---|---|\n| Custo dos produtos vendidos | −57.823.416.000 |\n| Resultado bruto | 9.203.240.000 |\n| EBIT | 7.487.202.000 |\n| Lucro líquido | 4.599.062.000 |\n\nRESPOSTA: 67026656000.0",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 784,
+   "turnos": 3,
+   "tokens_entrada": 187263,
+   "tokens_saida": 704,
+   "custo_usd": 0.3786172,
+   "duracao_s": 9.6,
+   "erro_sessao": false
+  },
+  {
+   "id": "q002",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "4599062000.0",
+   "resposta": "O lucro líquido consolidado da Gerdau (GGBR4) em 2024 foi de **R$ 4.599.062.000** (cerca de R$ 4,60 bi). Essa é a conta 3.11, \"Lucro/Prejuízo Consolidado do Período\", na DRE da DFP 2024 (versão 2, coluna \"Último\", de 01/01 a 31/12/2024). Ele se divide assim:\n\n| Parcela | R$ |\n|---|---|\n| Atribuído aos controladores (3.11.01) | 4.566.317.000 |\n| Atribuído aos não controladores (3.11.02) | 32.745.000 |\n| **Lucro consolidado (3.11)** | **4.599.062.000** |\n\nO mesmo filing traz 2023 como comparativo: R$ 7.536.983.000, uma queda de cerca de 39% em 2024.\n\nO número é o que estava no ZIP da CVM no dia da carga da base. Se a Gerdau reapresentar o balanço depois, o valor pode mudar.\n\nRESPOSTA: 4599062000.0",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1380,
+   "turnos": 3,
+   "tokens_entrada": 186830,
+   "tokens_saida": 915,
+   "custo_usd": 0.553165,
+   "duracao_s": 11.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q003",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "5351785000.0",
+   "resposta": "A receita líquida consolidada da YDUQS (YDUQ3) em 2024, pela DFP com data de referência 31/12/2024, foi de **R$ 5.351.785.000**, ou cerca de R$ 5,35 bilhões.\n\nO número vem da conta 3.01 (Receita de Venda de Bens e/ou Serviços) da DRE, lido na `vw_dre` da base local. Esse valor reflete a versão da DFP que a CVM publicava no dia em que a base foi carregada.\n\nA view não diz se o número é consolidado ou individual, e eu não conferi isso. Considerei consolidado porque a YDUQS é uma holding: na DRE individual, a receita ficaria perto de zero, não em bilhões.\n\nRESPOSTA: 5351785000.0",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 366,
+   "turnos": 3,
+   "tokens_entrada": 186999,
+   "tokens_saida": 672,
+   "custo_usd": 0.5437446,
+   "duracao_s": 15.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q004",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "341208000.0",
+   "resposta": "Pela DFP 2024 (versão 2, coluna do exercício corrente, conta 3.11 \"Lucro/Prejuízo Consolidado do Período\"), o lucro líquido consolidado de YDUQ3 em 2024 foi de **R$ 341.208.000** (≈ R$ 341,2 milhões).\n\nDesse total:\n- R$ 341.378.000 são dos acionistas controladores;\n- −R$ 170.000 são dos não controladores.\n\nPara comparar, a coluna de 2023 nessa mesma DFP traz R$ 154.651.000.\n\nRESPOSTA: 341208000.0",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1393,
+   "turnos": 4,
+   "tokens_entrada": 250894,
+   "tokens_saida": 785,
+   "custo_usd": 0.3969646,
+   "duracao_s": 11.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q005",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "1236345000.0",
+   "resposta": "A receita líquida consolidada da Iguatemi (IGTI11) em 2024, segundo a DFP, foi de **R$ 1.236.345.000**, ou cerca de R$ 1,24 bilhão.\n\n- **Conta:** 3.01, \"Receita de Venda de Bens e/ou Serviços\". O período vai de 01/01/2024 a 31/12/2024, na coluna \"Último\" da DFP 2024 (versão 1). O mesmo número aparece em `vw_dre`.\n- **Comparação:** a coluna \"Penúltimo\" do mesmo documento traz R$ 1.157.163.000 para 2023. A alta foi de cerca de 6,8%.\n- **Consolidado:** a consulta trouxe só uma linha da conta 3.01, e não conferi se ela é a demonstração consolidada ou a individual. Parti do princípio de que a base guarda a consolidada.\n\nRESPOSTA: 1236345000.0",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 904,
+   "turnos": 4,
+   "tokens_entrada": 246909,
+   "tokens_saida": 996,
+   "custo_usd": 0.4038584,
+   "duracao_s": 13.6,
+   "erro_sessao": false
+  },
+  {
+   "id": "q006",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "399876000.0",
+   "resposta": "**IGTI11 (Iguatemi S.A.), DFP 2024, versão 1, coluna \"Último\"**\n\nO lucro líquido consolidado do exercício foi de **R$ 399.876.000** (conta 3.11, \"Lucro/Prejuízo Consolidado do Período\"). Ele se divide em:\n- Atribuído aos sócios da controladora (3.11.01): R$ 399.771.000\n- Atribuído aos não controladores (3.11.02): R$ 105.000\n\nEntendi a conta 3.11 como o lucro consolidado porque ela está dividida entre controladores e não controladores.\n\nRESPOSTA: 399876000.0",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 1,
+   "consultas_abortadas": 0,
+   "chars_resultados": 727,
+   "turnos": 6,
+   "tokens_entrada": 202076,
+   "tokens_saida": 899,
+   "custo_usd": 0.44530559999999997,
+   "duracao_s": 10.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q007",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "21783791000.0",
+   "resposta": "A receita líquida consolidada da Motiva (MOTV3, antiga CCR) em 2024 foi de **R$ 21.783.791.000**, ou cerca de R$ 21,8 bilhões. O número está na linha 3.01 da demonstração de resultado (\"Receita de Venda de Bens e/ou Serviços\"), na DFP de 31/12/2024, versão 1, coluna do exercício corrente.\n\nA tabela não indica se o dado é consolidado ou só da controladora. Considero consolidado porque a holding sozinha teria receita muito menor que R$ 21,8 bilhões.\n\nPara comparação, a mesma DFP traz R$ 18.932.725.000 de receita em 2023, um crescimento de cerca de 15%. Os valores são os do arquivo baixado da CVM em 17/09/2026.\n\nRESPOSTA: 21783791000.0",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1809,
+   "turnos": 4,
+   "tokens_entrada": 247441,
+   "tokens_saida": 976,
+   "custo_usd": 0.3919896,
+   "duracao_s": 12.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q008",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "1311615000.0",
+   "resposta": "Pelo DFP 2024 (versão 1, exercício encerrado em 31/12/2024, coluna do exercício corrente), o lucro líquido consolidado da MOTV3 (Motiva, antiga CCR) foi de **R$ 1.311.615.000** (cerca de R$ 1,31 bi). É a conta 3.11, \"Lucro/Prejuízo Consolidado do Período\".\n\n| Parcela | R$ |\n|---|---|\n| Atribuído aos sócios da controladora (3.11.01) | 1.248.695.000 |\n| Atribuído aos não controladores (3.11.02) | 62.920.000 |\n| **Total consolidado (3.11)** | **1.311.615.000** |\n\nSe a pergunta for o lucro que fica com os acionistas da Motiva, o número é o da controladora, R$ 1.248.695.000. O valor é o que estava no arquivo da CVM no dia em que a base foi carregada.\n\nRESPOSTA: 1311615000.0",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 743,
+   "turnos": 3,
+   "tokens_entrada": 184536,
+   "tokens_saida": 836,
+   "custo_usd": 0.371609,
+   "duracao_s": 14.2,
+   "erro_sessao": false
+  },
+  {
+   "id": "q009",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "42150257000.0",
+   "resposta": "A receita líquida consolidada da MBRF3 (Marfrig Global Foods) no 4T24 foi de **R$ 42.150.257.000 (≈ R$ 42,15 bilhões)**. Esse é o número como divulgado na época.\n\n- **De onde vem:** a CVM não publica o 4º trimestre isolado. O valor é a receita do ano de 2024 na DFP 2024 menos o acumulado até setembro no ITR do 3T24, as duas da época (conta 3.01).\n- **Sem alertas:** a base não marca nenhum problema de consistência nessa linha, como reapresentação no meio do ano ou mudança de classificação entre os documentos.\n- **Versão reapresentada:** nos documentos de 2025, o mesmo trimestre aparece com R$ 42.208.180.000, cerca de R$ 58 milhões a mais. Como você pediu o número da época, vale o original.\n\nRESPOSTA: 42150257000.0",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1343,
+   "turnos": 5,
+   "tokens_entrada": 271295,
+   "tokens_saida": 926,
+   "custo_usd": 0.4608590000000001,
+   "duracao_s": 17.8,
+   "erro_sessao": false
+  },
+  {
+   "id": "q010",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "3349190000.0",
+   "resposta": "A receita líquida da PGMN3 (Pague Menos) no 4T24, trimestre isolado e como divulgada na época, foi de **R$ 3.349.190.000** (cerca de R$ 3,35 bilhões).\n\nA CVM não publica o 4º trimestre separado, então esse número é calculado: a receita do ano inteiro no DFP 2024 menos a receita acumulada até setembro no ITR do 3T24. Os dois são os documentos originais, não versões reapresentadas depois. A base não marca nenhuma inconsistência nesse cálculo.\n\n| Trimestre de 2024 | Receita líquida (R$) | De onde vem |\n|---|---|---|\n| 1T24 | 2.882.500.000 | publicada no ITR |\n| 2T24 | 3.138.831.000 | publicada no ITR |\n| 3T24 | 3.271.304.000 | publicada no ITR |\n| **4T24** | **3.349.190.000** | DFP 2024 − acumulado do 3T24 |\n\nA soma dos quatro trimestres dá cerca de R$ 12,64 bilhões, a receita do ano de 2024.\n\nRESPOSTA: 3349190000.0",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1225,
+   "turnos": 3,
+   "tokens_entrada": 184553,
+   "tokens_saida": 802,
+   "custo_usd": 0.37178259999999996,
+   "duracao_s": 9.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q011",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "7023983000.0",
+   "resposta": "Na DFP 2024, a Cosan (CSAN3) registrou **R$ 7.023.983.000** (cerca de R$ 7,02 bilhões) de depreciação, amortização e exaustão. O número está na conta 7.04.01 da DVA, que é a demonstração de valor adicionado (versão 1, coluna \"Último\").\n\n- **O valor não mudou depois.** A DFP 2025 traz o mesmo número para 2024 na coluna \"Penúltimo\".\n- **A DFC dá um número menor.** O fluxo de caixa padronizado (`get_financials`, conceito `da_total`, método `derivado`) dá R$ 3,87 bi. Esse valor ficou com a checagem `divergente` e não foi publicado. A diferença, de uns R$ 3,16 bi, é uma baixa por impairment: a DVA soma essa baixa ao D&A, e as linhas de D&A da DFC deixam de fora.\n- **Comparação com outros anos:** foram R$ 3,36 bi em 2023 e R$ 3,89 bi em 2025. O salto de 2024 vem dessa baixa, não de uma depreciação recorrente mais alta.\n\nSe a pergunta for pelo D&A recorrente, sem a baixa, o número de referência é o da DFC, de R$ 3,87 bi. O valor abaixo é o que foi publicado na DVA.\n\nRESPOSTA: 7023983000.0",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "get_financials"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2748,
+   "turnos": 6,
+   "tokens_entrada": 273537,
+   "tokens_saida": 1123,
+   "custo_usd": 0.47658860000000003,
+   "duracao_s": 30.6,
+   "erro_sessao": false
+  },
+  {
+   "id": "q012",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "37357000.0",
+   "resposta": "Em 2024, a ISA Energia (ISAE4) registrou **R$ 37,357 milhões** de depreciação, amortização e exaustão. O valor vem da DVA consolidada da DFP 2024, conta `7.04.01`.\n\n- **A DFP 2025 repete o número.** Ela mostra 2024 na coluna do ano anterior com os mesmos R$ 37,357 milhões, então não houve reapresentação.\n- **A DFC dá um número maior porque usa outra definição.** O total de D&A no fluxo de caixa é de R$ 57,219 milhões (somado de 2 linhas, checagem `ok_sem_ppa`). Ele se divide em:\n  - R$ 37,357 milhões de D&A sem a amortização de mais-valia de aquisições (`metodo` = regra, checagem `ok`), igual ao da DVA;\n  - R$ 19,862 milhões de amortização da mais-valia (PPA) de aquisições (`metodo` = regra, checagem `ok`), que a DVA não inclui em `7.04.01`.\n\n  Se você quiser o D&A com a amortização do PPA, o número é R$ 57,219 milhões.\n\nRESPOSTA: 37357000.0",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "get_financials"
+    ],
+    [
+     "get_financials"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2014,
+   "turnos": 7,
+   "tokens_entrada": 346019,
+   "tokens_saida": 1443,
+   "custo_usd": 0.4989512,
+   "duracao_s": 16.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q013",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "29171564000.0",
+   "resposta": "O lucro líquido consolidado do Banco do Brasil (BBAS3) no exercício de 2024, pela DFP, foi de **R$ 29,17 bilhões** (R$ 29.171.564.000). Desse total, **R$ 26,36 bilhões** são atribuídos aos acionistas do BB (controladora).\n\nO BB publica a DRE no plano de contas de banco, por isso o número vem da `vw_dre_financeiro` e não da `vw_dre`:\n\n| Linha (DFP 2024, 01/01–31/12/2024) | R$ |\n|---|---|\n| Receitas da intermediação financeira | 273.505.274.000 |\n| Despesas da intermediação financeira | −168.990.827.000 |\n| Resultado bruto da intermediação | 104.514.447.000 |\n| Outras receitas/despesas operacionais | −76.803.858.000 |\n| Lucro antes do IR/CS (LAIR) | 27.710.589.000 |\n| IR e CS | +1.460.975.000 |\n| **Lucro líquido consolidado** | **29.171.564.000** |\n| Lucro atribuído à controladora | 26.358.860.000 |\n\n- **IR/CS positivo:** o imposto somou ao resultado em vez de reduzi-lo.\n- **Diferença entre os dois lucros:** os R$ 2,8 bilhões restantes ficam com os sócios minoritários das subsidiárias.\n- **Lucro ajustado:** o lucro ajustado que o BB divulga no release de resultados é outro número, maior, e não sai deste quadro.\n\nRESPOSTA: 29171564000.0",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 841,
+   "turnos": 3,
+   "tokens_entrada": 184374,
+   "tokens_saida": 1058,
+   "custo_usd": 0.3750104,
+   "duracao_s": 13.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q014",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "11080445000.0",
+   "resposta": "O lucro líquido consolidado de BPAC11 (BTG Pactual) na DFP de 2024 foi **R$ 11,08 bi**. Os números vêm da `vw_dre_financeiro`, porque o BTG publica no plano de contas de banco, onde o lucro está na conta 3.09.\n\n| Linha | R$ |\n|---|---|\n| Resultado antes dos tributos (LAIR) | 12.823.072.000 |\n| IR/CS | −1.742.627.000 |\n| **Lucro líquido consolidado** | **11.080.445.000** |\n| Atribuído aos controladores | 10.745.004.000 |\n\nUsei o lucro consolidado. Se você precisa só da parte dos controladores (sem os não controladores), o número é R$ 10.745.004.000.\n\nRESPOSTA: 11080445000.0",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 450,
+   "turnos": 3,
+   "tokens_entrada": 184158,
+   "tokens_saida": 584,
+   "custo_usd": 0.36412220000000006,
+   "duracao_s": 10.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q015",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "4",
+   "resposta": "Pela base local, as Lojas Renner (LREN3) divulgaram **4 fatos relevantes em 2025**, contando pela data de entrega à CVM. São todos versões vigentes e nenhum foi reapresentado.\n\n| Data de entrega | Assunto |\n|---|---|\n| 20/02/2025 | Aquisição de ações de emissão da própria companhia (recompra) |\n| 20/02/2025 | Modificação de projeções divulgadas |\n| 08/12/2025 | Aquisição de ações de emissão da própria companhia e cancelamento de ações em tesouraria |\n| 08/12/2025 | Divulgação de projeções |\n\nOs quatro chegaram em duas datas. Em cada uma houve um fato sobre recompra e outro sobre projeções.\n\nRESPOSTA: 4",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 992,
+   "turnos": 5,
+   "tokens_entrada": 271205,
+   "tokens_saida": 867,
+   "custo_usd": 0.4579528,
+   "duracao_s": 10.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q016",
+   "tipo": "documento",
+   "correto": true,
+   "nota_correcao": "A resposta informa a data correta (10/08/2026) e o assunto correto (contratação de formador de mercado). Os detalhes extras (BTG Pactual, prazo de 12 meses) estão de acordo com o tema. A menção ao fato de 06/08/2026 aparece corretamente como anterior a ele, então não contradiz a referência.",
+   "resposta": "O último fato relevante da Lojas Renner (LREN3) antes de setembro de 2026 saiu em **10/08/2026** e trata da **contratação de um formador de mercado**.\n\n- **Contratado:** BTG Pactual Corretora de Títulos e Valores Mobiliários, como formador de mercado das ações ordinárias LREN3 na B3.\n- **Objetivo:** aumentar a liquidez das ações.\n- **Prazo:** o contrato vale 12 meses e renova sozinho por mais 12. O BTG começou a atuar em 11/08/2026.\n- **Ações em circulação:** 960.916.549 ações ordinárias na data do comunicado.\n- **Outros acordos:** a Renner informa que não tem com o BTG nenhum acordo sobre voto ou sobre compra e venda das suas ações.\n\n**O que muda para o acionista:** é um fato operacional de pouco impacto. Melhora um pouco a liquidez e não mexe nos resultados nem na tese de investimento.\n\nO fato relevante anterior, de **06/08/2026** (quatro dias antes), tem mais peso. O assunto é **\"Projeções\"**, ou seja, uma atualização do guidance. Ele veio depois do guidance de 2026 publicado em março, que foi reapresentado em 09/03. Se você quiser, leio esse documento e comparo as projeções com as de março.\n\nA base vai até documentos entregues em 24/10/2026, então todo o período antes de setembro está coberto. Link do documento: [RAD/CVM](https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&descTipo=IPE&CodigoInstituicao=1&numProtocolo=1555051&numSequencia=1079757&numVersao=1)",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6134,
+   "turnos": 6,
+   "tokens_entrada": 276889,
+   "tokens_saida": 1250,
+   "custo_usd": 0.48770060000000004,
+   "duracao_s": 15.2,
+   "erro_sessao": false
+  },
+  {
+   "id": "q017",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "23 (sem reapresentações; referência 25)",
+   "resposta": "ONCO3 (Oncoclínicas) divulgou **23 fatos relevantes distintos em 2025**, contando pela data de entrega à CVM. A base tem 25 entregas, porque dois fatos de 13/11 foram reapresentados no dia seguinte, e contei cada um uma vez só.\n\n| Data | Assunto |\n|---|---|\n| 06/02 | Incorporação e cisão parcial de entidades |\n| 28/03 | Programa de recompra |\n| 08/05 | Solicitação de convocação de AGE |\n| 13/05 | Resposta à solicitação de convocação de AGE |\n| 14/08 | Pedido de convocação de AGE |\n| 14/08 | Notícia veiculada em mídia |\n| 25/08 | Venda do Hospital Marcos Moraes |\n| 26/08 | Venda do Hospital UMC |\n| 09/09 | Atualização sobre potencial aumento de capital |\n| 10/09 | Notícia divulgada na mídia |\n| 16/09 | Aumento de capital |\n| 01/10 | Guidance de projeções financeiras |\n| 01/10 | Distrato BTS São Paulo |\n| 08/10 | Aumento de capital |\n| 22/10 | Repactuação de prazos de CBDs |\n| 27/10 | Venda de debêntures em tesouraria |\n| 11/11 | Atingimento de subscrição mínima |\n| 13/11 (reapresentado em 14/11) | Venda do Hospital Vila da Serra |\n| 13/11 (reapresentado em 14/11) | Contratos BTS |\n| 18/11 | Liquidação extrajudicial do Banco Master |\n| 18/11 | Homologação do aumento de capital |\n| 26/11 | Pedido de convocação de AGE |\n| 15/12 | Cotas de FIPs ligadas ao Banco Master |\n\nOs temas que mais aparecem são a venda de hospitais, o aumento de capital (em cinco fatos, de setembro a novembro), os pedidos de convocação de AGE e a exposição ao Banco Master.\n\nRESPOSTA: 23",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 4172,
+   "turnos": 5,
+   "tokens_entrada": 203192,
+   "tokens_saida": 1255,
+   "custo_usd": 0.462001,
+   "duracao_s": 12.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q018",
+   "tipo": "documento",
+   "correto": true,
+   "nota_correcao": "A resposta traz a data certa (27/08/2026) e o assunto 'Informações adicionais - OPA', que bate com a referência. Ela também resume o conteúdo do texto: a decisão do Colegiado da CVM que obriga a Centaurus Capital a fazer a OPA estatutária do art. 39. Os fatos de datas anteriores aparecem só como contexto e não confundem a ordenação.",
+   "resposta": "### ONCO3 (Oncoclínicas): último fato relevante antes de setembro de 2026\n\n**27/08/2026, \"Informações adicionais - OPA\"**. A decisão do Colegiado da CVM obriga a Centaurus Capital a fazer a OPA estatutária.\n\nA empresa informou que recebeu o Ofício nº 200/2026/CVM/SER/GER-1. Em reunião de 25/08/2026, o Colegiado da CVM **deu provimento aos recursos** contra a área técnica, a Superintendência de Registro (SRE). A SRE havia entendido que a OPA prevista no art. 39 do Estatuto Social da Oncoclínicas não se aplicava. O Colegiado decidiu o seguinte:\n\n1. **Fato gerador em 04/11/2024.** O preço por ação é calculado nessa data e corrigido pela Selic até a OPA.\n2. **Preço:** segue a fórmula do art. 39, §1º, do Estatuto.\n3. **Prazo:** a **Centaurus Capital L.P.** tem até 60 dias para fazer a OPA, ou seja, **até 24/10/2026**.\n4. **Quem pode vender:** os acionistas habilitados até a véspera do leilão (art. 25, §1º, da Resolução CVM 215/2024).\n5. **Exceções:** o Colegiado afastou as dos §§7º e 8º do art. 39. Isso derruba os argumentos que livrariam a Centaurus da oferta.\n\n**Classificação:** regulatório e societário, com impacto direto para o acionista minoritário. A decisão dá aos minoritários o direito de vender as ações à Centaurus, que é obrigada a comprar. O preço é o da fórmula estatutária na data de 2024, corrigido pela Selic.\n\n**Contexto:** em agosto a empresa publicou outros fatos relevantes sobre o mesmo assunto:\n- 25/08: \"Decisão CVM - OPA\";\n- 26/08: atualização da minuta do plano de recuperação extrajudicial;\n- 20/08: conclusão da venda da participação na JV da Arábia Saudita;\n- 05/08: deferimento do pedido de recuperação extrajudicial.\n\n**Ponto em aberto:** o prazo da OPA terminou em 24/10/2026. A última carga do IPE nesta base tem documentos entregues até essa mesma data. Se houver documento sobre o lançamento ou o adiamento da OPA, ele sai na carga de segunda-feira ou já pode ser consultado no [RAD](https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx).\n\n[Documento original](https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&descTipo=IPE&CodigoInstituicao=1&numProtocolo=1562196&numSequencia=1086902&numVersao=1)",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6636,
+   "turnos": 6,
+   "tokens_entrada": 276957,
+   "tokens_saida": 1545,
+   "custo_usd": 0.49533020000000005,
+   "duracao_s": 17.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q019",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "7 (sem reapresentações; referência 8)",
+   "resposta": "Pelo critério da data de entrega à CVM, a CPFL Energia (CPFE3) divulgou **7 fatos relevantes distintos em 2025**. A base tem 8 registros no ano, mas um deles é reenvio de outro: o fato relevante de 16/10 sobre a renúncia e eleição do presidente do Conselho foi entregue de novo em 17/10, com a mesma data de referência e o mesmo assunto. Contei só a versão em vigor.\n\n| Data | Assunto |\n|---|---|\n| 28/03 | Renovação das concessões da CPFL Paulista, CPFL Piratininga e RGE (rito antecipado, confirmação do envio à ANEEL) |\n| 08/04 | Ação judicial sobre contrato de compra e venda de energia |\n| 29/04 | Cisão parcial da CPFL Geração, com o acervo cindido incorporado pela CPFL Energia |\n| 05/05 | Renúncia da Diretora Vice-presidente de Operações de Mercado |\n| 16–17/10 | Renúncia e eleição do Presidente do Conselho de Administração (entregue duas vezes) |\n| 01/12 | Alteração de controle acionário da CPFL Transmissão |\n| 05/12 | Alteração de controle acionário |\n\nSe cada envio à CVM contar separadamente, incluindo o reenvio, o total é 8.\n\nRESPOSTA: 7",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1949,
+   "turnos": 4,
+   "tokens_entrada": 247284,
+   "tokens_saida": 1205,
+   "custo_usd": 0.397365,
+   "duracao_s": 19.8,
+   "erro_sessao": false
+  },
+  {
+   "id": "q020",
+   "tipo": "documento",
+   "correto": true,
+   "nota_correcao": "A resposta identifica corretamente a data (2026-05-08) e o tema (Renovação das Concessões das distribuidoras), em linha com a referência. Os demais detalhes são complementares e não contradizem o gabarito.",
+   "resposta": "O último fato relevante da **CPFE3 (CPFL Energia)** antes de setembro de 2026 saiu em **8 de maio de 2026**: **\"Renovação das Concessões das distribuidoras\"**.\n\n**O conteúdo:** três distribuidoras do grupo assinaram os termos aditivos aos contratos de concessão. Com isso, cada concessão foi prorrogada por mais 30 anos. Os novos prazos contam a partir destas datas:\n\n| Distribuidora | Prorrogação a partir de |\n|---|---|\n| CPFL Paulista | 20/11/2027 |\n| CPFL RGE | 06/11/2027 |\n| CPFL Piratininga | 23/10/2028 |\n\n- A assinatura atende ao despacho do Ministro de Minas e Energia publicado no DOU em 06/04/2026, com base no Decreto nº 12.068/2024. As cláusulas passaram a valer de imediato.\n- As três somam cerca de 10,3 milhões de consumidores e 21,8 milhões de habitantes, em 642 municípios: 261 em SP e 381 no RS.\n- O fato conclui o processo que começou no fato relevante de 28/03/2025 e seguiu nos comunicados de cada distribuidora ao longo de 2025.\n\n**Por que importa:** é um fato regulatório e operacional de peso. O risco de vencimento das três maiores distribuidoras do grupo sai do caminho, e a geração de caixa delas fica garantida até cerca de 2057–2058.\n\nA base não tem nenhum fato relevante da CPFE3 entre 8 de maio e 31 de agosto. Os anteriores foram a renúncia de um conselheiro (06/03/2026), uma reorganização societária (02/02/2026) e o cancelamento do registro de companhia aberta da CPFL Geração (janeiro de 2026).\n\nLink do documento: [RAD/CVM](https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&descTipo=IPE&CodigoInstituicao=1&numProtocolo=1519069&numSequencia=1043775&numVersao=1)",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 7144,
+   "turnos": 6,
+   "tokens_entrada": 346061,
+   "tokens_saida": 1242,
+   "custo_usd": 0.5039330000000001,
+   "duracao_s": 14.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q021",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "5",
+   "resposta": "A ALLOS (ALOS3) divulgou **5 fatos relevantes em 2025**. Cada um tem protocolo próprio, nenhum é reapresentação de outro, e a data de entrega coincide com a data de referência:\n\n| Data | Assunto |\n|---|---|\n| 28/01/2025 | Novo programa de recompra de ações |\n| 17/03/2025 | Acompanhamento, encerramento e novas projeções gerenciais |\n| 14/05/2025 | Notícia vinculada à mídia |\n| 13/08/2025 | Modificação de projeções divulgadas |\n| 12/11/2025 | Aprovação de dividendos intercalares e projeções gerenciais |\n\nA contagem saiu da base local, que guarda os documentos que a CVM envia (IPE).\n\nRESPOSTA: 5",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1123,
+   "turnos": 4,
+   "tokens_entrada": 247078,
+   "tokens_saida": 986,
+   "custo_usd": 0.3902528,
+   "duracao_s": 12.8,
+   "erro_sessao": false
+  },
+  {
+   "id": "q022",
+   "tipo": "documento",
+   "correto": true,
+   "nota_correcao": "A data de entrega bate com a referência (06/08/2026 = 2026-08-06). O tema também confere: a resposta descreve um esclarecimento sobre métricas do 2T26 que circularam antes da divulgação, o que corresponde ao assunto 'Esclarecimentos'. A resposta leu o conteúdo do documento e ordenou os fatos corretamente pela data de entrega.",
+   "resposta": "### ALOS3 (ALLOS S.A.): último fato relevante antes de setembro de 2026\n\nO último foi um **esclarecimento sobre os resultados do 2T26 que vazaram antes da divulgação**, entregue em **06/08/2026** (protocolo `022357IPE060820260180417510-38`).\n\n**O que diz:** a ALLOS soube que algumas métricas do 2T26 estavam circulando antes da divulgação oficial. A empresa confirmou que os números eram verdadeiros:\n\n| Métrica (2T26) | Valor | Var. anual |\n|---|---|---|\n| Receita líquida | R$ 732,3 mi | +11,6% |\n| EBITDA ajustado | R$ 525,4 mi | +10,5% |\n| Lucro líquido | R$ 294 mi | +57,7% |\n\nSegundo a empresa, esses números são só uma parte do resultado. O release completo e as demonstrações financeiras sairiam no mesmo dia, depois do fechamento do pregão, como previa o calendário corporativo.\n\n**Classificação:** é um fato relevante financeiro e reativo, publicado por obrigação da Resolução CVM 44 porque informação ainda não divulgada vazou. Não traz nenhum evento novo. O dado que mais chama atenção é o lucro subir 57,7%, bem acima da receita e do EBITDA. A explicação deve estar no release do 2T26; ainda não abri esse documento.\n\n**Fatos relevantes anteriores**, para contexto:\n- 10/04/2026: memorando de entendimento para criar um FII.\n- 10/03/2026: encerramento do guidance e divulgação de uma nova projeção.\n- 10/03/2026: aprovação da 9ª emissão de debêntures.\n- 12/11/2025: dividendos intercalares e projeções gerenciais.\n\nLink: https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&descTipo=IPE&CodigoInstituicao=1&numProtocolo=1553345&numSequencia=1078051&numVersao=1",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6013,
+   "turnos": 6,
+   "tokens_entrada": 345432,
+   "tokens_saida": 1206,
+   "custo_usd": 0.4985008000000001,
+   "duracao_s": 14.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q023",
+   "tipo": "fato",
+   "correto": true,
+   "nota_correcao": "Resposta identifica corretamente a VDQ Holding S.A. como maior acionista direto da BEEF3 com 28,891% do capital total, igual à referência. Usou a lista de acionistas diretos (sem misturar níveis da cadeia de controle) e excluiu corretamente 'Outros' e tesouraria.",
+   "resposta": "O maior acionista direto da **Minerva (BEEF3)** é a **VDQ Holding S.A.**, com **28,891% do capital total**, ou 289.066.368 ações ordinárias. A VDQ faz parte do bloco de controle e do acordo de acionistas.\n\nPelo FRE mais recente da base (referência 2026, versão 6), os acionistas diretos são:\n\n| Acionista | Controlador | Acordo de acionistas | Ações (ON) | % capital total |\n|---|---|---|---|---|\n| VDQ Holding S.A. | Sim | Sim | 289.066.368 | 28,891% |\n| Salic International Investment Company | Não | Sim | 243.563.679 | 24,343% |\n| Ações em tesouraria | — | — | 8.824.301 | 0,882% |\n| Outros (free float pulverizado) | — | — | 459.087.840 | 45,884% |\n\n- **\"Outros\" não é um acionista.** A linha soma quem tem participação abaixo do limite de divulgação. Por isso ela tem o maior percentual, mas não entra na resposta.\n- **Só existem ações ordinárias.** A Minerva não tem preferenciais, então o percentual das ON é igual ao do capital total.\n- **A Salic também está no acordo de acionistas.** O FRE não a classifica como controladora, mas, somadas, VDQ e Salic têm cerca de 53,2% do capital.\n\nSe quiser, posso subir a cadeia de controle da VDQ Holding para ver quem está por trás dela (a família Vilela de Queiroz, pelo nome).",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2001,
+   "turnos": 5,
+   "tokens_entrada": 202132,
+   "tokens_saida": 970,
+   "custo_usd": 0.44810959999999994,
+   "duracao_s": 18.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q024",
+   "tipo": "fato",
+   "correto": true,
+   "nota_correcao": "A resposta identifica corretamente o FIP Genoma III - Multiestratégia como maior acionista direto, com 50,575% do capital total, o que bate com a referência. Ela usa só os acionistas diretos e não mistura níveis da cadeia de controle.",
+   "resposta": "O maior acionista direto da DASA3 (Diagnósticos da América S.A.) é o **Fundo de Investimento em Participações Genoma III – Multiestratégia**, com **50,575% do capital total**. São 634.724.570 ações ordinárias, e o fundo faz parte do bloco controlador.\n\nFonte: o Formulário de Referência (FRE) mais recente na base, com `data_referencia` 2026-12-31, versão 2. A Dasa só tem ações ordinárias, então o percentual sobre as ordinárias é igual ao percentual sobre o capital total.\n\nPara comparação, os maiores acionistas diretos seguintes:\n\n| Acionista | % capital total | Controlador |\n|---|---|---|\n| FIP Genoma III – Multiestratégia | 50,575% | S |\n| FIP Genoma II – Multiestratégia | 14,192% | S |\n| Outros | 9,865% | N |\n| 1122-SF FIA | 4,968% | S |\n| Genoma PG FIA | 4,870% | S |\n| Banco BTG Pactual | 4,767% | N |\n| Dulce Pugliese de Godoy Bueno | 2,871% | S |\n\nOs fundos Genoma e a Dulce Bueno fazem parte do mesmo bloco controlador, ligado à família Bueno. Juntos, o bloco tem bem mais do que os 50,6% do Genoma III. Os percentuais acima são só dos acionistas diretos. Para saber quem está por trás dos fundos, é preciso consultar a cadeia de controle, e posso fazer isso se quiser.",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 3523,
+   "turnos": 5,
+   "tokens_entrada": 202824,
+   "tokens_saida": 952,
+   "custo_usd": 0.45348839999999996,
+   "duracao_s": 10.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q025",
+   "tipo": "fato",
+   "correto": true,
+   "nota_correcao": "A resposta aponta como maior acionista direto a PetroSantander Luxembourg Holdings S.à r.l. com 19,605% do capital total. Isso bate exatamente com a referência em nome e percentual. A resposta não caiu na armadilha: a lista traz só acionistas diretos, sem misturar holdings da cadeia de controle, e trata corretamente a linha 'Outros' como free float, não como acionista. Ponto não verificável: a data de referência 31/12/2026 é posterior a hoje. Isso não afeta o acionista nem o percentual pedidos.",
+   "resposta": "O maior acionista direto da PetroRecôncavo (RECV3) é a **PetroSantander Luxembourg Holdings S.à r.l.**, com **19,605% do capital total**. São 57.536.716 ações ordinárias. A companhia só tem ações ON, então esse também é o percentual das ordinárias.\n\nA informação vem do FRE mais recente da base, com data de referência 31/12/2026, versão 7.\n\n| # | Acionista | Ações | % total |\n|---|---|---|---|\n| 1 | PetroSantander Luxembourg Holdings S.à r.l. | 57.536.716 | 19,605% |\n| 2 | Opportunity Holding FIP Multiestratégia IE | 49.930.089 | 17,013% |\n| 3 | Fundos geridos pela Cobas Asset Management | 31.986.300 | 10,899% |\n| 4 | Opeg FIA IE | 28.400.199 | 9,677% |\n| 5 | Eduardo Cintra Santos | 17.240.000 | 5,874% |\n| — | Outros (free float) | 93.087.117 | 31,718% |\n\nPelo número de ações, a linha \"Outros\" é a maior da tabela, mas ela soma o free float pulverizado e não corresponde a um acionista. Nenhum acionista aparece marcado como controlador no FRE, então a PetroSantander é a maior acionista, mas não a controladora.",
+   "chamadas_ferramenta": 2,
+   "sequencia": [
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2799,
+   "turnos": 3,
+   "tokens_entrada": 185079,
+   "tokens_saida": 933,
+   "custo_usd": 0.3788758,
+   "duracao_s": 10.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q026",
+   "tipo": "numero_par",
+   "correto": true,
+   "nota_correcao": "original=-621699000; reapresentado=-569415000",
+   "resposta": "Sim. O resultado de 2024 da HBSA3 (Hidrovias do Brasil) foi reapresentado, e em 2024 foi prejuízo, não lucro.\n\n| Filing | Coluna | Conta 3.11, Lucro/Prejuízo Consolidado do Período (2024) |\n|---|---|---|\n| DFP 2024 (original) | Último | **−R$ 621.699.000** |\n| DFP 2025 (reapresentado) | Penúltimo | **−R$ 569.415.000** |\n\n- **Diferença:** o prejuízo ficou R$ 52.284.000 menor, cerca de 8,4%.\n- **Confirmação:** a Camada 2 classifica esse par de filings como `reapresentacao` (`warn`) na conta total da DRE. Não é só uma linha que mudou de lugar: o total mudou.\n- **Divisão entre controladores e minoritários:** a empresa preencheu as contas 3.11.01 e 3.11.02 com zero nos dois filings, então os valores acima são do consolidado.\n- **Data da carga:** a CVM não arquiva versões anteriores. Estes são os valores que estavam nos ZIPs no dia da carga desta base.\n\nRESPOSTA: original=-621699000; reapresentado=-569415000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2785,
+   "turnos": 6,
+   "tokens_entrada": 272140,
+   "tokens_saida": 1292,
+   "custo_usd": 0.4753758,
+   "duracao_s": 15.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q027",
+   "tipo": "numero_par",
+   "correto": true,
+   "nota_correcao": "original=213525000; reapresentado=245894000",
+   "resposta": "Sim. O lucro líquido consolidado de 2024 da BLAU3 (Blau Farmacêutica) foi reapresentado. A Camada 2 marca a mudança como `reapresentacao`.\n\n| Conta (DRE consolidada, 2024) | Original: DFP 2024, coluna \"Último\" | Reapresentado: DFP 2025 (versão 2), coluna \"Penúltimo\" | Diferença |\n|---|---|---|---|\n| 3.04 Despesas/receitas operacionais | −329.953.000 | −297.584.000 | +32.369.000 |\n| 3.05 EBIT | 328.797.000 | 361.166.000 | +32.369.000 |\n| 3.07 Resultado antes dos tributos | 291.889.000 | 324.258.000 | +32.369.000 |\n| **3.11 Lucro consolidado do período** | **213.525.000** | **245.894.000** | **+32.369.000 (+15,2%)** |\n| 3.11.01 Atribuído à controladora | 217.206.000 | 217.206.000 | 0 |\n| 3.11.02 Atribuído a não controladores | −3.681.000 | −3.681.000 | 0 |\n\n**De onde vem a diferença:** a mudança está nas despesas operacionais. A linha 3.04.03 (−R$ 14,7 mi) foi zerada, e a 3.04.04 passou de −R$ 1,5 mi para +R$ 16,2 mi. Os +R$ 32,4 mi seguem iguais até o lucro, sem nenhum efeito de IR.\n\n**O reapresentado não fecha:** no DFP 2025, o 3.11 (R$ 245,9 mi) não bate com a soma das partes. Controladora mais não controladores continua dando R$ 213,5 mi, e a Camada 1 marca isso como `divergencia` (error). Ou seja, a empresa mudou o total sem mudar quanto cabe à controladora e aos não controladores. Como o IR também não mudou, o mais provável é um erro de preenchimento no formulário da CVM, e não uma reapresentação contábil de fato. Antes de usar os R$ 245,9 mi, vale conferir a nota explicativa do DFP 2025. O lucro atribuído à controladora (R$ 217,2 mi) é igual nas duas versões.\n\nOs números são os da base carregada até 30/10/2026; a CVM não guarda versões anteriores.\n\nRESPOSTA: original=213525000; reapresentado=245894000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5730,
+   "turnos": 6,
+   "tokens_entrada": 345127,
+   "tokens_saida": 1896,
+   "custo_usd": 0.512232,
+   "duracao_s": 51.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q028",
+   "tipo": "sem_dado",
+   "correto": true,
+   "nota_correcao": "A resposta informa a data do último dado na base (24/10/2026), explica a defasagem semanal do IPE, deixa claro que não encontrar nada não significa que não houve evento e aponta o RAD da CVM com o link. É exatamente o que a referência pede. A lista de fatos antigos já na base é contexto extra e não afirma nada falso sobre ontem.",
+   "resposta": "Não consigo responder pela base: ela ainda não chega a ontem (29/10/2026). O documento mais recente carregado foi entregue em **24/10/2026**. A CVM só atualiza esses dados às segundas, então um fato relevante publicado ontem só entra na carga de **02/11**. Não ter encontrado nada quer dizer que falta o dado, não que a Petrobras deixou de publicar.\n\nPara ver o de ontem agora, consulte o RAD da CVM: https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx (filtre Petrobras e a categoria Fato Relevante).\n\n**Fatos relevantes mais recentes da PETR4 que estão na base:**\n\n| Entrega | Assunto |\n|---|---|\n| 13/10/2026 | Petrobras assina acordos de equalização das jazidas compartilhadas de Berbigão e Sururu |\n| 08/10/2026 | Petrobras informa sobre resultado de leilão da ANP |\n| 19/09/2026 | Petrobras informa sobre adesão à nova subvenção econômica |\n| 06/08/2026 | Petrobras informa sobre remuneração aos acionistas |\n| 31/07/2026 | Relatório de Produção e Vendas 2T26 (versão 2, sem texto extraído) |\n\nPosso resumir algum desses. Depois da carga de segunda, `bash scripts/update_weekly.sh` traz o de ontem para a base.",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill"
+    ],
+    [
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2128,
+   "turnos": 5,
+   "tokens_entrada": 271255,
+   "tokens_saida": 1171,
+   "custo_usd": 0.4675528,
+   "duracao_s": 19.1,
+   "erro_sessao": false
+  }
+ ]
+}

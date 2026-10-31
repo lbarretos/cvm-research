@@ -120,7 +120,7 @@ def completar_com_ofertas(conn) -> int:
             texto = " ".join(rot + t for rot, t in partes if t)
             if texto:
                 extrai_rf.gravar(conn, f"oferta:{o['chave']}", a["codigo"], a["tipo"],
-                                 extrai_rf.extrair(texto, a["tipo"]), fonte="cvm_oferta")
+                                 extrai_rf.extrair(texto, a["tipo"], exigir_sinal=False), fonte="cvm_oferta")
     conn.commit()
     return n
 

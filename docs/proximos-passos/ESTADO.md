@@ -8,9 +8,9 @@ arquivos de cada etapa e no `README.md` desta pasta.
 | Item | Situação |
 |---|---|
 | Etapas 1 a 7 | Na `main` (PRs #29 a #37). Vereditos e números em cada `0N-*.md` e na tabela do [README](README.md) |
-| v1 do conjunto de avaliação | **PR #38 aberto, sem merge** (branch `eval-v1`): `avaliacao/golden_v1.json` (81 perguntas) e `stress/st2_golden_v1.py` |
+| v1 do conjunto de avaliação | Na `main` (PR #38, 2026-10-16): `avaliacao/golden_v1.json` (81 perguntas) e `stress/st2_golden_v1.py`; **baseline não rodada** |
 | Banco `cvm_research.db` | **Fora do git** (~19 GB, ignorado). Está só na máquina de origem |
-| Etapa 8 (renda fixa) | Carga real no Mac em 2026-10-30; critérios 1–4 ok (CRI/CRA por download manual semanal; termo de CRA à mão) |
+| Etapa 8 (renda fixa) | Na `main` (PR #41). Carga real em 2026-10-30; critérios 1–4 ok; garantia real medida em 366 escrituras (falso positivo 35% → 6%) |
 | Skill `cvm-research` | Versionada em `skills/cvm-research/`; a cópia sincronizada em `~/.claude/skills/synced/` é outra, e pode divergir |
 
 ## Para continuar em outra máquina
@@ -34,9 +34,8 @@ arquivos de cada etapa e no `README.md` desta pasta.
 0. **Etapa 8**: carga real feita (ver `08-renda-fixa.md`). Taxa e cadastro de CRI/CRA vêm do dataset público
    "CRIs e CRAs - Precificação ANBIMA" (data.anbima.com.br → Datasets): o usuário baixa toda semana (formulário) e roda
    `ingest_rf_taxas.py --arquivo X.xls`. A API interna do site exige token e não é usada. Falta: termo dos dois CRAs
-   (`ingest_rf_docs.py --codigo X --arquivo termo.pdf`, PDF da aba Documentos) e medir a extração em mais escrituras
-   (`stress/st8_extrai_rf.py`).
-1. **Mergear o #38** (v1 da avaliação) e **rodar a baseline do v1**: `run_eval.py --golden v1 --rotulo v1-baseline --paralelo 4
+   (`ingest_rf_docs.py --codigo X --arquivo termo.pdf`, PDF da aba Documentos); fiança/aval sem gabarito (precisão não medida).
+1. **Rodar a baseline do v1** (o #38 já está na `main`): `run_eval.py --golden v1 --rotulo v1-baseline --paralelo 4
    --timeout 600` (~US$ 35–40, ~15 min). Sem ela, o v1 é só um conjunto, não uma régua. A conta já bateu no limite de uso
    no meio de uma execução; se cair, refaça só as ids invalidadas com `--ids` e junte os relatórios.
 2. **Revisão por analista das regras da Etapa 7**: precisão de 98% não demonstrada (minhas duas amostras deram ~88–92%).

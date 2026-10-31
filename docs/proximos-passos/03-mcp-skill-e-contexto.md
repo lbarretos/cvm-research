@@ -121,3 +121,10 @@ mesmo acerto.
 4,36 → 3,07, tokens por pergunta 318 mil → 245 mil (**−23%**), custo US$ 13,92 → 12,46, 0 consultas abortadas, 1 erro de
 ferramenta, **turnos por pergunta 6,07 → 4,61**. Critério revisto (turnos < 4,6 com o mesmo acerto): empatado no limite;
 o ganho real está nos tokens (−23%) e no acerto.
+
+**Skill e ferramentas no mesmo primeiro turno** (`runs/2026-10-30_etapa3-primeiro-turno.json`, só as 9 perguntas que
+carregavam a skill num turno à parte): a skill e o `ToolSearch` passaram a sair na mesma mensagem nas 9; tokens por
+pergunta 305 mil → 242 mil (−21%), 9/9 certas. O `num_turns` do Claude Code não cai (5,78 → 5,89): ele conta a injeção da
+skill como um turno, mesmo vinda na mesma mensagem; **a medida certa é tokens**, não turnos. Trocando essas 9 na execução
+das 28: **224 mil tokens por pergunta, −30% contra os 317 mil da Etapa 7**, acerto 28/28. **Veredito: a meta original de
+30% menos tokens passa a ser cumprida** (projeção com 9 perguntas remedidas; uma execução completa confirmaria).

@@ -406,6 +406,16 @@ PDFs: `python docs/proximos-passos/stress/st8_extrai_rf.py CRA termo.pdf`. URL e
 Base de teste fictícia (sem rede): `python tests/fixtures/rf/make_test_db.py /tmp/rf_teste.db` e `CVM_DB_PATH=/tmp/rf_teste.db`
 no MCP. Regras de resposta: `skills/cvm-research/references/renda-fixa.md`.
 
+### `dmpl` — mutações do patrimônio líquido (DFP e ITR, Etapa 7)
+`cnpj_companhia, fonte, data_referencia, versao, ordem_exercicio, dt_ini_exerc, dt_fim_exerc, cd_conta, coluna, ds_conta, vl_conta, st_conta_fixa`
+
+Matriz conta × componente do PL (`coluna`: `capital`, `reservas_capital`, `reservas_lucro`, `lucros_acumulados`, `ora`,
+`pl`, `nao_controladores`, `pl_consolidado`). Contas fixas: 5.01 saldos iniciais, 5.04 transações com sócios (5.04.01
+aumentos de capital, 5.04.04 tesouraria adquirida, 5.04.06 dividendos, 5.04.07 JCP), 5.05 resultado abrangente, 5.07
+saldos finais. No ITR, acumulado do ano. Gravada por `ingest_dfp`/`ingest_itr` (mesmo ZIP); carga só da DMPL:
+`python scripts/ingest/dmpl.py --desde 2010` (~3,6 mi de linhas, 151 empresas). 5.07 `pl_consolidado` = BPP 2.03 em
+99,4% dos filings. Vira `dividendos_declarados`, `aumento_capital` e `recompra_dmpl` em `fato_padronizado`.
+
 ### `cd_conta_ds_timeline` — trilha temporal de cada linha (pai + nome) entre filings (Camada 5)
 `run_id, cnpj_companhia, tipo_doc, fonte, data_referencia (filing atual), cd_conta, ds_conta, st_conta_fixa, cd_conta_pai,`
 `ds_conta_norm, data_referencia_anterior, cd_conta_anterior, ds_conta_anterior, similarity_score, classificacao`

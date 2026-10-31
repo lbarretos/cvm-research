@@ -246,3 +246,22 @@ este doc pediu. O `get_financials` expõe `metodo` e `checagem` justamente para 
   `query`), então o efeito da ferramenta em acerto e tokens **não foi medido**. A v1 (~80 perguntas, com "capex de X em
   2023" e "dividendos pagos") é o que falta para isso. A diferença de +5% de tokens para a Etapa 4 está dentro do ruído de
   uma execução (sessões diferentes, prefixo de contexto igual).
+
+### DMPL (2026-10-30)
+
+Tabela `dmpl` (matriz conta × componente do PL, `scripts/ingest/dmpl.py`), gravada por `ingest_dfp`/`ingest_itr` com o
+ZIP que eles já baixam. Carga histórica: DFP 2010–2026 e ITR 2011–2026, 3,56 mi de linhas de 151 empresas, sem erro.
+Conferência: o saldo final 5.07 (`pl_consolidado`) bate com o PL do balanço (BPP 2.03) em **6.972 de 7.013 filings (99,4%)**.
+
+Conceitos novos em `fato_padronizado` (`metodo = 'S'`, coluna PL consolidado, versão vigente): `dividendos_declarados`
+(5.04.06 + 5.04.07 + contas próprias negativas sob 5.04 com dividendo/JCP no nome, fora prescrito e reversão: a CPFL
+abre "Aprovação da Proposta de Dividendo" em 5.04.09), `aumento_capital` (5.04.01; capitalização de reservas se anula na
+coluna consolidada) e `recompra_dmpl` (5.04.04).
+
+Gabaritos medidos nos DFPs (`stress/st7_dmpl_dividendos.py`):
+- **recompra (DFC) × tesouraria adquirida (DMPL)**: 340 de 452 a menos de 2% (75%), 350 a menos de 10%. Confirma o
+  conceito da DFC por uma fonte independente.
+- **dividendos pagos ≈ declarados + Δ dividendos a pagar** (2.01.05.02.01/02 e contas próprias de dividendo a pagar):
+  48% a menos de 2%, 65% a menos de 10% (1.198 DFPs). Só com as contas fixas eram 34%. O resto tem causas que a DMPL não
+  separa (IR retido no JCP pago à parte, dividendos de controladas a minoritários, dividendo adicional que passa por
+  reserva). **Não vira checagem** de `dividendos_pagos`: com 48% ela reprovaria fatos certos.

@@ -207,3 +207,28 @@ def test_regra_do_proprio_nome_vence_o_voto():
     _, fatos = t.fatos_da_empresa(pd.DataFrame(rows), ids, "C")
     por = {(f[2][:4], f[5]) for f in fatos if f[5] in ("juros_pagos", "amort_divida")}
     assert por == {(str(a), "juros_pagos") for a in range(2019, 2023)} | {("2023", "amort_divida")}
+
+
+def test_fatos_dmpl_contas_fixas_e_dividendos_em_conta_propria():
+    import sqlite3
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
+    import dmpl
+    conn = sqlite3.connect(":memory:")
+    assert t.fatos_dmpl(conn, "C") == []                     # banco sem a tabela
+    dmpl.garantir_schema(conn)
+    base = ("C", "DFP", "2011-12-31", 1, "Último", "2011-01-01", "2011-12-31")
+    linhas = [("5.04.01", "pl_consolidado", "Aumentos de Capital", 0.0, "S"),
+              ("5.04.04", "pl_consolidado", "Ações em Tesouraria Adquiridas", -40e6, "S"),
+              ("5.04.06", "pl_consolidado", "Dividendos", -751e6, "S"),
+              ("5.04.06", "pl", "Dividendos", -747e6, "S"),                                   # outra coluna: fora
+              ("5.04.09", "pl_consolidado", "Aprovação da Proposta de Dividendo", -490e6, "N"),
+              ("5.04.10", "pl_consolidado", "Dividendo Prescrito", 5e6, "N"),                 # positivo/prescrito: fora
+              ("5.04.08", "pl_consolidado", "Combinação de negócios", 1414e6, "N")]           # sem dividendo: fora
+    conn.executemany("INSERT INTO dmpl VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                     [base + (cd, col, ds, vl, st) for cd, col, ds, vl, st in linhas])
+    # versão antiga do mesmo filing não entra
+    conn.execute("INSERT INTO dmpl VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                 ("C", "DFP", "2011-12-31", 0, "Último", "2011-01-01", "2011-12-31", "5.04.06", "pl_consolidado", "Dividendos", -1.0, "S"))
+    f = {x[5]: x for x in t.fatos_dmpl(conn, "C")}
+    assert f["dividendos_declarados"][6] == -1241e6 and f["dividendos_declarados"][8] == "S"
+    assert f["recompra_dmpl"][6] == -40e6 and f["aumento_capital"][6] == 0.0

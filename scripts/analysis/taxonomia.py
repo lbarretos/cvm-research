@@ -12,7 +12,8 @@ Fluxo (por empresa):
 
 Tabelas: conceito, linha_conceito, fato_padronizado (schema.sql / migração 2026-10-16_taxonomia.sql).
 Não implementado (ver docs/proximos-passos/07-taxonomia-canonica.md): modelo supervisionado, fila de
-revisão humana, DMPL (dividendos declarados) e demonstrações individuais.
+revisão humana e demonstrações individuais. A DMPL entra pelas contas fixas (tabela `dmpl`, coluna 'pl_consolidado'):
+dividendos e JCP declarados, aumentos de capital e ações em tesouraria adquiridas.
 
     python taxonomia.py --full               # base inteira
     python taxonomia.py --cnpj 84.429.695/0001-11
@@ -58,6 +59,10 @@ CONCEITOS = {
     "caixa_final":          ("Caixa e equivalentes no fim do período", "DFC_MI", None, 0, False),
     "ativo_total":          ("Ativo total", "BPA", None, 0, False),
     "patrimonio_liquido":   ("Patrimônio líquido consolidado", "BPP", None, 0, False),
+    # DMPL (contas fixas 5.04.xx, coluna 'pl_consolidado' da tabela dmpl)
+    "dividendos_declarados": ("Dividendos e JCP declarados (DMPL 5.04.06 + 5.04.07)", "DMPL", None, -1, False),
+    "aumento_capital":      ("Aumentos de capital (DMPL 5.04.01; capitalização de reservas se anula no PL)", "DMPL", None, 0, False),
+    "recompra_dmpl":        ("Ações em tesouraria adquiridas (DMPL 5.04.04)", "DMPL", None, -1, False),
 }
 CONTAS_S = {"receita_liquida": ("DRE", "3.01"), "resultado_bruto": ("DRE", "3.03"), "ebit": ("DRE", "3.05"),
             "lucro_liquido": ("DRE", "3.11"), "cfo": ("DFC_MI", "6.01"), "cfi": ("DFC_MI", "6.02"),
@@ -331,12 +336,55 @@ def fatos_da_empresa(df: pd.DataFrame, linha_id: dict, cnpj: str, contribuicoes:
     return lc, fatos
 
 
+CONTAS_DMPL = {"dividendos_declarados": ("5.04.06", "5.04.07"), "aumento_capital": ("5.04.01",),
+               "recompra_dmpl": ("5.04.04",)}
+# a empresa abre parte dos dividendos em contas próprias sob 5.04 ("Aprovação da Proposta de Dividendo", "Dividendos a
+# não controladores", "Dividendo adicional"): entram as negativas com dividendo/JCP no nome, fora prescrito e reversão
+_DIV_N = re.compile(r"dividend|juros sobre (o )?capital|\bjcp\b|\bjscp\b")
+_DIV_N_FORA = re.compile(r"prescri|revers|receb|a receber")
+
+
+def fatos_dmpl(conn, cnpj: str) -> list[tuple]:
+    """Fatos das contas fixas da DMPL (coluna PL consolidado, coluna 'Último', versão vigente de cada filing). Banco sem
+    a tabela dmpl = nenhum fato. No ITR, como a DFC, o período é o acumulado do ano."""
+    try:
+        rows = conn.execute(
+            """SELECT d.fonte, d.data_referencia, d.dt_ini_exerc, d.dt_fim_exerc, d.cd_conta, d.vl_conta, d.ds_conta,
+                      d.st_conta_fixa
+               FROM dmpl d JOIN (SELECT fonte, data_referencia, MAX(versao) AS v FROM dmpl
+                                 WHERE cnpj_companhia = ? GROUP BY 1, 2) u
+                 ON u.fonte = d.fonte AND u.data_referencia = d.data_referencia AND u.v = d.versao
+               WHERE d.cnpj_companhia = ? AND d.coluna = 'pl_consolidado' AND d.ordem_exercicio = 'Último'
+                 AND (d.cd_conta IN ('5.04.01', '5.04.04', '5.04.06', '5.04.07')
+                      OR (d.cd_conta LIKE '5.04.%' AND d.st_conta_fixa = 'N'))""", (cnpj, cnpj)).fetchall()
+    except Exception:   # sqlite3.OperationalError: banco anterior à tabela dmpl
+        return []
+    por = defaultdict(dict)
+    for fonte, data, ini, fim, cd, vl, ds, st in rows:
+        if st == "N":
+            dsn = normalize_text(ds or "")
+            if not (vl and vl < 0 and _DIV_N.search(dsn) and not _DIV_N_FORA.search(dsn)):
+                continue
+            cd = "N:" + cd
+        por[(fonte, data, ini, fim)][cd] = vl
+    out = []
+    for (fonte, data, ini, fim), v in por.items():
+        for conc, cds in CONTAS_DMPL.items():
+            if conc == "dividendos_declarados":
+                cds = cds + tuple(c for c in v if c.startswith("N:"))
+            vals = [v[c] for c in cds if v.get(c) is not None]
+            if vals:
+                out.append((cnpj, fonte, data, ini, fim, conc, float(sum(vals)), len(vals), "S", 1.0, "ok", 1))
+    return out
+
+
 def construir(conn, cnpj: str) -> tuple[int, int]:
     df = latest_rows(conn, cnpj=cnpj)
     ids = {(r[0], r[1], r[2]): r[3] for r in conn.execute(
         "SELECT fonte, data_referencia, cd_conta, linha_id FROM linha_empresa "
         "WHERE cnpj_companhia = ? AND tipo_doc = 'DFC_MI'", (cnpj,))}
     lc, fatos = fatos_da_empresa(df, ids, cnpj)
+    fatos += fatos_dmpl(conn, cnpj)
     conn.execute("DELETE FROM linha_conceito WHERE cnpj_companhia = ?", (cnpj,))
     conn.execute("DELETE FROM fato_padronizado WHERE cnpj_companhia = ?", (cnpj,))
     conn.executemany("INSERT INTO linha_conceito VALUES (?,?,?,?,?,?,?)", lc)

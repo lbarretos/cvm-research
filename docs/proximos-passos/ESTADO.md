@@ -1,4 +1,4 @@
-# Estado do roadmap e como retomar (2026-10-15)
+# Estado do roadmap e como retomar (2026-10-30)
 
 Documento de passagem para continuar em outra máquina. O que está aqui não está em nenhum outro lugar: o resto vive nos
 arquivos de cada etapa e no `README.md` desta pasta.
@@ -47,8 +47,9 @@ arquivos de cada etapa e no `README.md` desta pasta.
    ligações; venceu a fonte única, que respeita `linha_decisao`).
 5. **Camada 6 lê `linha_decisao`** desde 2026-10-30 (migração `2026-10-30_trimestrais_decisao.sql` + Camada 6 --full em
    toda instalação). A fila ainda não tem decisões: `linha_economica.py --listar-ambiguos --cnpj X`.
-6. **Etapa 7, fora do escopo feito**: modelo supervisionado e fila de revisão (3.b, 3.c), DMPL, demonstrações individuais,
-   bancos e seguradoras (DRE de banco sem `versao_template`), safra reapresentada.
+6. **Etapa 7, fora do escopo feito**: DMPL feita em 2026-10-30 (tabela `dmpl`, `dividendos_declarados`, `aumento_capital`,
+   `recompra_dmpl`; ver `07-taxonomia-canonica.md`). Faltam: bancos e seguradoras (DRE de banco sem `versao_template`),
+   safra reapresentada, demonstrações individuais, modelo supervisionado e fila de revisão (3.b, 3.c).
 7. **Etapa 4, 4.1 e 4.6**: texto separado em `ipe_texto` e embeddings (`sqlite-vec`) não foram feitos.
 8. **v1: perguntas conceituais sobre o texto** e documentos longos (proposta da AGO) pedem gabarito escrito à mão.
 9. **Skill duplicada**: remover a cópia sincronizada em `~/.claude/skills/synced/` ou mantê-la igual à do repositório.

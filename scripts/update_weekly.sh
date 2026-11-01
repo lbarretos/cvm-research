@@ -28,6 +28,16 @@ set -u
 set -o pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DB="${CVM_DB_PATH:-$PROJECT_DIR/cvm_research.db}"
+REAL_DB="$(python3 -c "import os; print(os.path.realpath('$DB'))" 2>/dev/null || echo "$DB")"
+if [[ "$REAL_DB" == /Volumes/* ]]; then
+  VOL_NAME=$(echo "$REAL_DB" | cut -d'/' -f3)
+  VOL_DIR="/Volumes/$VOL_NAME"
+  if [ ! -d "$VOL_DIR" ] || ! mount | grep -q "on $VOL_DIR "; then
+    echo "$(date '+%F %T') AVISO: O disco removível '$VOL_DIR' não está montado. Pulando execução semanal com segurança."
+    exit 0
+  fi
+fi
 VENV_PY="$PROJECT_DIR/.venv/bin/python"
 LOG_DIR="${UPDATE_LOG_DIR:-$PROJECT_DIR/logs}"
 LOCK_DIR="$LOG_DIR/.update_weekly.lock"
@@ -250,20 +260,25 @@ checkpoint_wal() {
 DB="$PROJECT_DIR/cvm_research.db"
 checkpoint_wal "$DB"
 
-# Snapshot somente leitura para o analista (usuário "assistente"): só o .db, nunca .env/.git.
-# O disco não comporta duas cópias: apaga a anterior e gera a nova (analista fica ~2 min sem base).
+# Snapshot / Acesso compartilhado para o analista (usuário "assistente")
 SHARE_DIR="/Users/Shared/cvm-research"
-if command -v sqlite3 >/dev/null && [ -f "$DB" ] && [ -d "$SHARE_DIR" ]; then
-  SNAP_TMP="$SHARE_DIR/.cvm_research.db.tmp"
-  rm -f "$SNAP_TMP" "$SNAP_TMP-journal" "$SHARE_DIR/cvm_research.db" "$SHARE_DIR/cvm_research.db-shm" "$SHARE_DIR/cvm_research.db-wal"
-  if sqlite3 "$DB" ".backup '$SNAP_TMP'" >>"$LOG_FILE" 2>&1 \
-     && sqlite3 "$SNAP_TMP" "PRAGMA journal_mode=DELETE;" >/dev/null 2>>"$LOG_FILE" \
-     && chmod 644 "$SNAP_TMP" \
-     && mv -f "$SNAP_TMP" "$SHARE_DIR/cvm_research.db"; then
-    log "Snapshot compartilhado atualizado em $SHARE_DIR."
-  else
-    rm -f "$SNAP_TMP"
-    log "AVISO: falha ao atualizar snapshot compartilhado (rode o .backup à mão)."
+if [ -d "$SHARE_DIR" ]; then
+  REAL_TARGET="$(python3 -c "import os; print(os.path.realpath('$DB'))" 2>/dev/null || echo "$DB")"
+  if [[ "$REAL_TARGET" == /Volumes/* ]]; then
+    ln -sf "$REAL_TARGET" "$SHARE_DIR/cvm_research.db"
+    log "Symlink compartilhado mantido em $SHARE_DIR/cvm_research.db -> $REAL_TARGET (0 bytes locais)."
+  elif command -v sqlite3 >/dev/null && [ -f "$DB" ]; then
+    SNAP_TMP="$SHARE_DIR/.cvm_research.db.tmp"
+    rm -f "$SNAP_TMP" "$SNAP_TMP-journal" "$SHARE_DIR/cvm_research.db" "$SHARE_DIR/cvm_research.db-shm" "$SHARE_DIR/cvm_research.db-wal"
+    if sqlite3 "$DB" ".backup '$SNAP_TMP'" >>"$LOG_FILE" 2>&1 \
+       && sqlite3 "$SNAP_TMP" "PRAGMA journal_mode=DELETE;" >/dev/null 2>>"$LOG_FILE" \
+       && chmod 644 "$SNAP_TMP" \
+       && mv -f "$SNAP_TMP" "$SHARE_DIR/cvm_research.db"; then
+      log "Snapshot compartilhado atualizado em $SHARE_DIR."
+    else
+      rm -f "$SNAP_TMP"
+      log "AVISO: falha ao atualizar snapshot compartilhado (rode o .backup à mão)."
+    fi
   fi
 fi
 if command -v sqlite3 >/dev/null; then

@@ -82,7 +82,25 @@ def _authorizer(action, arg1, arg2, dbname, source):
     return sqlite3.SQLITE_DENY
 
 
+def _check_db_accessible() -> tuple[bool, str]:
+    try:
+        resolved = DB_PATH.expanduser().resolve()
+    except Exception:
+        resolved = DB_PATH
+    parts = resolved.parts
+    if len(parts) >= 3 and parts[1] == "Volumes":
+        vol_path = Path("/Volumes") / parts[2]
+        if not vol_path.exists() or not os.path.ismount(str(vol_path)):
+            return False, f"O disco removível '{vol_path.name}' não está conectado ou montado."
+    if not DB_PATH.exists():
+        return False, f"Banco SQLite não encontrado em {DB_PATH}."
+    return True, ""
+
+
 def get_db() -> sqlite3.Connection:
+    ok, err = _check_db_accessible()
+    if not ok:
+        raise RuntimeError(f"ERRO: {err} Conecte o disco externo para consultar a base CVM.")
     # mode=ro: o SQLite recusa qualquer escrita mesmo que o SQL passe pelo filtro.
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row

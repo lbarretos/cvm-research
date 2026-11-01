@@ -78,6 +78,22 @@ _DEDUP_COLUMNS: dict[str, str] = {
 
 # ── Conexão de banco de dados ─────────────────────────────────────────────────
 
+def _check_volume_mounted(path_str: str) -> None:
+    """Verifica se o volume externo (/Volumes/...) está montado antes de operações de I/O."""
+    try:
+        path_resolved = Path(path_str).expanduser().resolve()
+    except Exception:
+        path_resolved = Path(path_str)
+    parts = path_resolved.parts
+    if len(parts) >= 3 and parts[1] == "Volumes":
+        vol_path = Path("/Volumes") / parts[2]
+        if not vol_path.exists() or not os.path.ismount(str(vol_path)):
+            raise RuntimeError(
+                f"O disco removível '{vol_path}' não está montado. "
+                "Conecte o disco externo para acessar a base CVM."
+            )
+
+
 def get_db() -> sqlite3.Connection:
     """Retorna conexão sqlite3 para banco local.
 
@@ -93,6 +109,7 @@ def get_db() -> sqlite3.Connection:
     path = url.removeprefix("sqlite:///")
     if not os.path.isabs(path):
         path = str(Path(__file__).parents[2] / path)
+    _check_volume_mounted(path)
     # timeout: quanto esperar pelo lock de escrita de outro processo antes de "database is locked".
     # O padrão de 5 s derrubou o job semanal de 30/09/2026 (migração e run_all rodando em paralelo).
     conn = sqlite3.connect(path, timeout=300)

@@ -150,7 +150,7 @@ def _rebuild_fts(conn: sqlite3.Connection) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200,
-         retry_failed=False, rebuild_fts=False, tipo_filter=None):
+         retry_failed=False, rebuild_fts=False, tipo_filter=None, sem_fts=False):
     conn = get_db()
 
     if rebuild_fts:
@@ -193,7 +193,7 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
 
     print(f"\nResultado: {ok} extraídos | {fail} falhas | {skip} sem link")
 
-    if ok > 0:
+    if ok > 0 and not sem_fts:
         print()
         _rebuild_fts(conn)
         print("  Busca full-text disponível via ipe_docs_fts.")
@@ -212,7 +212,10 @@ if __name__ == "__main__":
                    help="Re-tentar docs marcados como falha (útil para erros transitórios)")
     p.add_argument("--rebuild-fts",  action="store_true",
                    help="Apenas reconstrói o índice FTS5 sem baixar nenhum PDF")
+    p.add_argument("--sem-fts",      action="store_true",
+                   help="Não reconstrói o índice FTS5 ao fim (um laço de lotes reconstrói uma vez só, no fim)")
     args = p.parse_args()
     if args.tipo and not args.categoria:
         p.error("--tipo exige --categoria")
-    main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts, args.tipo)
+    main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts, args.tipo,
+         args.sem_fts)

@@ -1,0 +1,99 @@
+{
+ "rotulo": "v2-rep-branch",
+ "executado_em": "2026-11-06",
+ "golden_gerado_em": "2026-11-05",
+ "modelo": null,
+ "duracao_total_s": 20,
+ "resumo": {
+  "geral": {
+   "n": 2,
+   "acerto": 0.5,
+   "chamadas_por_pergunta": 3.5,
+   "tokens_por_pergunta": 224078,
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_lidos_por_pergunta": 4045,
+   "duracao_media_s": 14.9,
+   "custo_usd": 0.491
+  },
+  "por_tipo": {
+   "numero": {
+    "n": 1,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 4.0,
+    "tokens_por_pergunta": 224688,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 4293,
+    "duracao_media_s": 18.4,
+    "custo_usd": 0.25
+   },
+   "quantidade": {
+    "n": 1,
+    "acerto": 0.0,
+    "chamadas_por_pergunta": 3.0,
+    "tokens_por_pergunta": 223469,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 3797,
+    "duracao_media_s": 11.5,
+    "custo_usd": 0.241
+   }
+  }
+ },
+ "resultados": [
+  {
+   "id": "q044",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "36484585000",
+   "resposta": "A dívida bruta financeira da AZUL4 em 31/12/2024 (DFP, versão 1, consolidado) é de **R$ 36.484.585.000**, ou cerca de R$ 36,48 bilhões. É a soma das duas contas de Empréstimos e Financiamentos do balanço:\n\n| Conta | R$ |\n|---|---|\n| Curto prazo (2.01.04) | 8.645.741.000 |\n| Longo prazo (2.02.01) | 27.838.844.000 |\n| **Total** | **36.484.585.000** |\n\nEsse total inclui o financiamento por arrendamento (leasing), que a CVM classifica dentro de Empréstimos e Financiamentos:\n\n| Componente | Curto prazo (R$) | Longo prazo (R$) |\n|---|---|---|\n| Empréstimos | 2.207.199.000 | 12.774.218.000 |\n| Debêntures | 124.321.000 | 0 |\n| Arrendamento | 6.314.221.000 | 15.064.626.000 |\n\nSem o arrendamento, a dívida bancária e de debêntures seria de R$ 15.105.738.000 (cerca de R$ 15,11 bilhões). Usei o total com arrendamento porque você pediu curto mais longo prazo e é assim que as contas aparecem no balanço.\n\nRESPOSTA: 36484585000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 4293,
+   "turnos": 6,
+   "tokens_entrada": 223423,
+   "tokens_saida": 1265,
+   "custo_usd": 0.2500613,
+   "duracao_s": 18.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q069",
+   "tipo": "quantidade",
+   "correto": false,
+   "nota_correcao": "157368970",
+   "resposta": "O FRE mais recente de GFSA3 (data de referência 2026-12-31) registra o capital integralizado em **157.368.970 ações**. Todas são ordinárias e não há preferenciais. Esse número vem da última alteração de capital, aprovada em 30/09/2026. O capital integralizado, o subscrito e o emitido têm a mesma quantidade nessa data.\n\nA data de referência do FRE (2026-12-31) é posterior a hoje (2026-11-06). Isso é normal nessa tabela, porque o FRE carrega a data do exercício.\n\nRESPOSTA: 157368970",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 3797,
+   "turnos": 5,
+   "tokens_entrada": 222847,
+   "tokens_saida": 622,
+   "custo_usd": 0.24142090000000002,
+   "duracao_s": 11.5,
+   "erro_sessao": false
+  }
+ ]
+}

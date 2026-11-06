@@ -161,3 +161,90 @@ def test_atualizar_versoes_escala_linearmente(db):
     mudou = bc.atualizar_versoes(c)
     assert mudou == 30_000 and time.time() - t < 5
     assert c.execute("SELECT COUNT(*) FROM ipe_chunks WHERE is_latest = 0").fetchone()[0] == 0
+
+
+# ---------- Etapa 9, bloco A: search_docs(camada=…) sobre o FTS por documento ----------
+
+def _com_fts_documentos(db):
+    """Acrescenta ao banco de teste um DF em inglês, um prospecto e o ipe_docs_fts (mesmo schema do real)."""
+    c = sqlite3.connect(db)
+    c.executemany("INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL)", [
+        ("P5", CNPJ, "Dados Econômico-Financeiros", "Demonstrações Financeiras Adicionais", None, "ITR", "2026-06-30",
+         "2026-08-01", "http://x/5", "Notes. " * 200 + "Reconciliation of income tax: Tax incentives 131,413 143,303. "
+         + "Other notes. " * 50),
+        ("P6", CNPJ, "Documentos de Oferta de Distribuição Pública", "Prospecto", None, "Oferta", "2025-05-01",
+         "2025-05-01", "http://x/6", "Prospecto da oferta com garantia fidejussória e incentivos fiscais. " * 20),
+    ])
+    c.execute("UPDATE ipe_docs SET texto_extraido = ? WHERE protocolo_entrega = 'P4'",
+              ("Notas explicativas. " * 300 + "Conciliação do imposto de renda: Incentivos fiscais 368.062. "
+               + "Outras notas. " * 100,))
+    c.executescript("""
+        CREATE VIRTUAL TABLE ipe_docs_fts USING fts5(protocolo_entrega, cnpj_companhia, assunto, texto_extraido,
+            content='ipe_docs', content_rowid='rowid');
+        INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild');
+    """)
+    c.commit()
+    c.close()
+
+
+def _col(r, nome):
+    i = r["colunas"].index(nome)
+    return [l[i] for l in r["linhas"]]
+
+
+def test_search_docs_mantem_colunas_antigas_na_ordem(db, monkeypatch):
+    construir(monkeypatch)
+    r = cvm_mcp.search_docs("aquisição", ticker="PETR4")
+    assert r["colunas"][:8] == ["protocolo", "ordem", "data_entrega", "categoria", "tipo", "assunto", "trecho", "link"]
+    assert set(_col(r, "camada")) == {"quente"} and set(_col(r, "data_referencia")) == {"2026-01-16"}   # o representante é o P3
+
+
+def test_search_docs_camada_df_acha_nota_e_devolve_offset(db, monkeypatch):
+    construir(monkeypatch)
+    _com_fts_documentos(db)
+    r = cvm_mcp.search_docs("incentivos fiscais", ticker="PETR4", camada="df")
+    assert _col(r, "protocolo") == ["P4"] and _col(r, "camada") == ["df"]
+    off = _col(r, "offset")[0]
+    assert off is not None
+    lido = cvm_mcp.read_doc("P4", offset=off, max_chars=1500)
+    assert "368.062" in lido["texto"] and lido["data_referencia"] == "2026-02-01"
+    # ITR em inglês (DF Adicionais) e filtro por período do documento
+    r = cvm_mcp.search_docs('"tax incentives"', camada="df", ref_desde="2026-06-30")
+    assert _col(r, "protocolo") == ["P5"]
+    assert cvm_mcp.search_docs('"tax incentives"', camada="df", ref_ate="2026-03-31")["linhas"] == []
+    assert cvm_mcp.search_docs("incentivos", camada="df", tipos=["Demonstrações Financeiras Intermediárias"])["linhas"] == []
+
+
+def test_search_docs_camada_fria_exclui_quente_e_df(db, monkeypatch):
+    construir(monkeypatch)
+    _com_fts_documentos(db)
+    assert _col(cvm_mcp.search_docs("incentivos fiscais", camada="fria"), "protocolo") == ["P6"]
+    assert cvm_mcp.search_docs("aquisição", camada="fria")["linhas"] == []      # FR e CM são da quente
+
+
+def test_search_docs_camada_todas_intercala(db, monkeypatch):
+    construir(monkeypatch)
+    _com_fts_documentos(db)
+    c = sqlite3.connect(db)
+    c.execute("UPDATE ipe_docs SET texto_extraido = texto_extraido || ' incentivos fiscais' WHERE protocolo_entrega='P3'")
+    c.commit()
+    c.close()
+    monkeypatch.setattr(sys, "argv", ["build_chunks.py", "--rebuild"])
+    bc.main()
+    r = cvm_mcp.search_docs("incentivos fiscais", camada="todas", k=5)
+    assert set(_col(r, "camada")) == {"quente", "df", "fria"}
+
+
+def test_search_docs_vazio_aponta_camada_df(db, monkeypatch):
+    construir(monkeypatch)
+    r = cvm_mcp.search_docs("imposto zebracornio")
+    assert r["linhas"] == [] and "camada='df'" in r["aviso"]
+    assert "camada='fria'" in cvm_mcp.search_docs("zebracornio")["aviso"]
+    with pytest.raises(ValueError, match="camada deve ser"):
+        cvm_mcp.search_docs("x", camada="morna")
+
+
+def test_consulta_fts_tira_stopwords_so_do_texto_livre():
+    assert cvm_mcp._consulta_fts("conciliação do imposto de renda") == '"conciliação" AND "imposto" AND "renda"'
+    assert cvm_mcp._consulta_fts('"imposto de renda"') == '"imposto de renda"'      # frase fica intacta
+    assert cvm_mcp._consulta_fts("de da") == '"de" AND "da"'                          # só stopword: mantém

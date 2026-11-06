@@ -238,7 +238,7 @@ def main() -> None:
     ap.add_argument("--db", help="banco a consultar (CVM_DB_PATH)")
     ap.add_argument("--paralelo", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=300)
-    ap.add_argument("--golden", default="v0", help="v0 ou v1 (avaliacao/golden_<v>.json)")
+    ap.add_argument("--golden", default="v0", help="v0, v1 ou v2 (avaliacao/golden_<v>.json)")
     ap.add_argument("--comparar", nargs=2, metavar=("A", "B"))
     a = ap.parse_args()
     if a.comparar:

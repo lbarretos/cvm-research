@@ -14,7 +14,7 @@ explicativas.
 | "Esse número foi reapresentado?" | `consistency_flags` layer 2 (e 3) |
 | A soma do quadro fecha? | `consistency_flags` layer 1 |
 | Histórico de uma conta criada pela empresa | `cd_conta_ds_timeline` (Camada 5) |
-| Dado que só existe em nota (imobilizado por classe, provisões…) | `notas_explicativas` |
+| Dado que só existe em nota (imobilizado por classe, provisões, incentivos fiscais…) | `search_docs(camada='df')`; `notas_explicativas` só se faltar o período |
 
 Valores em R$ (já normalizados de milhar); lucro por ação (`3.99.*`) em R$/ação.
 
@@ -170,9 +170,9 @@ FROM notas_explicativas WHERE cnpj_companhia = '<CNPJ>' ORDER BY data_referencia
 ```
 
 Busca: `notas_explicativas_fts` (mesmo padrão do `ipe_docs_fts`; junte por `n.id = f.rowid`).
-Se o período não estiver lá, veja primeiro o PDF da DF em `ipe_docs` (`categoria = 'Dados
-Econômico-Financeiros'`, `tipo` = `'Demonstrações Financeiras Intermediárias'` ou `'... Anuais
-Completas'`), que costuma já ter texto. Só então ofereça ingerir (comando em `manutencao.md`).
+**Antes, procure no IPE com `search_docs(consulta, ticker, camada='df', ref_desde=…)`**: os PDFs da DF
+(`Anuais Completas`, `Intermediárias`, `Adicionais` — esta em inglês —, `Padrões Internacionais`) já
+têm texto na maioria das empresas. Só então ofereça ingerir (comando em `manutencao.md`).
 Só a versão mais recente do documento é mantida.
 
 ## Visualizador

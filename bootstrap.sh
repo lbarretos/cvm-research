@@ -251,7 +251,8 @@ if [ "$FAZER_PDF" = 1 ]; then
     PEND=$(sqlite3 "$DB" "SELECT COUNT(*) FROM ipe_docs WHERE texto_extraido IS NULL AND extracao_falhou = 0")
     [ "$PEND" -gt 0 ] || { log "extração concluída: nenhum documento pendente"; break; }
     log "pendentes: $PEND"
-    "$PY" extract_pdf.py --limite "$PDF_LOTE"
+    # --sem-fts: o índice é reconstruído uma vez, depois do laço (por lote custa horas em disco externo)
+    "$PY" extract_pdf.py --limite "$PDF_LOTE" --sem-fts
     DEPOIS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM ipe_docs WHERE texto_extraido IS NULL AND extracao_falhou = 0")
     # Sem progresso = todos os restantes estão falhando de forma persistente.
     [ "$DEPOIS" -lt "$PEND" ] || { log "lote não avançou; parando (tente com RETRY_FAILED=1 no update_weekly.sh)"; break; }

@@ -1,0 +1,474 @@
+{
+ "rotulo": "v2-notas-baseline",
+ "executado_em": "2026-11-05",
+ "golden_gerado_em": "2026-11-05",
+ "modelo": null,
+ "duracao_total_s": 111,
+ "resumo": {
+  "geral": {
+   "n": 13,
+   "acerto": 1.0,
+   "chamadas_por_pergunta": 5.62,
+   "tokens_por_pergunta": 394945,
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_lidos_por_pergunta": 9200,
+   "duracao_media_s": 24.1,
+   "custo_usd": 7.209
+  },
+  "por_tipo": {
+   "numero": {
+    "n": 12,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 5.67,
+    "tokens_por_pergunta": 402839,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 9818,
+    "duracao_media_s": 23.9,
+    "custo_usd": 6.694
+   },
+   "sem_dado": {
+    "n": 1,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 5.0,
+    "tokens_por_pergunta": 300211,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 1778,
+    "duracao_media_s": 26.5,
+    "custo_usd": 0.515
+   }
+  }
+ },
+ "resultados": [
+  {
+   "id": "q082",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "368062000.00",
+   "resposta": "Na conciliação do IR e da CSLL da nota 26 do DFP 2025 da WEG, a linha **Incentivos fiscais** do consolidado em 31/12/2025 é **R$ 368.062 mil**, ou seja, R$ 368.062.000. É um ajuste positivo: reduz o imposto calculado à alíquota nominal de 34%.\n\nContexto da mesma tabela (consolidado, em R$ mil):\n\n| Linha | 31/12/25 | 31/12/24 |\n|---|---|---|\n| Lucro antes dos impostos | 8.147.677 | 7.908.508 |\n| IRPJ e CSLL à alíquota nominal (34%) | (2.770.210) | (2.688.893) |\n| **Incentivos fiscais** | **368.062** | **329.239** |\n| IRPJ e CSLL no resultado | (1.371.719) | (1.589.745) |\n| Alíquota efetiva | 16,84% | 20,10% |\n\nNa controladora, a linha vem em branco (\"-\") nos dois anos.\n\nFonte: PDF das demonstrações financeiras anuais completas no IPE, protocolo `005410IPE311220250182656204-74`, entregue em 25/02/2026. A tabela informa os valores em milhares de reais.\n\nRESPOSTA: 368062000.00",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5279,
+   "turnos": 7,
+   "tokens_entrada": 376919,
+   "tokens_saida": 1266,
+   "custo_usd": 0.5397958,
+   "duracao_s": 25.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q083",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "306025000.00",
+   "resposta": "Em 2025, a WEG reconheceu no resultado consolidado **R$ 306.025 mil (R$ 306,0 milhões)** em subvenções e assistências governamentais. Em 2024 tinham sido R$ 301.191 mil, então o valor subiu 1,6%.\n\nO número está na nota explicativa 29 (\"Subvenções e Assistências Governamentais\") das Demonstrações Financeiras Anuais Completas de 2025, entregues à CVM em 25/02/2026 (protocolo `005410IPE311220250182656204-74`). Todo o valor vem de incentivos fiscais, e a soma das empresas abaixo fecha exatamente com o total:\n\n| Controlada | 2025 (R$ mil) | Composição |\n|---|---:|---|\n| WEG Drives & Controls – Automação | 128.332 | Crédito estímulo de ICMS |\n| WEG Linhares Equipamentos Elétricos | 120.501 | ICMS 73.611; redução de IRPJ 46.865; incentivos municipais 25 |\n| WEG Equipamentos e Logística | 26.650 | Crédito estímulo de ICMS |\n| WEG Equipamentos Elétricos | 14.151 | ICMS 13.057; incentivos municipais 1.094 |\n| WEG Amazônia | 10.567 | Redução de IRPJ 9.651; ICMS 916 |\n| V2 Tecnologia | 3.559 | Crédito estímulo de ICMS |\n| Reivax Automação e Controle | 2.013 | Crédito estímulo de ICMS |\n| WEG Turbinas e Solar | 252 | Crédito estímulo de ICMS |\n| **Total consolidado** | **306.025** | |\n\nSegundo a nota, nenhuma contingência está ligada a essas subvenções, e todas as condições para recebê-las foram cumpridas.\n\nEsse número só aparece na nota. Nos quadros padronizados da CVM, as contas \"Subvenções de Investimento a Apropriar\" e \"Reserva de Incentivos Fiscais\" estão zeradas.\n\nRESPOSTA: 306025000.00",
+   "chamadas_ferramenta": 8,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 14833,
+   "turnos": 10,
+   "tokens_entrada": 547249,
+   "tokens_saida": 2113,
+   "custo_usd": 0.6268062,
+   "duracao_s": 29.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q084",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "128332000.00",
+   "resposta": "Em 2025, a WEG Drives & Controls – Automação Ltda. recebeu **R$ 128.332 mil** de crédito estímulo de ICMS, ou seja, **R$ 128.332.000**.\n\nO número está na nota explicativa 29 (Subvenções e Assistências Governamentais) das Demonstrações Financeiras Anuais Completas da WEG S.A. de 31/12/2025. Os valores são consolidados, em milhares de reais. O documento foi entregue à CVM em 25/02/2026, protocolo `005410IPE311220250182656204-74`.\n\n| Item | 31/12/25 | 31/12/24 |\n|---|---|---|\n| WEG Drives & Controls: crédito estímulo do ICMS | 128.332 | 125.822 |\n| Total de subvenções do grupo | 306.025 | 301.191 |\n\nEsse crédito é o único incentivo que a nota atribui à Drives & Controls. Ele subiu cerca de 2% sobre 2024 e responde por cerca de 42% de todas as subvenções do grupo.\n\nRESPOSTA: 128332000.00",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 3441,
+   "turnos": 7,
+   "tokens_entrada": 298951,
+   "tokens_saida": 1329,
+   "custo_usd": 0.5210554000000001,
+   "duracao_s": 17.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q085",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "459663000.00",
+   "resposta": "O total consolidado de incentivos fiscais da Intelbras em 2025 foi de **R$ 459.663 mil**, ou R$ 459,7 milhões. O número sai da nota 23 (\"Incentivos fiscais\") das Demonstrações Financeiras Anuais Completas de 2025 (protocolo `025453IPE311220250156163807-09`), em milhares de reais.\n\n| Incentivo | Vencimento | Consolidado 2025 (R$ mil) | Consolidado 2024 (R$ mil) |\n|---|---|---:|---:|\n| Crédito financeiro da Lei das TICs (Lei 13.969/2019) | 31/12/2029 | 123.331 | 138.126 |\n| ICMS – Amazonas | 31/12/2032 | 179.976 | 183.067 |\n| ICMS – Santa Catarina | 31/12/2032 | 123.634 | 153.837 |\n| ICMS – Minas Gerais | 31/12/2032 | 24.601 | 30.772 |\n| ICMS – Pernambuco | 31/12/2032 | 8.121 | 8.854 |\n| **Total** | | **459.663** | **514.656** |\n\n- A soma das linhas confere com o total publicado na nota. O valor caiu cerca de 10,7% em relação a 2024. Na controladora, o total de 2025 é R$ 453.359 mil.\n- O crédito financeiro da Lei das TICs entra no resultado em \"Outras receitas (despesas) operacionais, líquidas\". Esse valor não aparece como linha própria nos quadros padronizados da CVM, por isso só a nota explicativa traz o número.\n- A reserva de incentivos fiscais de R$ 3.099 mil no balanço é outra coisa: é a redução de IRPJ da SUDAM constituída em 2023, e não entra nesse total.\n\nRESPOSTA: 459663000.00",
+   "chamadas_ferramenta": 7,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "search_docs"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 15915,
+   "turnos": 9,
+   "tokens_entrada": 466606,
+   "tokens_saida": 2026,
+   "custo_usd": 0.6115352,
+   "duracao_s": 31.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q086",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "278170000.00",
+   "resposta": "Pela conciliação do IR no ITR do 2T26 da Intelbras, os incentivos fiscais do semestre no consolidado somam **R$ 278,170 milhões**.\n\nO número está na nota \"b. Conciliação das despesas do imposto de renda e contribuição social\" das Demonstrações Financeiras Intermediárias de 30/06/2026 (protocolo `025453IPE300620260199285140-66`, entregue em 29/07/2026). Os valores da nota estão em milhares de reais.\n\n| Item (R$ mil) | Consolidado 30/06/2026 | Consolidado 30/06/2025 |\n|---|---|---|\n| Lucro antes do IR/CS | 320.256 | 186.431 |\n| **Incentivos fiscais** | **(278.170)** | **(213.430)** |\n| Pesquisa e inovação (Lei 11.196/05) | (15.781) | (607) |\n| Alíquota efetiva | (2,77%) | 6,15% |\n\n- Os R$ 278,17 milhões são uma dedução da base de cálculo, por isso aparecem entre parênteses na nota. Não são o imposto economizado: aplicando a alíquota de 34%, o efeito no imposto fica em cerca de R$ 94,6 milhões.\n- Na controladora, o mesmo item é de R$ 274,801 milhões.\n- A resposta usa o valor da linha sem o sinal negativo.\n\nRESPOSTA: 278170000.00",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6794,
+   "turnos": 7,
+   "tokens_entrada": 377673,
+   "tokens_saida": 1479,
+   "custo_usd": 0.5327796,
+   "duracao_s": 20.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q087",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "47182000",
+   "resposta": "Na conciliação do IR/CSLL do DFP 2025 da Marcopolo, consolidado, a linha \"Programa de Desenvolvimento Industrial (i)\" é de **R$ 47.182 mil**, ou seja, R$ 47.182.000. Ela aparece como adição positiva: reduz a despesa de imposto.\n\nA fonte é a nota 20(c), \"Conciliação da despesa de imposto de renda e contribuição social correntes\", nas Demonstrações Financeiras Anuais Completas de 31/12/2025. O documento foi entregue à CVM em 26/02/2026, protocolo 008451IPE311220250105985494-16.\n\n| Consolidado (R$ mil) | 2025 | 2024 |\n|---|---|---|\n| Lucro antes do IR/CSLL | 1.567.449 | 1.470.621 |\n| IR/CSLL à alíquota nominal de 34% | (532.933) | (500.011) |\n| **Programa de Desenvolvimento Industrial** | **47.182** | **36.843** |\n| IR/CSLL total | (331.941) | (248.244) |\n| Alíquota efetiva | 21% | 17% |\n\nSegundo a nota (i), esse é o incentivo à inovação tecnológica da Lei 11.196/2005, a Lei do Bem. A Marcopolo deduz da base do IRPJ e da CSLL o que gastou com pesquisa tecnológica e desenvolvimento de inovação. Na controladora o valor é o mesmo, R$ 47.182 mil.\n\nRESPOSTA: 47182000",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5989,
+   "turnos": 7,
+   "tokens_entrada": 377422,
+   "tokens_saida": 1399,
+   "custo_usd": 0.5301232,
+   "duracao_s": 23.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q088",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "30541000.00",
+   "resposta": "Na nota 20(c) do DFP 2025 da Marcopolo, consolidado, a redução de IR por lucro da exploração é de **R$ 30.541 mil**, ou seja, R$ 30.541.000.\n\nA fonte é a nota 20(c), \"Conciliação da despesa de imposto de renda e contribuição social correntes\", nas demonstrações financeiras anuais completas de 31/12/2025. O protocolo é 008451IPE311220250105985494-16, entregue em 26/02/2026, e os valores estão em milhares de reais.\n\n| Linha da conciliação | Consolidado 2025 | Consolidado 2024 |\n|---|---|---|\n| Redução de IR – Lucro de exploração | 30.541 | 18.872 |\n\n- **Controladora:** a linha vem zerada em 2025 e em 2024. O benefício aparece só no consolidado, ou seja, vem das controladas.\n- **SUDENE:** a nota chama a linha só de \"Redução de IR – Lucro de exploração\" e não cita a SUDENE em nenhum ponto do documento. Esse é o benefício regional da SUDENE/SUDAM, então tratei a linha como a que você pediu, mas a ligação com a SUDENE é minha leitura, não está escrita na fonte.\n\nRESPOSTA: 30541000.00",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 17719,
+   "turnos": 7,
+   "tokens_entrada": 386203,
+   "tokens_saida": 1379,
+   "custo_usd": 0.571548,
+   "duracao_s": 23.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q089",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "109713000.00",
+   "resposta": "Na reconciliação do IR do DFP 2025 da Embraer, consolidado, os gastos com pesquisa e desenvolvimento aparecem como efeito positivo de **R$ 109.713 mil**, ou seja, R$ 109.713.000. É uma redução da despesa de IR e CS.\n\nA fonte é a nota 22.3, \"Reconciliação da despesa de imposto de renda e contribuição social\", no PDF das Demonstrações Financeiras Anuais Completas (protocolo `020087IPE311220250113800553-62`, entregue em 18/03/2026). A nota está em R$ mil.\n\n| Linha | Controladora 2025 | Controladora 2024 | **Consolidado 2025** | Consolidado 2024 |\n|---|---|---|---|---|\n| Lucro antes dos impostos | 898.370 | 2.584.811 | 1.455.643 | 3.108.931 |\n| IR à alíquota de 34% | (305.446) | (878.836) | (494.919) | (1.057.037) |\n| Gastos com pesquisa e desenvolvimento | 90.682 | – | **109.713** | 18.711 |\n\nO texto extraído do PDF intercala duas notas lado a lado. Na mesma linha aparecem números da tabela de provisões (1.819.953, 926.770…), que não fazem parte da reconciliação. Confirmei a ordem das colunas pelas linhas vizinhas, Lucro antes dos impostos e IR a 34%, que seguem o mesmo padrão.\n\nRESPOSTA: 109713000.00",
+   "chamadas_ferramenta": 7,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 11583,
+   "turnos": 9,
+   "tokens_entrada": 539246,
+   "tokens_saida": 2125,
+   "custo_usd": 0.6010784000000001,
+   "duracao_s": 30.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q090",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "41372000.00",
+   "resposta": "Em 2025, a Kepler Weber registrou **R$ 41,372 milhões** de subvenções governamentais em outras receitas operacionais, no consolidado (R$ 41.372 mil na tabela da nota).\n\n**Fonte:** Nota 9 (\"Outras receitas (despesas) operacionais líquidas\") das Demonstrações Financeiras Anuais Completas de 2025, protocolo `007870IPE311220250149587669-42`. A nota abre essa conta assim:\n\n| Linha | Controladora 2025 | Controladora 2024 | Consolidado 2025 | Consolidado 2024 |\n|---|---|---|---|---|\n| Subvenções governamentais | – | – | **41.372** | 50.683 |\n| Total outras receitas (despesas) líquidas | 27.817 | 26.747 | 34.722 | 9.923 |\n\nValores em R$ mil.\n\n- **Controladora sem valor:** a subvenção está toda na controlada KWI. A controladora não registra nada nessa linha.\n- **Valor no ano anterior:** em 2024 a subvenção somou R$ 50,683 milhões, ou seja, caiu cerca de 18% em 2025.\n- **Crédito da LC 160/2017 em outra linha:** no segundo semestre de 2025, uma decisão judicial a favor da KWI gerou um crédito tributário. Desse crédito, R$ 27,653 milhões entraram na mesma conta de outras receitas operacionais. A nota de tributos a recuperar não diz em qual linha da Nota 9 eles estão. Nenhuma linha da tabela mostra esse valor, e ele não aparece somado aos R$ 41,372 milhões.\n- **A DFP estruturada não separa a subvenção:** lá só existe o total de outras receitas operacionais (conta 3.04.04, R$ 83,215 milhões em 2025). Por isso o número acima vem da nota explicativa.\n\nRESPOSTA: 41372000.00",
+   "chamadas_ferramenta": 6,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 13922,
+   "turnos": 8,
+   "tokens_entrada": 385714,
+   "tokens_saida": 1953,
+   "custo_usd": 0.5734844,
+   "duracao_s": 24.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q091",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "592000.00",
+   "resposta": "Na conciliação do IR e da CSLL do DFP 2025 da Iochpe-Maxion (MYPK3), o benefício dos projetos de inovação tecnológica no consolidado foi de **R$ 592 mil**, ou seja, R$ 592.000. O valor está na nota \"b) Conciliação do crédito (despesa) de imposto de renda e contribuição social\", na página 33 das demonstrações financeiras anuais completas (protocolo `011932IPE311220250137064530-23`, entregue em 25/02/2026). A nota está em milhares de reais.\n\n| Linha \"Benefício dos projetos de inovação tecnológica\" | 31/12/2025 | 31/12/2024 |\n|---|---|---|\n| Controladora | – | 2.481 |\n| Consolidado | **592** | 3.159 |\n\nPara dar contexto: no consolidado de 2025, o lucro antes do IR e da CSLL foi de R$ 363.638 mil. A despesa total de IR e CSLL ficou em R$ (146.504) mil.\n\nRESPOSTA: 592000.00",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5882,
+   "turnos": 7,
+   "tokens_entrada": 377066,
+   "tokens_saida": 1205,
+   "custo_usd": 0.5251969999999999,
+   "duracao_s": 17.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q092",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "173500000.00",
+   "resposta": "A Tupy vendeu o crédito-prêmio de IPI em **dezembro de 2025**, por cessão de direitos, por **R$ 173,5 milhões**, com efeito caixa.\n\n- **Valor exato:** a tabela de \"Outras receitas (despesas) operacionais\" das DFs anuais de 2025 (consolidado, em R$ mil) traz a linha \"Venda crédito prêmio IPI\" com **173.500** em 2025 e nada em 2024. São as DFs entregues em 19/03/2026, protocolo `006343IPE311220250114408280-21`.\n- **Valor arredondado:** o relatório anual, o release do 4T25, a proposta da AGO/E e o release do 1T26 falam em \"R$ 174 milhões\". É o mesmo número arredondado.\n- **De onde vem o crédito:** é um benefício fiscal sobre exportações feitas entre 1988 e 1990. O direito de usá-lo foi reconhecido por decisão judicial transitada em julgado.\n- **Tributos:** segundo o release do 1T26, a empresa pagou R$ 8 milhões de PIS/COFINS sobre essa venda, reconhecidos no 1T26. Os R$ 173,5 milhões são o valor bruto da venda.\n\nRESPOSTA: 173500000.00",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs",
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 9498,
+   "turnos": 7,
+   "tokens_entrada": 302977,
+   "tokens_saida": 1234,
+   "custo_usd": 0.5238372,
+   "duracao_s": 17.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q093",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "131413000",
+   "resposta": "Na conciliação do IR e da CSLL do ITR de 30/06/2026 da WEG (nota 26, consolidado, acumulado de janeiro a junho), a linha \"Tax incentives\" (incentivos fiscais) vale **R$ 131.413 mil**, ou seja, **R$ 131.413.000**. O valor é positivo, então reduz a despesa de imposto.\n\nPara comparar, a mesma linha no 1S25 foi de R$ 143.303 mil. Na controladora ela é zero.\n\nContexto da conciliação consolidada no 1S26:\n\n| Linha | R$ mil |\n|---|---|\n| Lucro antes do IR | 3.871.214 |\n| IR e CSLL à alíquota nominal de 34% | (1.316.213) |\n| Diferença de alíquota no exterior | 230.421 |\n| **Incentivos fiscais** | **131.413** |\n| JCP | 291.801 |\n| Equivalência patrimonial | (811) |\n| Outros ajustes | 18.420 |\n| IR e CSLL efetivos | (644.969), alíquota efetiva de 16,66% |\n\nO número saiu da versão em inglês do ITR, que está no IPE como \"Demonstrações Financeiras Adicionais\" (protocolo 005410IPE300620260166960051-18). A base não tem o ITR em português em `notas_explicativas` nem no IPE, mas o valor deve ser o mesmo, porque a versão em inglês é tradução do mesmo documento.\n\nRESPOSTA: 131413000",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6966,
+   "turnos": 7,
+   "tokens_entrada": 379012,
+   "tokens_saida": 1526,
+   "custo_usd": 0.5366316,
+   "duracao_s": 26.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q094",
+   "tipo": "sem_dado",
+   "correto": true,
+   "nota_correcao": "A resposta diz que a base não tem as notas do ITR 2026 da RAPT3, só os quadros estruturados (balanço, DRE, DFC, DVA), e que o PDF das DFs intermediárias não aparece no IPE desse período. Aponta o RAD e não inventa nenhum valor, nem zero nem trimestral derivado do anual. Não cita o valor anual do DFP 2025, mas isso era opcional. Uma ressalva: ela diz que nenhum documento da Randoncorp está em notas_explicativas, o que pode conflitar com o DFP 2025 citado na referência, mas não afirma nenhum valor errado e cumpre o essencial do critério.",
+   "resposta": "Não consegui responder com a base atual. A nota de imposto de renda não está carregada, e o número da linha de incentivo à tecnologia só aparece no texto das notas explicativas.\n\n- **Notas explicativas:** nenhum documento da Randoncorp (CNPJ 89.086.144/0001-16) foi carregado em `notas_explicativas`. A tabela tem 63 documentos, todos de outras empresas.\n- **ITR 2T26 estruturado:** está na base, com data de referência 30/06/2026. Mas ele só traz os quadros padrão (balanço, DRE, fluxo de caixa, DVA). A DRE mostra o IR total, sem a conciliação da alíquota onde fica o incentivo à tecnologia.\n- **Documentos do IPE:** o press-release do 2T26, entregue em 13/08/2026, ainda não teve o texto extraído. O PDF das demonstrações intermediárias não aparece no IPE desse período.\n\nPara carregar o ITR completo com as notas, um único documento baixado do RAD:\n\n```bash\ncd scripts/ingest && source ../../.venv/bin/activate\npython ingest_notas_explicativas.py --cnpj 89.086.144/0001-16 --ano 2026 --fonte ITR\n```\n\nEsse comando baixa todos os ITRs de 2026 da empresa, até o limite padrão de 20 documentos, e não só o do 2T. Depois disso, procuro a linha na conciliação da alíquota efetiva e trago o valor do trimestre e o do acumulado no ano. Posso rodar agora, se quiser.\n\nSe preferir abrir você mesmo, o ITR está no RAD: https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx (procure pela Randoncorp, ITR de 30/06/2026, nota de imposto de renda e contribuição social).",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1778,
+   "turnos": 7,
+   "tokens_entrada": 298204,
+   "tokens_saida": 2007,
+   "custo_usd": 0.5149114,
+   "duracao_s": 26.5,
+   "erro_sessao": false
+  }
+ ]
+}

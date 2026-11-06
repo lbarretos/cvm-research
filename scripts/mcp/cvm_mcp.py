@@ -23,7 +23,8 @@ Banco: por padrão <raiz do projeto>/cvm_research.db. Sobrescreva com CVM_DB_PAT
 
 Ferramentas:
     resolve_company(texto) → ticker, nome parcial ou CNPJ → até 5 empresas (ou aviso de que não está na base)
-    search_docs(consulta…) → busca por trecho (FR, CM, AVI, RCA, assembleias, press-release), deduplicada
+    search_docs(consulta…) → busca no texto: trechos da camada quente (FR, CM, AVI, RCA, assembleias, press-release)
+                             ou, com camada='df'/'fria', documentos (notas explicativas do DFP/ITR, prospectos…)
     read_doc(protocolo…)   → lê um documento por trechos, a partir de uma posição
     get_financials(ticker, conceitos…) → fatos padronizados (D&A, capex, dividendos, juros, dívida…) com a checagem
     resolve_bond(texto)    → código (RUMOB6, CRA024004SB), ISIN, CNPJ ou nome de emissor/devedor → títulos de renda fixa
@@ -271,86 +272,217 @@ def resolve_company(texto: str) -> dict:
 _FTS_OPERADORES = re.compile(r'["()]|\b(AND|OR|NOT|NEAR)\b|\w:')
 
 
+# Palavras que estão em quase todo documento: num AND não filtram nada e, com o cache frio no disco externo, ler a
+# lista delas custou 19,8 s numa consulta da Etapa 9 (0,1 s sem elas). Só saem do texto livre, nunca de "frase".
+_STOPWORDS = frozenset("""a o as os de da do das dos e em no na nos nas um uma para por pelo pela com ao aos à às que
+se sobre the of and to in on for by""".split())
+
+
 def _consulta_fts(consulta: str) -> str:
-    """Texto livre vira AND de termos (prefixo com * é mantido); sintaxe FTS5 explícita passa direto."""
+    """Texto livre vira AND de termos sem stopwords (prefixo com * é mantido); sintaxe FTS5 explícita passa direto."""
     c = consulta.strip()
     if _FTS_OPERADORES.search(c):
         return c
     termos = re.findall(r"\w+\*?", c)
-    return " AND ".join(f'"{t[:-1]}"*' if t.endswith("*") else f'"{t}"' for t in termos)
+    uteis = [t for t in termos if t.lower() not in _STOPWORDS] or termos
+    return " AND ".join(f'"{t[:-1]}"*' if t.endswith("*") else f'"{t}"' for t in uteis)
+
+
+# Camadas da busca. A quente tem trechos (ipe_chunks, Etapa 4); as demais só o FTS por documento (ipe_docs_fts).
+DF_TIPOS = ("Demonstrações Financeiras Anuais Completas", "Demonstrações Financeiras Intermediárias",
+            "Demonstrações Financeiras em Padrões Internacionais", "Demonstrações Financeiras Adicionais")
+_QUENTE_SQL = ("(i.categoria IN ('Fato Relevante','Comunicado ao Mercado','Aviso aos Acionistas','Reunião da Administração')"
+               " OR (i.categoria = 'Assembleia' AND i.especie IN ('Ata','Proposta da Administração','Sumário das Decisões',"
+               "'Edital de Convocação')) OR (i.categoria = 'Dados Econômico-Financeiros' AND i.tipo = 'Press-release'))")
+CAMADAS = ("quente", "df", "fria", "todas")
+# consulta que parece pedir nota explicativa: o aviso de vazio aponta camada='df' (Etapa 9.3)
+_PARECE_DF = re.compile(r"\b(nota|notas|explicativ|concilia|al[ií]quota|imposto|IRPJ|CSLL|subven|incentivo|"
+                        r"imobilizado|intang|provis|deprecia|arrendament|tribut|balan|demonstra|ITR|DFP|tax|income)",
+                        re.I)
+# as oito primeiras na ordem de antes da Etapa 9 (quem lia por posição não quebra); as novas vão no fim
+_COLS_BUSCA = ["protocolo", "ordem", "data_entrega", "categoria", "tipo", "assunto", "trecho", "link",
+               "data_referencia", "offset", "camada"]
+
+
+def _cnpj_digitos(ticker: str) -> tuple[str | None, str | None, str | None]:
+    """ticker/nome/CNPJ → (cnpj formatado, só dígitos, aviso). Aviso preenchido = não resolveu."""
+    r = resolve_company(ticker)
+    if not r["candidatos"]:
+        return None, None, r["aviso"]
+    if len(r["candidatos"]) > 1:
+        return None, None, "ticker ambíguo: " + "; ".join(f"{c['ticker']} {c['nome_cvm']}" for c in r["candidatos"])
+    cnpj = r["candidatos"][0]["cnpj"]
+    return cnpj, re.sub(r"\D", "", cnpj), None
+
+
+def _busca_quente(conn, q, cnpj_tok, categorias, desde, ate, ref_desde, ref_ate, k, versoes_antigas) -> list[list]:
+    match = f"texto : ({q})"
+    if cnpj_tok:
+        match += f' AND cnpj_tok : "{cnpj_tok}"'
+    where, args = ["ipe_chunks_fts MATCH ?"], [match]
+    if not versoes_antigas:
+        where.append("c.is_latest = 1")
+    if categorias:
+        where.append(f"c.categoria IN ({','.join('?' * len(categorias))})")
+        args += categorias
+    for col, op, v in (("c.data_entrega", ">=", desde), ("c.data_entrega", "<=", ate),
+                       ("i.data_referencia", ">=", ref_desde), ("i.data_referencia", "<=", ref_ate)):
+        if v:
+            where.append(f"{col} {op} ?")
+            args.append(v)
+    sql = ("SELECT c.hash, c.rep_protocolo, c.rep_ordem, c.data_entrega, i.data_referencia, c.categoria, c.tipo, "
+           "c.assunto, snippet(ipe_chunks_fts, 0, '[', ']', ' … ', 48), i.link_download "
+           "FROM ipe_chunks_fts JOIN ipe_chunks c ON c.chunk_id = ipe_chunks_fts.rowid "
+           "LEFT JOIN ipe_docs i ON i.protocolo_entrega = c.rep_protocolo "
+           f"WHERE {' AND '.join(where)} ORDER BY ipe_chunks_fts.rank LIMIT ?")
+    try:
+        rows = conn.execute(sql, args + [k * 5]).fetchall()
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e):
+            raise ValueError("Índice de trechos ausente: rode a migração 2026-10-06_ipe_chunks.sql e "
+                             "scripts/ingest/build_chunks.py.") from None
+        raise
+    vistos, linhas = set(), []
+    for h, proto, ordem, data, dref, cat, tipo, assunto, trecho, link in rows:
+        # mesmo hash = texto idêntico; mesmo trecho destacado = boilerplate repetido entre documentos
+        chave = re.sub(r"\W+", "", trecho.lower())
+        if h in vistos or chave in vistos:
+            continue
+        vistos.update((h, chave))
+        linhas.append([proto, ordem, data, cat, tipo, assunto, trecho, link, dref, None, "quente"])
+        if len(linhas) == k:
+            break
+    return linhas
+
+
+def _offset_do_trecho(conn, proto: str, trecho: str) -> int | None:
+    """Posição (em caracteres) do primeiro termo destacado no texto do documento, para o read_doc abrir ali.
+    O snippet do FTS é o texto original com marcadores; sem eles, um pedaço dele é substring exata."""
+    i = trecho.find("[")
+    if i < 0:
+        return None
+    pedaco = trecho[i:].replace("[", "").replace("]", "").split(" … ")[0][:40]
+    if len(pedaco) < 4:
+        return None
+    (pos,) = conn.execute("SELECT instr(texto_extraido, ?) FROM ipe_docs WHERE protocolo_entrega = ?",
+                          (pedaco, proto)).fetchone() or (0,)
+    return max(0, pos - 1 - 400) if pos else None
+
+
+def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_desde, ref_ate, k,
+                      versoes_antigas) -> list[list]:
+    """Camadas 'df' e 'fria': FTS por documento (ipe_docs_fts), um resultado por documento."""
+    match = f"texto_extraido : ({q})"
+    where, args = ["ipe_docs_fts MATCH ?"], []
+    if cnpj:
+        # só a raiz do CNPJ no MATCH: os tokens "0001" e o dígito verificador estão em quase todo documento
+        raiz = " ".join(re.findall(r"\d+", cnpj)[:3])
+        match += f' AND cnpj_companhia : "{raiz}"'
+        where.append("i.cnpj_companhia = ?")
+        args.append(cnpj)
+    args.insert(0, match)
+    if camada == "df":
+        where.append(f"i.tipo IN ({','.join('?' * len(DF_TIPOS))})")
+        args += list(DF_TIPOS)
+    else:
+        where.append(f"NOT {_QUENTE_SQL}")
+        where.append(f"COALESCE(i.tipo, '') NOT IN ({','.join('?' * len(DF_TIPOS))})")
+        args += list(DF_TIPOS)
+    if tipos:
+        where.append(f"i.tipo IN ({','.join('?' * len(tipos))})")
+        args += tipos
+    if categorias:
+        where.append(f"i.categoria IN ({','.join('?' * len(categorias))})")
+        args += categorias
+    if not versoes_antigas:
+        where.append("COALESCE(v.is_latest, 1) = 1")
+    for col, op, val in (("i.data_entrega", ">=", desde), ("i.data_entrega", "<=", ate),
+                         ("i.data_referencia", ">=", ref_desde), ("i.data_referencia", "<=", ref_ate)):
+        if val:
+            where.append(f"{col} {op} ?")
+            args.append(val)
+    sql = ("SELECT i.protocolo_entrega, i.data_entrega, i.data_referencia, i.categoria, i.tipo, i.assunto, "
+           "snippet(ipe_docs_fts, 3, '[', ']', ' … ', 40), i.link_download "
+           "FROM ipe_docs_fts JOIN ipe_docs i ON i.rowid = ipe_docs_fts.rowid "
+           "LEFT JOIN ipe_versoes v ON v.protocolo_entrega = i.protocolo_entrega "
+           f"WHERE {' AND '.join(where)} ORDER BY ipe_docs_fts.rank LIMIT ?")
+    linhas = []
+    for proto, data, dref, cat, tipo, assunto, trecho, link in conn.execute(sql, args + [k]).fetchall():
+        linhas.append([proto, None, data, cat, tipo, assunto, trecho, link, dref,
+                       _offset_do_trecho(conn, proto, trecho), camada])
+    return linhas
 
 
 @mcp.tool()
 def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] | None = None,
                 desde: str | None = None, ate: str | None = None, k: int = 10,
-                versoes_antigas: bool = False) -> dict:
-    """Busca por trecho (~2 mil caracteres) nos documentos da camada quente do IPE: Fato Relevante, Comunicado ao
-    Mercado, Aviso aos Acionistas, Reunião da Administração, Assembleia (ata, proposta, sumário, edital) e
-    press-release. Devolve os k melhores trechos (BM25), sem repetir texto idêntico, só de versões vigentes
-    (versoes_antigas=True inclui as substituídas), com o protocolo para ler em volta com read_doc.
+                versoes_antigas: bool = False, camada: str = "quente", tipos: list[str] | None = None,
+                ref_desde: str | None = None, ref_ate: str | None = None) -> dict:
+    """Busca no texto dos documentos do IPE. `camada` escolhe onde:
+    - 'quente' (padrão): trechos de ~2 mil caracteres de Fato Relevante, Comunicado ao Mercado, Aviso aos Acionistas,
+      Reunião da Administração, Assembleia (ata, proposta, sumário, edital) e press-release; sem repetir texto
+      idêntico. Abra com read_doc(protocolo, ordem).
+    - 'df': **notas explicativas** — PDF completo do DFP (DF Anuais Completas) e do ITR (DF Intermediárias; em
+      inglês, DF Adicionais; até 2024 também DF em Padrões Internacionais). Conciliação do IR, subvenções e
+      incentivos fiscais, imobilizado, provisões, dívida, partes relacionadas etc. Muitas empresas só publicam o ITR
+      com notas em inglês: busque também os termos em inglês ("tax incentives", "government grants").
+    - 'fria': o resto do IPE (prospectos, relatórios de agente fiduciário, escrituras, laudos, estatutos…).
+    - 'todas': quente e documentos intercalados.
+    Fora da quente, cada linha é um documento: abra com read_doc(protocolo, offset=<offset>), que já cai no trecho.
     consulta: termos (AND implícito; acento e caixa não importam; `dividend*` para prefixo) ou sintaxe FTS5
-    ("frase exata", OR, NEAR(a b, 10)). ticker: filtra a empresa (ticker, nome ou CNPJ). categorias: lista de
-    ipe_docs.categoria. desde/ate: data_entrega 'YYYY-MM-DD'.
-    Não cobre DFs completas, prospectos nem relatórios de agente fiduciário (camada fria): para esses use o FTS
-    por documento (ipe_docs_fts) via query. Se o último dado é recente, lembre da defasagem do IPE (ver a skill)."""
+    ("frase exata", OR, NEAR(a b, 10)). ticker: empresa (ticker, nome ou CNPJ). categorias: ipe_docs.categoria.
+    tipos: ipe_docs.tipo (ex.: ['Demonstrações Financeiras Intermediárias']). desde/ate: data_entrega;
+    ref_desde/ref_ate: data_referencia (período do documento: '2026-06-30' = ITR do 2T26), 'YYYY-MM-DD'.
+    Só versões vigentes (versoes_antigas=True inclui as substituídas). Lembre da defasagem semanal do IPE."""
     q = _consulta_fts(consulta)
     if not q:
         raise ValueError("Consulta vazia.")
+    if camada not in CAMADAS:
+        raise ValueError(f"camada deve ser uma de {CAMADAS}.")
     k = max(1, min(int(k), 30))
     conn = get_db()
     try:
         prazo = _com_prazo(conn)
-        match = f"texto : ({q})"
-        aviso = None
+        cnpj = cnpj_tok = None
         if ticker:
-            r = resolve_company(ticker)
-            if not r["candidatos"]:
-                return {"colunas": [], "linhas": [], "aviso": r["aviso"]}
-            if len(r["candidatos"]) > 1:
-                return {"colunas": [], "linhas": [], "aviso": "ticker ambíguo: "
-                        + "; ".join(f"{c['ticker']} {c['nome_cvm']}" for c in r["candidatos"])}
-            match += f' AND cnpj_tok : "{re.sub(r"\D", "", r["candidatos"][0]["cnpj"])}"'
-        where, args = ["ipe_chunks_fts MATCH ?"], [match]
-        if not versoes_antigas:
-            where.append("c.is_latest = 1")
-        if categorias:
-            where.append(f"c.categoria IN ({','.join('?' * len(categorias))})")
-            args += categorias
-        if desde:
-            where.append("c.data_entrega >= ?")
-            args.append(desde)
-        if ate:
-            where.append("c.data_entrega <= ?")
-            args.append(ate)
-        sql = ("SELECT c.hash, c.rep_protocolo, c.rep_ordem, c.data_entrega, c.categoria, c.tipo, c.assunto, "
-               "snippet(ipe_chunks_fts, 0, '[', ']', ' … ', 48), i.link_download "
-               "FROM ipe_chunks_fts JOIN ipe_chunks c ON c.chunk_id = ipe_chunks_fts.rowid "
-               "LEFT JOIN ipe_docs i ON i.protocolo_entrega = c.rep_protocolo "
-               f"WHERE {' AND '.join(where)} ORDER BY ipe_chunks_fts.rank LIMIT ?")
+            cnpj, cnpj_tok, aviso = _cnpj_digitos(ticker)
+            if aviso:
+                return {"colunas": [], "linhas": [], "aviso": aviso}
         try:
-            rows = conn.execute(sql, args + [k * 5]).fetchall()
+            linhas: list[list] = []
+            if camada in ("quente", "todas"):
+                linhas = _busca_quente(conn, q, cnpj_tok, categorias, desde, ate, ref_desde, ref_ate, k,
+                                       versoes_antigas)
+            if camada != "quente":
+                outras = []
+                for c in (("df", "fria") if camada == "todas" else (camada,)):
+                    outras += _busca_documentos(conn, c, q, cnpj, categorias, tipos, desde, ate, ref_desde, ref_ate,
+                                                k, versoes_antigas)
+                if camada == "todas":   # intercala: os rankings das camadas não são comparáveis
+                    mix = [x for par in zip(linhas, outras) for x in par]
+                    linhas = (mix + linhas[len(outras):] + outras[len(linhas):])[:k]
+                else:
+                    linhas = outras
         except sqlite3.OperationalError as e:
             if time.monotonic() > prazo:
-                raise ValueError("Busca abortada por tempo: restrinja por ticker, categorias ou datas.") from None
-            if "no such table" in str(e):
-                raise ValueError("Índice de trechos ausente: rode a migração 2026-10-06_ipe_chunks.sql e "
-                                 "scripts/ingest/build_chunks.py.") from None
-            raise ValueError(f"Consulta FTS inválida ({e}). Use termos simples ou aspas.") from None
-        vistos, linhas = set(), []
-        for h, proto, ordem, data, cat, tipo, assunto, trecho, link in rows:
-            # mesmo hash = texto idêntico; mesmo trecho destacado = boilerplate repetido entre documentos
-            chave = (h, re.sub(r"\W+", "", trecho.lower()))
-            if h in vistos or chave[1] in vistos:
-                continue
-            vistos.update(chave)
-            linhas.append([proto, ordem, data, cat, tipo, assunto, trecho, link])
-            if len(linhas) == k:
-                break
+                raise ValueError("Busca abortada por tempo: restrinja por ticker, tipos, categorias ou datas.") from None
+            if "fts5" in str(e).lower() or "syntax" in str(e).lower():
+                raise ValueError(f"Consulta FTS inválida ({e}). Use termos simples ou aspas.") from None
+            raise
+        aviso = None
         if not linhas:
-            aviso = ("nenhum trecho; a busca cobre só a camada quente e versões vigentes. Tente menos termos, "
-                     "prefixo (termo*) ou versoes_antigas=True")
-        return _tabular(["protocolo", "ordem", "data_entrega", "categoria", "tipo", "assunto", "trecho", "link"],
-                        linhas, aviso)
+            if camada == "quente":
+                aviso = ("nenhum trecho na camada quente (FR, CM, AVI, RCA, assembleias, press-release) em versões "
+                         "vigentes. Tente menos termos, prefixo (termo*) ou versoes_antigas=True")
+                if _PARECE_DF.search(consulta) or (categorias and "Dados Econômico-Financeiros" in categorias):
+                    aviso += ("; notas explicativas (DFP/ITR completos) estão em camada='df' — no ITR em inglês, "
+                              "busque também os termos em inglês")
+                else:
+                    aviso += "; prospectos, escrituras e demais documentos: camada='fria'"
+            else:
+                aviso = (f"nenhum documento na camada '{camada}'. Tente menos termos ou prefixo (termo*)"
+                         + ("; no ITR em inglês (DF Adicionais), use os termos em inglês" if camada == "df" else ""))
+        return _tabular(_COLS_BUSCA, linhas, aviso)
     finally:
         conn.close()
 
@@ -359,18 +491,19 @@ def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] 
 def read_doc(protocolo: str, ordem: int = 0, offset: int = 0, max_chars: int = 20_000) -> dict:
     """Lê um documento a partir de um trecho. Use o `protocolo` e a `ordem` devolvidos por search_docs: o texto
     vem limpo (hifenização e cabeçalhos tratados), do trecho `ordem` em diante, até max_chars (máx. 28.000).
-    A resposta traz `proximo_ordem` para continuar e `total_trechos`. Documentos fora da camada quente não têm
-    trechos: nesse caso o texto bruto vem por posição (`offset` em caracteres)."""
+    A resposta traz `proximo_ordem` para continuar e `total_trechos`. Documentos fora da camada quente (DFs com notas
+    explicativas, prospectos…) não têm trechos: o texto bruto vem por posição; passe o `offset` que search_docs
+    devolveu (camada='df'/'fria') para cair direto no trecho encontrado, e `proximo_offset` para continuar."""
     max_chars = max(500, min(int(max_chars), 28_000))
     conn = get_db()
     try:
         _com_prazo(conn)
-        doc = conn.execute("SELECT categoria, tipo, assunto, data_entrega, link_download, chars_extraidos "
-                           "FROM ipe_docs WHERE protocolo_entrega = ?", (protocolo,)).fetchone()
+        doc = conn.execute("SELECT categoria, tipo, assunto, data_entrega, link_download, chars_extraidos, "
+                           "data_referencia FROM ipe_docs WHERE protocolo_entrega = ?", (protocolo,)).fetchone()
         if doc is None:
             raise ValueError(f"Protocolo '{protocolo}' não existe em ipe_docs.")
         meta = {"protocolo": protocolo, "categoria": doc[0], "tipo": doc[1], "assunto": doc[2],
-                "data_entrega": doc[3], "link": doc[4]}
+                "data_entrega": doc[3], "data_referencia": doc[6], "link": doc[4]}
         chunks = conn.execute(
             "SELECT d.ordem, c.texto FROM ipe_chunk_docs d JOIN ipe_chunks c USING (chunk_id) "
             "WHERE d.protocolo_entrega = ? AND d.ordem >= ? ORDER BY d.ordem", (protocolo, max(0, ordem))).fetchall()

@@ -22,6 +22,7 @@ A numeração é a ordem recomendada. Cada etapa só depende das anteriores.
 | 6 | [Linha econômica por empresa](06-linha-economica.md) | demonstrativos, L1 | 5 | **Implementada em 2026-10-15; 6.4 em 2026-10-30** (visualizador lê `linha_empresa`). `linha_empresa` em 84 s; fragmentação da DRE p90 2,9; DFC segue precisando do conceito (Etapa 7) | S |
 | 7 | [Taxonomia canônica](07-taxonomia-canonica.md) | demonstrativos, L2 | 5, 6 | **Implementada em 2026-10-16 com ressalvas.** 138 mil fatos, `get_financials` no MCP; Revisão exaustiva (Claude, não analista) dos 14 conceitos de regra em 2026-10-30: 0 erros nos nomes revistos (antes 28%–99,9%); D&A × DVA 89,5% → 90,4% (critério de 90% cumprido) | M–L |
 | 8 | [Renda fixa: debêntures, CRI, CRA](08-renda-fixa.md) | nova fonte | 3, 4 (padrões), FRE | **Carga real em 2026-10-30.** Debêntures completas (SND, CVM, taxa ANBIMA, escritura e garantia conferidas em RUMOB6/ERDVB4). CRI/CRA com taxa e cadastro pelo dataset público da ANBIMA (download manual semanal, `--arquivo`); termo de CRA manual | M |
+| 9 | [Busca nos documentos financeiros](09-busca-em-documentos.md) | documentos | 2, 4 | **Planejada em 2026-11-05; bloco A implementado no branch `etapa9-bloco-a`** (`search_docs(camada='df')`, `golden_v2`), 13/13 nas perguntas de nota, **igual à baseline** (o modelo com a skill já achava as notas por SQL no `ipe_docs_fts`); ganho de robustez, não de acerto. ~37 das 149 empresas sem ITR com notas no IPE desde 2025 (32 só em inglês); RAD bloqueado a partir desta máquina. Blocos B–C seguem planejados | S–M |
 
 ## Por que esta ordem
 
@@ -81,6 +82,8 @@ O script `stN_…` é o stress test da Etapa N (a Etapa 3 não tem script própr
 .venv/bin/python docs/proximos-passos/stress/st6_linha_economica.py "$PWD/cvm_research.db"
 # Etapa 7. Taxonomia (precisa de scikit-learn: venv separada, ver o cabeçalho do script)
 /tmp/v/bin/python docs/proximos-passos/stress/st7_taxonomia.py "$PWD/cvm_research.db"
+# Etapa 9. Qualidade do texto e lacunas de extração por camada (~9 min, só leitura)
+.venv/bin/python docs/proximos-passos/stress/st9_medir.py "$PWD/cvm_research.db"
 ```
 
 Rode da raiz do projeto: os scripts das etapas 5, 6 e 7 importam `scripts/analysis`. No banco vivo, com o

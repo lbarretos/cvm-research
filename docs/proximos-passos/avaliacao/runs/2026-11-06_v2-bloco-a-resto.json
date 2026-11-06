@@ -1,0 +1,1312 @@
+{
+ "rotulo": "v2-bloco-a-resto",
+ "executado_em": "2026-11-06",
+ "golden_gerado_em": "2026-11-05",
+ "modelo": null,
+ "duracao_total_s": 249,
+ "resumo": {
+  "geral": {
+   "n": 43,
+   "acerto": 0.977,
+   "chamadas_por_pergunta": 4.21,
+   "tokens_por_pergunta": 272690,
+   "erros_ferramenta": 5,
+   "consultas_abortadas": 1,
+   "chars_lidos_por_pergunta": 4232,
+   "duracao_media_s": 17.0,
+   "custo_usd": 11.216
+  },
+  "por_tipo": {
+   "contagem": {
+    "n": 7,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 3.71,
+    "tokens_por_pergunta": 246824,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 3270,
+    "duracao_media_s": 14.4,
+    "custo_usd": 1.729
+   },
+   "documento": {
+    "n": 1,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 5.0,
+    "tokens_por_pergunta": 305962,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 5216,
+    "duracao_media_s": 28.6,
+    "custo_usd": 0.267
+   },
+   "fato": {
+    "n": 3,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 4.0,
+    "tokens_por_pergunta": 223248,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 2652,
+    "duracao_media_s": 17.0,
+    "custo_usd": 0.728
+   },
+   "numero": {
+    "n": 26,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 4.19,
+    "tokens_por_pergunta": 283056,
+    "erros_ferramenta": 4,
+    "consultas_abortadas": 1,
+    "chars_lidos_por_pergunta": 4621,
+    "duracao_media_s": 17.0,
+    "custo_usd": 6.97
+   },
+   "quantidade": {
+    "n": 2,
+    "acerto": 0.5,
+    "chamadas_por_pergunta": 3.5,
+    "tokens_por_pergunta": 224178,
+    "erros_ferramenta": 0,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 5346,
+    "duracao_media_s": 10.4,
+    "custo_usd": 0.49
+   },
+   "sem_dado": {
+    "n": 4,
+    "acerto": 1.0,
+    "chamadas_por_pergunta": 5.5,
+    "tokens_por_pergunta": 303603,
+    "erros_ferramenta": 1,
+    "consultas_abortadas": 0,
+    "chars_lidos_por_pergunta": 3770,
+    "duracao_media_s": 21.5,
+    "custo_usd": 1.033
+   }
+  }
+ },
+ "resultados": [
+  {
+   "id": "q052",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "7949584000",
+   "resposta": "A receita líquida acumulada de CMIN3 (CSN Mineração) no 1º semestre de 2025 foi de **R$ 7.949.584.000**, ou cerca de R$ 7,95 bilhões. O valor vem da DRE acumulada do ITR do 2T25, conta 3.01, com data de referência 30/06/2025. A empresa usa o plano de contas padrão.\n\nNão verifiquei se o ITR do 2T25 teve reapresentação.\n\nRESPOSTA: 7949584000",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 669,
+   "turnos": 5,
+   "tokens_entrada": 221396,
+   "tokens_saida": 494,
+   "custo_usd": 0.33427049999999997,
+   "duracao_s": 10.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q053",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "10047836000",
+   "resposta": "A receita líquida da PSSA3 (Porto S.A.) no 2T25 isolado, de 01/04/2025 a 30/06/2025, foi de **R$ 10.047.836.000**, ou cerca de R$ 10,05 bilhões.\n\nEsse é o valor da conta 3.01 (Receita de Venda de Bens e/ou Serviços) do ITR do 2T25, no trimestre isolado e não no acumulado do semestre. Duas consultas deram o mesmo número: `vw_dre` e `demonstrativos_trimestrais`. A segunda traz a safra original e a reapresentada, e as duas coincidem, então não houve reapresentação do valor. A DRE da Porto usa o plano padrão, com custo igual a zero.\n\nRESPOSTA: 10047836000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2712,
+   "turnos": 6,
+   "tokens_entrada": 222514,
+   "tokens_saida": 789,
+   "custo_usd": 0.3416847,
+   "duracao_s": 20.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q054",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "19753705000",
+   "resposta": "A receita líquida acumulada de PSSA3 no 1º semestre de 2025 (01/01 a 30/06/2025) foi de R$ 19.753.705.000, ou cerca de R$ 19,75 bilhões.\n\nO valor vem da conta 3.01 da DRE do ITR do 2T25 (versão 1), coluna \"Último\", no acumulado do ano. Na mesma coluna, o 2T25 isolado foi R$ 10,05 bi. Para comparação, o 1S24 foi R$ 17,65 bi.\n\nNão consultei reapresentações posteriores desse período. O valor é o que consta na base, carregada na data da última atualização.\n\nRESPOSTA: 19753705000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 1,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2289,
+   "turnos": 6,
+   "tokens_entrada": 222492,
+   "tokens_saida": 834,
+   "custo_usd": 0.3418751,
+   "duracao_s": 13.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q055",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "9134666000",
+   "resposta": "A receita líquida da MGLU3 no 2T25 isolado (01/04/2025 a 30/06/2025) foi de **R$ 9.134.666.000**, ou cerca de R$ 9,13 bilhões.\n\nEsse valor é o da DRE consolidada, conta 3.01, publicada no ITR do 2T25 como trimestre isolado (`vw_dre`). Ele bate com o publicado e com o derivado (acumulado menos 1T) em `demonstrativos_trimestrais`. Nas safras original e reapresentada o valor é o mesmo, e não há flag de reapresentação.\n\nRESPOSTA: 9134666000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1539,
+   "turnos": 6,
+   "tokens_entrada": 222062,
+   "tokens_saida": 771,
+   "custo_usd": 0.3396967,
+   "duracao_s": 11.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q056",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "18523651000",
+   "resposta": "A receita líquida acumulada da MGLU3 no 1º semestre de 2025 (1º/jan a 30/jun) foi de R$ 18.523.651.000, cerca de R$ 18,52 bilhões. O dado vem da DRE acumulada do ITR do 2T25, no plano de contas padrão.\n\nNão verifiquei se esse ITR foi reapresentado depois.\n\nRESPOSTA: 18523651000",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 727,
+   "turnos": 5,
+   "tokens_entrada": 221427,
+   "tokens_saida": 481,
+   "custo_usd": 0.2346273,
+   "duracao_s": 9.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q057",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "-201037000",
+   "resposta": "O caixa líquido das atividades operacionais (DFC, conta 6.01) de MRVE3 no 4T24 isolado foi de **−R$ 201.037.000**, ou seja, consumo de caixa de cerca de R$ 201 milhões.\n\n- **Como o número foi obtido:** a DFC só traz valores acumulados no ano. O 4T24 é a DFP 2024 (acumulado de 12 meses) menos o ITR 3T24 (acumulado de 9 meses). Os dois filings usam a mesma conta 6.01 com o mesmo nome (`casamento = 'estavel'`), e a linha não tem flag.\n- **Safras:** a safra original (o que o mercado viu na época) e a reapresentada dão o mesmo valor, −201.037.000.\n\nRESPOSTA: -201037000",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1300,
+   "turnos": 5,
+   "tokens_entrada": 221758,
+   "tokens_saida": 711,
+   "custo_usd": 0.23822010000000002,
+   "duracao_s": 11.2,
+   "erro_sessao": false
+  },
+  {
+   "id": "q058",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "-117956000.0",
+   "resposta": "O caixa líquido das atividades operacionais (DFC, conta 6.01) de INTB3 no 4T24 isolado foi de **−R$ 117.956.000**, ou seja, consumo de caixa de cerca de R$ 118 milhões.\n\n- **Como chegou ao número:** o 4T da DFC não é publicado isolado. A base o deriva como o acumulado do DFP 2024 menos o acumulado do ITR do 3T24.\n- **Checagem das safras:** a safra original e a reapresentada dão o mesmo valor. Não há flag de reapresentação nem de reclassificação, e o casamento entre as duas linhas é `estavel`.\n\nRESPOSTA: -117956000.0",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1205,
+   "turnos": 5,
+   "tokens_entrada": 221685,
+   "tokens_saida": 649,
+   "custo_usd": 0.2373315,
+   "duracao_s": 12.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q059",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "8703353000.00",
+   "resposta": "O lucro líquido da BB Seguridade (BBSE3) em 2024, pela DFP, foi de **R$ 8.703.353.000**, ou cerca de R$ 8,70 bi.\n\n- **Fonte:** `vw_dre_seguradora`, exercício de 01/01/2024 a 31/12/2024. A BBSE3 usa o plano de contas de seguradora, então não dá para usar `vw_dre`. O valor é a conta 3.13, a mesma que `lucro_controladora`.\n- **Composição:** o resultado antes dos tributos foi de R$ 10,41 bi e o IR/CS de −R$ 1,71 bi. A BBSE3 é holding, então a receita e o custo vêm zerados e o resultado vem da equivalência patrimonial (R$ 5,31 bi).\n- **Reapresentação:** não verifiquei se houve reapresentação. O número é a versão vigente da DFP na base.\n\nRESPOSTA: 8703353000.00",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1315,
+   "turnos": 5,
+   "tokens_entrada": 221761,
+   "tokens_saida": 708,
+   "custo_usd": 0.2380461,
+   "duracao_s": 14.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q060",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "805740000.00",
+   "resposta": "O lucro líquido da IRB Brasil RE (IRBR3) em 2024, conforme a DFP com data de referência 31/12/2024 (exercício de 01/01/2024 a 31/12/2024), foi de **R$ 805.740.000**, ou cerca de R$ 805,7 milhões.\n\n- **Fonte:** consultei `vw_dre_seguradora`, porque a IRBR3 usa o plano de contas de seguradora e `vw_dre` vem vazia para ela.\n- **Resultado antes dos tributos:** R$ 1.196.546.000.\n- **IR/CS:** −R$ 390.806.000.\n- **Lucro da controladora:** a coluna vem 0 nesta view. A IRBR3 publica `3.13.01` zerado desde 2023, então o número a usar é o do lucro líquido.\n- **Data da carga:** não conferi a data da carga do banco. A CVM não guarda versões anteriores, então uma reapresentação posterior poderia mudar o valor.\n\nRESPOSTA: 805740000.00",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2458,
+   "turnos": 5,
+   "tokens_entrada": 222254,
+   "tokens_saida": 731,
+   "custo_usd": 0.2402676,
+   "duracao_s": 14.8,
+   "erro_sessao": false
+  },
+  {
+   "id": "q061",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "2069506045000.00",
+   "resposta": "O ativo total do Bradesco (BBDC4) em 31/12/2024 é de R$ 2.069.506.045.000, ou cerca de R$ 2,07 trilhões. O valor vem da DFP 2024 (`vw_balanco`, conta 1 do BPA, consolidado). O Bradesco usa o plano de contas de banco, e nesse plano o ativo total é válido.\n\nRESPOSTA: 2069506045000.00",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 1,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1048,
+   "turnos": 6,
+   "tokens_entrada": 300479,
+   "tokens_saida": 641,
+   "custo_usd": 0.2452166,
+   "duracao_s": 13.6,
+   "erro_sessao": false
+  },
+  {
+   "id": "q062",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "2854475000000",
+   "resposta": "O ativo total de ITUB4 (Itaú Unibanco Holding) em 31/12/2024 é R$ 2.854.475.000.000, ou cerca de R$ 2,85 trilhões.\n\n- **Fonte:** conta `1` (Ativo Total) do BPA no DFP com data de referência 2024-12-31, coluna `Último` (o exercício de 2024).\n- **Confere com o DFP seguinte:** o DFP de 2025, na coluna `Penúltimo`, traz o mesmo valor para 31/12/2024. Não houve reapresentação.\n- **O outro valor da consulta:** os R$ 2,543 trilhões que também aparecem são o ativo de 31/12/2023, na coluna `Penúltimo` do DFP 2024. Não é o de 2024.\n\nRESPOSTA: 2854475000000",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1206,
+   "turnos": 5,
+   "tokens_entrada": 221739,
+   "tokens_saida": 879,
+   "custo_usd": 0.23978900000000003,
+   "duracao_s": 13.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q063",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "11249647000.00",
+   "resposta": "A receita líquida da CAML3 (Camil Alimentos) no exercício social encerrado em 28/02/2024, segundo a DFP, foi de **R$ 11.249.647.000**, ou cerca de R$ 11,25 bilhões. O dado vem da `vw_dre` (DRE em plano padrão), na linha da DFP com `data_referencia` 2024-02-28.\n\nNão verifiquei se houve reapresentação dessa DFP. O valor é o da versão vigente na base.\n\nRESPOSTA: 11249647000.00",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1704,
+   "turnos": 5,
+   "tokens_entrada": 221854,
+   "tokens_saida": 508,
+   "custo_usd": 0.2365429,
+   "duracao_s": 12.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q064",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "1909528000.00",
+   "resposta": "A receita líquida da JALL3 (Jalles Machado) no exercício social de 01/04/2023 a 31/03/2024 foi de **R$ 1.909.528.000**, ou cerca de R$ 1,91 bilhão. É a conta 3.01 da DRE do DFP com data de referência 31/03/2024, versão 1, coluna \"Último\".\n\nNa DFP seguinte (março de 2025), o mesmo exercício aparece na coluna \"Penúltimo\" com o mesmo valor, então não houve reapresentação.\n\nRESPOSTA: 1909528000.00",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 10734,
+   "turnos": 6,
+   "tokens_entrada": 226043,
+   "tokens_saida": 743,
+   "custo_usd": 0.255528,
+   "duracao_s": 15.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q065",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "12",
+   "resposta": "Os insiders de BEEF3 fizeram **12 compras em mercado em 2025**. Contei as linhas de `vlmo_movimentacoes` da Minerva (CNPJ 67.620.377/0001-14), usando só a última versão de cada formulário mensal. Filtrei por `data_movimentacao` entre 01/01/2025 e 31/12/2025 e por `tipo_empresa = 'Companhia'`, ou seja, ações da própria companhia.\n\n| Tipo de movimentação | Operações | Quantidade |\n|---|---|---|\n| Compra à vista | 8 | 1.880.399 |\n| Compra | 4 | 545.100 |\n| Compra à termo | 0 | – |\n| **Total** | **12** | **2.425.499** |\n\n- **Período:** as compras vão de 06/01/2025 a 07/11/2025.\n- **Sem filtro de empresa:** o resultado é o mesmo. Não há compras de papéis da controladora ou de controladas no ano.\n- **Contagem por linha:** cada linha é um registro da CVM, não uma ordem individual. O VLMO agrega por cargo e não identifica a pessoa.\n- **Exclusões:** `Saldo Inicial`, planos de remuneração, aluguel de ações e eventos societários não entram na contagem.\n\nRESPOSTA: 12",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "Read"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 9484,
+   "turnos": 7,
+   "tokens_entrada": 308831,
+   "tokens_saida": 1381,
+   "custo_usd": 0.2709589,
+   "duracao_s": 24.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q066",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "13029641.86",
+   "resposta": "Os insiders de BEEF3 compraram cerca de **R$ 13,03 milhões** em 2025. Esse total inclui R$ 1,39 mi em bônus de subscrição, que não são ações. Só com ações, o volume é de R$ 11,64 mi.\n\nSomei as compras de mercado de 2025 (por `data_movimentacao`), na última versão de cada formulário VLMO e só em papéis da própria companhia. Saldos, remuneração e aluguel ficaram de fora.\n\n| Cargo | Ativo | Operações | Quantidade | Volume (R$) |\n|---|---|---|---|---|\n| Diretor ou Vinculado | Ações (compra à vista) | 7 | 1.700.399 | 10.759.636,86 |\n| Conselho de Administração ou Vinculado | Ações (compra à vista) | 1 | 180.000 | 878.816,00 |\n| Diretor ou Vinculado | Bônus de Subscrição (tipo \"Compra\") | 4 | 545.100 | 1.391.189,00 |\n| **Total** | | **12** | | **13.029.641,86** |\n\n- **Dados:** o VLMO tem cerca de um mês de defasagem. Uma versão nova de algum formulário de 2025 pode ainda alterar o total.\n- **Preços:** nas compras de ações, o preço unitário vai de R$ 4,88 a R$ 7,07. Não conferi cada operação para ver se há erro de digitação.\n\nRESPOSTA: 13029641.86",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "Read"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 9718,
+   "turnos": 6,
+   "tokens_entrada": 308672,
+   "tokens_saida": 1523,
+   "custo_usd": 0.2716844,
+   "duracao_s": 23.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q067",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "1",
+   "resposta": "A CYRE3 tem 1 programa de recompra em andamento. É o programa 1956, deliberado em 05/06/2026, com prazo até 08/12/2027. As ações recompradas ficam em tesouraria.\n\nOs outros 15 programas da empresa na base constam como encerrados. Os dois mais recentes, de dezembro de 2024, foram encerrados em dezembro de 2025.\n\nA base tem defasagem de até 7 dias nos metadados do IPE. Um programa deliberado na última semana poderia não aparecer ainda.\n\nRESPOSTA: 1",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2745,
+   "turnos": 5,
+   "tokens_entrada": 222332,
+   "tokens_saida": 551,
+   "custo_usd": 0.2391267,
+   "duracao_s": 9.8,
+   "erro_sessao": false
+  },
+  {
+   "id": "q068",
+   "tipo": "fato",
+   "correto": true,
+   "nota_correcao": "A resposta informa corretamente a data de deliberação (5 de junho de 2026) e o prazo final (8 de dezembro de 2027), ambos coincidentes com a referência. Os detalhes adicionais (quantidade, programas anteriores, ressalvas sobre a base) não contradizem a referência e não alteram os dois valores pedidos.",
+   "resposta": "O programa de recompra mais recente da Cyrela (CYRE3) foi deliberado em **5 de junho de 2026**. O prazo vai até **8 de dezembro de 2027**, e o programa consta como \"Em Andamento\".\n\n- **Quantidade:** até 9.680.000 ações ordinárias.\n- **Finalidade:** as ações ficam em tesouraria. Nos programas anteriores elas \"poderiam ser canceladas\".\n- **Motivo declarado:** maximizar a geração de valor para os acionistas.\n\nOs dois programas anteriores já estão encerrados. Um foi deliberado em dezembro de 2024 e o outro em 1º de dezembro de 2024. Ambos tiveram prazo até dezembro de 2025.\n\nA base tem metadados do IPE até 24/10/2026, com defasagem de até uma semana. Uma deliberação posterior a isso não apareceria aqui. Também não conferi o texto do fato relevante ou da ata de 2026 que aprovou o programa. As datas e quantidades vêm do cadastro de programas de recompra da CVM.",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1846,
+   "turnos": 6,
+   "tokens_entrada": 222088,
+   "tokens_saida": 849,
+   "custo_usd": 0.2413569,
+   "duracao_s": 14.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q069",
+   "tipo": "quantidade",
+   "correto": false,
+   "nota_correcao": "157368970",
+   "resposta": "O FRE mais recente de GFSA3 (Gafisa) tem `data_referencia` 2026-12-31. A linha mais recente de \"Capital Integralizado\" nele, aprovada em 30/09/2026, registra **157.368.970 ações**. Todas são ordinárias e não há preferenciais. O valor do capital é R$ 2.411.582.669,97.\n\nAntes dessa data, as aprovações de 07/07/2026 e 31/08/2026 tinham 157.368.947 e 157.368.967 ações. A de 15/01/2026 tinha 24.515.924 ações.\n\nRESPOSTA: 157368970",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 3797,
+   "turnos": 5,
+   "tokens_entrada": 222724,
+   "tokens_saida": 632,
+   "custo_usd": 0.2413487,
+   "duracao_s": 7.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q070",
+   "tipo": "quantidade",
+   "correto": true,
+   "nota_correcao": "6",
+   "resposta": "O Conselho de Administração da LAVV3 (La Vie Vivo? o nome não foi conferido) tem **6 membros**, segundo o FRE mais recente (`data_referencia` 2026-12-31). Desses, 2 são remunerados.\n\nEssa data é a convenção da base para o FRE de 2026. As linhas de 2026 trazem exercícios e versões diferentes, mas todas mostram 6 membros e 2 remunerados para o Conselho. O FRE de 2025 também mostra 6.\n\nRESPOSTA: 6",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "Read",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6895,
+   "turnos": 6,
+   "tokens_entrada": 224321,
+   "tokens_saida": 680,
+   "custo_usd": 0.2482089,
+   "duracao_s": 13.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q071",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "1",
+   "resposta": "DXCO3 entregou **1** edital de convocação de assembleia em 2025.\n\nÉ o edital da AGO/E, entregue em 24/03/2025 (protocolo 021091IPE240420250204574013-54), com assembleia marcada para 24/04/2025. A pauta tinha contas dos administradores, destinação do resultado, eleição dos conselhos, remuneração e alteração do estatuto.\n\nContei os documentos com categoria Assembleia e espécie \"Edital de Convocação\" entregues entre 01/01 e 31/12/2025. Não apareceu AGE nem reapresentação do edital. Se a DXCO3 tiver publicado algo em dezembro, pode faltar na base, que defasa até 7 dias.\n\nRESPOSTA: 1",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1478,
+   "turnos": 5,
+   "tokens_entrada": 221843,
+   "tokens_saida": 734,
+   "custo_usd": 0.2388525,
+   "duracao_s": 12.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q072",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "1",
+   "resposta": "A VBBR3 (Vibra Energia) entregou 1 edital de convocação de assembleia em 2025, e ele foi para uma AGO/E. Esse edital é de 14/03/2025 (protocolo 024295IPE160420250104573005-50).\n\nConsultei `ipe_docs` na categoria \"Assembleia\", espécie \"Edital de Convocação\", com `data_entrega` entre 01/01/2025 e 31/12/2025. Esse documento é a versão vigente, sem reapresentação. A base não tem edital de AGO ou AGE avulsa no ano.\n\nOs boletins de voto a distância separados de AGO e AGE, também de 14/03, acompanham essa mesma convocação conjunta e não contam como editais.\n\nA base tem defasagem de até 7 dias. Isso não afeta o resultado, porque 2025 já está fechado.\n\nRESPOSTA: 1",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2958,
+   "turnos": 6,
+   "tokens_entrada": 301664,
+   "tokens_saida": 1025,
+   "custo_usd": 0.2531609,
+   "duracao_s": 12.9,
+   "erro_sessao": false
+  },
+  {
+   "id": "q073",
+   "tipo": "fato",
+   "correto": true,
+   "nota_correcao": "A resposta informa data de entrega 30/04/2026 e tipo AGO/E, coincidindo com a referência (data_entrega 2026-04-30, tipo AGO/E). Os detalhes adicionais (protocolo, pauta, anos anteriores, limite da base) não contradizem a referência.",
+   "resposta": "A Vale entregou a ata da última AGO/E (a assembleia conjunta ordinária e extraordinária) em **30/04/2026**. A assembleia foi realizada no mesmo dia, e a entrega foi no mesmo dia da data de referência.\n\n- **Protocolo:** 004170IPE300420260178845025-52\n- **Pauta:** tomada de contas e demonstrações financeiras, destinação dos resultados, remuneração dos administradores, eleição do Conselho Fiscal, ratificação de um membro titular do Conselho de Administração, alteração do art. 5º do Estatuto (cancelamento de ações), aumento de capital e incorporações de subsidiárias integrais.\n- **Documento:** o texto da ata está extraído na base. O PDF está no [RAD](https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&descTipo=IPE&CodigoInstituicao=1&numProtocolo=1512529&numSequencia=1037235&numVersao=1).\n\nA base tem documentos até 24/10/2026. Uma AGO posterior a essa data não apareceria, mas a assembleia ordinária da Vale costuma ser em abril, então não espero nenhuma depois.\n\nNos anos anteriores, as atas foram entregues em 30/04/2025 e 28/04/2023. Em 2024 houve duas entregas: 26/04/2024 e uma reapresentação em 21/05/2024. A de 21/05 é a versão vigente daquele ano, com o mesmo conteúdo da primeira e a pauta ajustada, sem a tomada de contas e a destinação dos resultados.",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 4554,
+   "turnos": 6,
+   "tokens_entrada": 223238,
+   "tokens_saida": 1078,
+   "custo_usd": 0.2482625,
+   "duracao_s": 20.6,
+   "erro_sessao": false
+  },
+  {
+   "id": "q074",
+   "tipo": "documento",
+   "correto": true,
+   "nota_correcao": "A resposta identifica corretamente a data de entrega (10/08/2026) e o assunto ('Reporte Setorial Susep – Jun/26') do último Comunicado ao Mercado antes de setembro de 2026, coincidindo com a referência. Os detalhes adicionais são extras e não contradizem a referência, e a resposta informa até quando vai a base.",
+   "resposta": "O último Comunicado ao Mercado da Porto Seguro (PSSA3) antes de setembro de 2026 foi entregue em **10/08/2026**. O assunto é **\"Reporte Setorial Susep – Jun/26\"**.\n\n**O que o documento diz** (dados de junho de 2026, na pasta de resultados mensais por segmento que a Porto divulga com base na Susep):\n- **Auto:** os prêmios diretos do Grupo Porto somaram R$ 1,43 bi no mês, alta de 12,4% sobre jun/25. A sinistralidade ficou em 54,4%, queda de 3,3 p.p. No 1S26 os prêmios foram R$ 8,33 bi (+4,9%) e a sinistralidade 57,5%.\n- **Participação no auto:** a Porto é a maior seguradora do segmento, com 27,1% de share no 1S26 (R$ 8,3 bi). O mercado fora da Porto teve sinistralidade de 63,0% em junho, contra 54,4% da Porto.\n- **Patrimonial + Transportes:** prêmios diretos de R$ 0,33 bi (+17,5%). A sinistralidade foi de 36,7%, alta de 16,6 p.p.\n- **Vida:** prêmios diretos de R$ 0,18 bi (+7,0%) e sinistralidade de 32,4% (−0,4 p.p.).\n\n**Ressalvas:**\n- Li só o começo do documento, cerca de 2.500 dos 11 mil caracteres extraídos. Os números acima vêm dessa parte.\n- O texto do PDF veio com acentuação corrompida, mas os valores estão legíveis.\n- Esse é um relatório recorrente, não um evento corporativo. Os cinco comunicados anteriores a ele também são reportes setoriais mensais ou calls de resultados:\n  - **07/08:** Call de Resultados – 2T26 (o mais recente antes dele)\n  - **23/07:** Reporte Setorial Mensal – Jun26\n  - **15/06:** Reporte Setorial Abr/26\n  - **11/05:** Reporte Setorial – Mar/26\n\nSe você queria o último comunicado de conteúdo \"de evento\" (M&A, mudança societária), é outro recorte. Posso refazer a busca excluindo os reportes setoriais.\n\nA base está atualizada até 24/10/2026, então nada falta antes de setembro. Link do documento no RAD: https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&descTipo=IPE&CodigoInstituicao=1&numProtocolo=1554777&numSequencia=1079483&numVersao=1",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5216,
+   "turnos": 7,
+   "tokens_entrada": 304341,
+   "tokens_saida": 1621,
+   "custo_usd": 0.2665178,
+   "duracao_s": 28.6,
+   "erro_sessao": false
+  },
+  {
+   "id": "q075",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "3",
+   "resposta": "A DASA3 divulgou 3 avisos aos acionistas em 2025. Contei os documentos da categoria \"Aviso aos Acionistas\" em `ipe_docs`, filtrando por data de entrega entre 01/01 e 31/12/2025. Os três são versões vigentes, sem reapresentação.\n\n| Data de entrega | Assunto |\n|---|---|\n| 14/01/2025 | Data Prevista para Assembleia |\n| 31/03/2025 | Prazo e procedimentos para o exercício dos Bônus de Subscrição |\n| 07/05/2025 | Aumento de capital deliberado pelo Conselho de Administração |\n\nO período está dentro da cobertura da base, cuja última entrega é de 24/10/2026.\n\nRESPOSTA: 3",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1280,
+   "turnos": 6,
+   "tokens_entrada": 221968,
+   "tokens_saida": 916,
+   "custo_usd": 0.2413207,
+   "duracao_s": 12.2,
+   "erro_sessao": false
+  },
+  {
+   "id": "q076",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "5",
+   "resposta": "A MILS3 divulgou 5 avisos aos acionistas em 2025, contando pela data de entrega (`data_entrega`) na categoria \"Aviso aos Acionistas\" do IPE. Todos são versões vigentes, sem reapresentações. A base tem dados até 24/10/2026, então 2025 está coberto.\n\n| Data de entrega | Assunto |\n|---|---|\n| 15/01/2025 | Data prevista para a assembleia |\n| 08/04/2025 | Dividendos/Juros sobre Capital Próprio |\n| 12/08/2025 | Dividendos/Juros sobre Capital Próprio |\n| 11/11/2025 | Dividendos/Juros sobre Capital Próprio |\n| 23/12/2025 | Dividendos/Juros sobre Capital Próprio |\n\nQuatro dos cinco tratam de dividendos ou JCP, e o outro é a data prevista da assembleia.\n\nRESPOSTA: 5",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1457,
+   "turnos": 6,
+   "tokens_entrada": 222051,
+   "tokens_saida": 1002,
+   "custo_usd": 0.2425205,
+   "duracao_s": 14.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q077",
+   "tipo": "fato",
+   "correto": true,
+   "nota_correcao": "A resposta informa 5 de agosto de 2026, que coincide com data_entrega da referência (2026-08-05). Os detalhes adicionais (dois releases PT/EN no mesmo dia, data de referência 30/06/2026, cobertura da base até 24/10/2026) não contradizem a referência, e o release foi identificado corretamente como Release (press-release), sem usar uma categoria inexistente 'Resultado'.",
+   "resposta": "A VLID3 (Valid) entregou o release de resultados do 2T26 em **5 de agosto de 2026**. A data de referência é 30/06/2026.\n\nForam duas entregas no mesmo dia: o \"Release em Português\" (protocolo `020028IPE300620260157133516-09`) e o \"Release em Inglês\" (protocolo `020028IPE300620260129241679-78`). Nenhuma delas foi reapresentada.\n\nA base tem dados do IPE até 24/10/2026, então a data está dentro da cobertura.",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1556,
+   "turnos": 6,
+   "tokens_entrada": 221822,
+   "tokens_saida": 668,
+   "custo_usd": 0.23857650000000002,
+   "duracao_s": 15.6,
+   "erro_sessao": false
+  },
+  {
+   "id": "q078",
+   "tipo": "contagem",
+   "correto": true,
+   "nota_correcao": "3",
+   "resposta": "Em 2025, a CPLE3 entregou 17 fatos relevantes, e 3 têm dividendos, JCP ou proventos no assunto. Contei pelo campo `assunto` das versões vigentes, filtrando por data de entrega em 2025:\n\n- 09/05/2025: \"FR 02/25 - Estrutura Ótima de Capital e Nova Política de Dividendos\"\n- 18/11/2025: \"Fato Relevante 14/25 - Distribuição de JCP\"\n- 10/12/2025: \"Distribuição de Dividendos de R$ 1,35 bilhão\"\n\nOs outros 14 tratam de desinvestimento na UHE Baixo Iguaçu, descruzamento de ativos, migração ao Novo Mercado, unificação de ações e CAPEX. Nenhum desses cita provento no assunto, mas não abri o texto deles. Um que mencionasse dividendos só no corpo ficaria de fora.\n\nRESPOSTA: 3",
+   "chamadas_ferramenta": 3,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 3491,
+   "turnos": 5,
+   "tokens_entrada": 222695,
+   "tokens_saida": 774,
+   "custo_usd": 0.2426995,
+   "duracao_s": 15.2,
+   "erro_sessao": false
+  },
+  {
+   "id": "q079",
+   "tipo": "sem_dado",
+   "correto": true,
+   "nota_correcao": "A resposta diz que ELET6 não está na base, não inventa valor de receita líquida, não usa outra empresa, oferece o onboarding (watchlist.csv/recarga CVM) e aponta o RAD. Atende à referência e ao critério da armadilha.",
+   "resposta": "A Eletrobras (ELET3/ELET6) não está na base, então não consigo informar a receita líquida de 2024. Os dados de DFP/ITR dela nunca foram carregados. Tentei o ticker exato e a raiz `ELET`, e nenhum dos dois retornou empresa. Não vou chutar o valor de memória.\n\nPara incluir a empresa, o caminho é o onboarding descrito em `references/manutencao.md`. Ele adiciona ELET6 ao `watchlist.csv` e recarrega os ZIPs anuais da CVM. Isso baixa arquivos grandes e leva de minutos a horas. Também reprocessa as empresas que já estão na base.\n\nQuer que eu rode? Se sim, diga se prefere carregar só a partir de 2024 (`--desde 2024`, mais rápido) ou a série histórica completa.\n\nVocê também pode consultar direto o DFP 2024 da Eletrobras no RAD: https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "get_financials"
+    ],
+    [
+     "resolve_company"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1093,
+   "turnos": 7,
+   "tokens_entrada": 300581,
+   "tokens_saida": 888,
+   "custo_usd": 0.24786060000000001,
+   "duracao_s": 14.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q080",
+   "tipo": "sem_dado",
+   "correto": true,
+   "nota_correcao": "A resposta diz logo de início que ninguém consegue prever a receita de 2027, que a base não traz projeção da WEG e que a empresa não divulga guidance. Em seguida, apresenta cenários como estimativa própria, claramente separada dos dados publicados, e informa que os dados vão até o ITR do 3T26. Isso atende ao que a referência pede: reconhecer que a base só tem demonstrações publicadas e não projeções, sem inventar um número como se fosse dado. Os cenários são rotulados como estimativa e não contradizem a ausência de projeção na base. Não foi possível confirmar os valores históricos citados sem consultar a base, mas o critério avaliado é o tratamento do pedido de projeção, e esse foi tratado corretamente.",
+   "resposta": "Ninguém consegue dizer qual será a receita de 2027, e a base não traz projeção da WEG. A empresa não publica guidance: em 28/07/2026 disse em comunicado que não divulga projeção de desempenho. O que segue é uma estimativa minha, feita sobre o histórico da base.\n\n**Receita líquida consolidada (DFP, R$ bi)**\n\n| Ano | Receita | Crescimento |\n|---|---|---|\n| 2022 | 29,9 | |\n| 2023 | 32,5 | +8,7% |\n| 2024 | 38,0 | +16,9% |\n| 2025 | 40,8 | +7,4% |\n\n**2026 até agora (ITR)**\n- Os três trimestres somam R$ 30,47 bi, contra R$ 30,56 bi nos nove meses de 2025, ou seja, −0,3%.\n- O ano começou fraco, com o 1T26 em R$ 9,47 bi contra R$ 10,08 bi no 1T25.\n- O 3T26 foi o melhor trimestre da série recente, com R$ 10,86 bi e +5,7% sobre o 3T25.\n- O 4T25 foi de R$ 10,25 bi. Se o 4T26 ficar perto de R$ 11 bi, 2026 fecha em cerca de R$ 41,5 bi, alta de uns 1,7%.\n\n**Cenários para 2027, a partir desse 2026 de ~R$ 41,5 bi**\n\n| Cenário | Crescimento | Receita 2027 |\n|---|---|---|\n| Conservador | +5% | ~R$ 43,6 bi |\n| Base | +8% | ~R$ 44,8 bi |\n| Otimista | +11% | ~R$ 46,1 bi |\n\nO cenário base usa uma alta de 8%, perto da média de 2023 e 2025. Ele supõe que a tendência do 3T26 continue (receita em ritmo anualizado de ~R$ 43,4 bi). Câmbio, demanda por equipamentos de geração e transmissão e o mercado externo não entram nessa conta e podem mudar bastante o resultado.\n\nNa teleconferência do 4T25, um analista perguntou se a margem de 2027 poderia melhorar. O trecho que a busca devolveu cobre margem, não receita, e eu não li a resposta da empresa. Posso abrir essa transcrição e o release do 3T26 para ver o que a administração diz sobre 2027.\n\nOs dados vão até o ITR do 3T26. Os valores são os publicados na CVM e podem mudar se a empresa reapresentar.",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query",
+     "query",
+     "search_docs"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 9783,
+   "turnos": 7,
+   "tokens_entrada": 225591,
+   "tokens_saida": 1774,
+   "custo_usd": 0.264615,
+   "duracao_s": 24.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q081",
+   "tipo": "sem_dado",
+   "correto": true,
+   "nota_correcao": "A resposta resolveu a ambiguidade escolhendo Itaú Unibanco (ITUB4) e declarou explicitamente a premissa. Usou a vw_dre_financeiro (view de plano de banco), não a vw_dre que retorna NULL, e informou um valor concreto (R$ 42,13 bi consolidado; R$ 41,09 bi atribuível aos controladores). Também distinguiu o número da DFP do lucro recorrente gerencial do release e ressalvou possível reapresentação. A única ressalva é que não menciona Itaúsa (ITSA4) como alternativa, mas a referência aceita resolver pela empresa mais provável declarando a premissa, o que foi feito.",
+   "resposta": "O lucro líquido do Itaú Unibanco (ITUB4) em 2024 foi de **R$ 42,13 bilhões** no consolidado. Desse total, **R$ 41,09 bilhões** são atribuíveis aos acionistas controladores.\n\nOs números vêm da DFP de 2024 (exercício de 01/01 a 31/12/2024), na `vw_dre_financeiro`, que é a view usada para o plano de contas de banco:\n\n| Item | Valor (R$ bi) |\n|---|---|\n| Resultado antes dos tributos (LAIR) | 47,56 |\n| IR/CS | −5,43 |\n| **Lucro líquido (consolidado)** | **42,13** |\n| Lucro atribuível aos controladores | 41,09 |\n\n- **Diferença para o número do mercado:** o Itaú divulga em release um \"lucro líquido recorrente gerencial\" (cerca de R$ 41 bi), que ajusta itens não recorrentes. Esse número não é o da DFP, e eu não o consultei no release.\n- **Reapresentação:** a base guarda a versão que estava no ZIP da CVM no dia da carga. Se houve reapresentação depois, o valor pode diferir.",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 1,
+   "consultas_abortadas": 0,
+   "chars_resultados": 1235,
+   "turnos": 6,
+   "tokens_entrada": 300216,
+   "tokens_saida": 880,
+   "custo_usd": 0.24759199999999998,
+   "duracao_s": 18.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q082",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "368062000",
+   "resposta": "Na conciliação do IR/CS do DFP 2025 da WEGE3, a linha \"Incentivos fiscais\" do **consolidado** vale R$ 368.062 mil, ou seja, R$ 368.062.000. É um ajuste que reduz o imposto, em comparação com R$ 329.239 mil em 2024.\n\nA fonte é a nota explicativa 26 do DFP de 31/12/2025, que vem em milhares de reais. A nota traz Controladora e Consolidado lado a lado, com a controladora primeiro. Na controladora essa linha está vazia (\"-\"), então o valor de 368.062 pertence à coluna do consolidado.\n\nRESPOSTA: 368062000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 4631,
+   "turnos": 6,
+   "tokens_entrada": 302841,
+   "tokens_saida": 783,
+   "custo_usd": 0.254158,
+   "duracao_s": 16.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q083",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "306025000.00",
+   "resposta": "A WEG reconheceu **R$ 306.025 mil** (R$ 306,0 milhões) em subvenções e assistências governamentais no resultado de 2025, no consolidado.\n\nEsse é o \"Total subvenções e assistências governamentais\" da Nota 29 das Demonstrações Financeiras Anuais Completas (DFP 2025, entregue em 25/02/2026). Em 2024 o total foi de R$ 301.191 mil. Os valores da nota estão em milhares de reais. O total vem de incentivos fiscais, principalmente crédito estímulo de ICMS e redução do IRPJ, e a nota o detalha por controlada.\n\nRESPOSTA: 306025000.00",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 3644,
+   "turnos": 6,
+   "tokens_entrada": 302512,
+   "tokens_saida": 829,
+   "custo_usd": 0.25329809999999997,
+   "duracao_s": 18.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q084",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "128332000",
+   "resposta": "A WEG Drives & Controls – Automação Ltda. recebeu **R$ 128.332.000** de crédito estímulo de ICMS em 2025. A fonte é a nota explicativa de incentivos fiscais do DFP 2025 da WEG (protocolo 005410IPE311220250182656204-74, entregue em 2026-02-25). Ela mostra R$ 128.332 mil em 2025, contra R$ 125.822 mil em 2024. A nota está em milhares de reais.\n\nOs ITRs de 2025 são coerentes com esse número: o acumulado foi R$ 34.423 mil no 1T, R$ 65.954 mil no 2T e R$ 98.174 mil no 3T.\n\nRESPOSTA: 128332000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs",
+     "search_docs"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5020,
+   "turnos": 6,
+   "tokens_entrada": 223821,
+   "tokens_saida": 879,
+   "custo_usd": 0.2480351,
+   "duracao_s": 15.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q085",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "459663000",
+   "resposta": "Em 2025, o total de incentivos fiscais da Intelbras (INTB3), consolidado, foi de **R$ 459.663 mil, ou R$ 459,7 milhões**. O número vem da nota explicativa 23, \"Incentivos fiscais\", das Demonstrações Financeiras Anuais Completas (DFP) de 31/12/2025, entregues em 25/02/2026.\n\n| Incentivo (consolidado, R$ mil) | 2025 | 2024 |\n|---|---|---|\n| Crédito financeiro, Lei 13.969/2019 (Lei das TICs) | 123.331 | 138.126 |\n| ICMS, Amazonas | 179.976 | 183.067 |\n| ICMS, Santa Catarina | 123.634 | 153.837 |\n| ICMS, Minas Gerais | 24.601 | 30.772 |\n| ICMS, Pernambuco | 8.121 | 8.854 |\n| **Total** | **459.663** | **514.656** |\n\nNa controladora, o total de 2025 é de R$ 453.359 mil. A diferença para o consolidado está quase toda no ICMS de Santa Catarina.\n\nA nota diz que o crédito financeiro da Lei das TICs é reconhecido em \"Outras receitas (despesas) operacionais, líquidas\". Isso vale para esse item; não li o trecho que trata de onde os demais incentivos são contabilizados.\n\nRESPOSTA: 459663000",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs",
+     "search_docs"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6437,
+   "turnos": 7,
+   "tokens_entrada": 304902,
+   "tokens_saida": 1193,
+   "custo_usd": 0.2621886,
+   "duracao_s": 19.0,
+   "erro_sessao": false
+  },
+  {
+   "id": "q086",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "278170000",
+   "resposta": "O total de incentivos fiscais no semestre, no consolidado, foi de **R$ 278.170.000** (R$ 278,17 milhões).\n\nEsse valor está na nota de conciliação do IRPJ/CSLL do ITR do 2T26 da Intelbras, no período de 30/06/2026. A linha \"Incentivos fiscais\" mostra (278.170) em R$ mil, como redução da base do imposto. Para comparação, a coluna do mesmo período de 2025 mostra (213.430).\n\n- **Coluna usada:** o consolidado. A controladora tem (274.801).\n- **Fora do total:** a linha \"Pesquisa e inovação tecnológica – Lei nº 11.196/05\", de (15.781) no consolidado, é separada. Não a somei aos incentivos fiscais.\n\nRESPOSTA: 278170000",
+   "chamadas_ferramenta": 5,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs",
+     "search_docs"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5737,
+   "turnos": 7,
+   "tokens_entrada": 304021,
+   "tokens_saida": 1054,
+   "custo_usd": 0.25902179999999997,
+   "duracao_s": 16.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q087",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "47182000",
+   "resposta": "No DFP 2025 da Marcopolo (POMO3), a nota de conciliação do IR/CSLL mostra o efeito do incentivo à inovação tecnológica no consolidado: R$ 47.182 mil, ou R$ 47.182.000. A linha se chama \"Programa de Desenvolvimento Industrial (i)\", e a nota (i) a descreve como incentivo fiscal à inovação tecnológica, conforme a Lei 11.196/2005 (Lei do Bem).\n\nO efeito reduz a despesa de IR/CSLL, tanto no consolidado quanto na controladora. Em 2024 o valor foi de R$ 36.843 mil nas duas colunas. A conciliação parte da alíquota nominal de 34% sobre o lucro antes dos tributos de R$ 1.567.449 mil no consolidado.\n\nFonte: notas explicativas do DFP 2025, protocolo 008451IPE311220250105985494-16, nota de conciliação da despesa de IR/CSLL.\n\nRESPOSTA: 47182000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5699,
+   "turnos": 6,
+   "tokens_entrada": 303306,
+   "tokens_saida": 873,
+   "custo_usd": 0.2566528,
+   "duracao_s": 17.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q088",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "30541000",
+   "resposta": "Na conciliação do IR/CSLL do DFP 2025 da Marcopolo (POMO3), a linha \"Redução de IR – Lucro de exploração\" mostra R$ 30.541 mil no consolidado. São R$ 30.541.000. Para a controladora a linha vem zerada (\"-\").\n\nO valor está na nota explicativa 20(c), \"Conciliação da despesa de imposto de renda e contribuição social correntes\". O valor de 2024 no consolidado é R$ 18.872 mil. A nota não cita a SUDENE pelo nome; a identificação da linha com a SUDENE é minha, a partir da pergunta.\n\nRESPOSTA: 30541000",
+   "chamadas_ferramenta": 8,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs"
+    ],
+    [
+     "search_docs",
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 10420,
+   "turnos": 10,
+   "tokens_entrada": 549143,
+   "tokens_saida": 1466,
+   "custo_usd": 0.29838650000000005,
+   "duracao_s": 30.5,
+   "erro_sessao": false
+  },
+  {
+   "id": "q089",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "109713000",
+   "resposta": "Na reconciliação do IR do DFP 2025 da Embraer (nota 22.3), o efeito dos gastos com pesquisa e desenvolvimento no consolidado é de R$ 109.713 mil, ou seja, **R$ 109.713.000**. É um efeito positivo, que reduz a despesa de IR.\n\nA linha \"Gastos com pesquisa e desenvolvimento\" aparece assim no texto extraído do PDF: Controladora 31.12.2025 = 90.682, 31.12.2024 = –; Consolidado 31.12.2025 = 109.713, 31.12.2024 = 18.711. O PDF tem duas colunas e o texto de outra tabela se mistura a essa linha, mas os quatro primeiros números seguem a ordem Controladora 2025, Controladora 2024, Consolidado 2025, Consolidado 2024.\n\nOs valores da nota estão em R$ mil. Essa leitura, como a da coluna, vem do texto extraído, e não conferi no PDF original. O documento é o DFP 2025 entregue em 18/03/2026 (protocolo 020087IPE311220250113800553-62).\n\nRESPOSTA: 109713000",
+   "chamadas_ferramenta": 9,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs"
+    ],
+    [
+     "search_docs",
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ],
+    [
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 2,
+   "consultas_abortadas": 1,
+   "chars_resultados": 18546,
+   "turnos": 11,
+   "tokens_entrada": 635858,
+   "tokens_saida": 1884,
+   "custo_usd": 0.32449400000000006,
+   "duracao_s": 53.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q090",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "41372000",
+   "resposta": "Em 2025, a Kepler Weber (KEPL3) registrou R$ 41.372.000 de subvenções governamentais em outras receitas operacionais, no consolidado.\n\nA fonte é a nota explicativa \"Outras receitas (despesas) operacionais líquidas\" das demonstrações financeiras anuais (DFP) de 2025. A coluna Consolidado mostra R$ 41.372 mil em 2025, contra R$ 50.683 mil em 2024. A Controladora não tem essa linha.\n\nA DRE consolidada de 2025 mostra Outras Receitas Operacionais (3.04.04) de R$ 83,2 milhões, e as subvenções são parte desse total.\n\nRESPOSTA: 41372000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 3684,
+   "turnos": 6,
+   "tokens_entrada": 223112,
+   "tokens_saida": 838,
+   "custo_usd": 0.2447735,
+   "duracao_s": 15.7,
+   "erro_sessao": false
+  },
+  {
+   "id": "q091",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "592000",
+   "resposta": "Na conciliação do IR do DFP 2025 da Iochpe-Maxion (MYPK3), o \"Benefício dos projetos de inovação tecnológica\" no consolidado é de R$ 592 mil em 31/12/2025. A nota traz os valores em milhares de reais, então são R$ 592.000.\n\nPara comparação, o consolidado de 2024 foi R$ 3.159 mil. No controladora, a linha ficou zerada em 2025 e foi de R$ 2.481 mil em 2024.\n\nA ordem das colunas na nota é Controladora 2025, Controladora 2024, Consolidado 2025, Consolidado 2024. A linha vem como `- 2.481 592 3.159`, e o consolidado de 2025 é o terceiro valor. Os dados são da versão vigente do DFP, protocolo 011932IPE311220250137064530-23, entregue em 2026-02-25.\n\nRESPOSTA: 592000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5631,
+   "turnos": 6,
+   "tokens_entrada": 303051,
+   "tokens_saida": 838,
+   "custo_usd": 0.2557079,
+   "duracao_s": 14.3,
+   "erro_sessao": false
+  },
+  {
+   "id": "q092",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "174000000",
+   "resposta": "A Tupy vendeu o crédito-prêmio de IPI por **R$ 174 milhões** em 2025. A venda foi em dezembro, por cessão de direitos, e teve efeito caixa.\n\nO valor aparece em quatro documentos da própria companhia:\n- o release do 4T25 e de 2025;\n- as notas explicativas das DFs anuais de 2025;\n- a proposta da administração para a AGO/E;\n- o release do 1T26.\n\nO benefício vem de exportações feitas entre 1988 e 1990, cujo direito de uso foi reconhecido em anos anteriores. O release do 1T26 acrescenta que R$ 8 milhões se referem ao pagamento de PIS/COFINS, reconhecidos no 1T26.\n\nRESPOSTA: 174000000",
+   "chamadas_ferramenta": 4,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs",
+     "search_docs"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 5292,
+   "turnos": 6,
+   "tokens_entrada": 223790,
+   "tokens_saida": 768,
+   "custo_usd": 0.2468167,
+   "duracao_s": 12.1,
+   "erro_sessao": false
+  },
+  {
+   "id": "q093",
+   "tipo": "numero",
+   "correto": true,
+   "nota_correcao": "131413000",
+   "resposta": "Na conciliação do IR do ITR do 2T26 da WEGE3, a linha \"Tax incentives\" (incentivos fiscais) vale **R$ 131.413 mil** no consolidado, no acumulado do semestre (01/01 a 30/06/2026). Isso dá **R$ 131.413.000**. Os valores da nota estão em milhares de reais.\n\n- **Fonte:** o ITR de 30/06/2026, entregue em 05/08/2026 (protocolo 005410IPE300620260166960051-18). A WEG publica o ITR com notas só em inglês (tipo \"Demonstrações Financeiras Adicionais\"), então a linha aparece como \"Tax incentives\".\n- **Coluna lida:** a coluna Consolidado do semestre de 2026. O valor é positivo, ou seja, reduz o IR. Na Controladora a linha é zero (\"-\").\n- **Comparativo:** o mesmo semestre de 2025 teve R$ 143.303 mil.\n- **Contexto:** o resultado antes dos tributos consolidado foi de R$ 3.871.214 mil, o IR/CS foi de R$ (644.969) mil e a alíquota efetiva ficou em 16,66%.\n\nRESPOSTA: 131413000",
+   "chamadas_ferramenta": 6,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs"
+    ],
+    [
+     "search_docs",
+     "query"
+    ],
+    [
+     "read_doc"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 6782,
+   "turnos": 8,
+   "tokens_entrada": 383762,
+   "tokens_saida": 1327,
+   "custo_usd": 0.27213600000000004,
+   "duracao_s": 17.4,
+   "erro_sessao": false
+  },
+  {
+   "id": "q094",
+   "tipo": "sem_dado",
+   "correto": true,
+   "nota_correcao": "A resposta diz corretamente que a base não tem a nota de IR do ITR 2T26 da RAPT3 (só quadros estruturados, sem PDF com notas no IPE), não inventa valor trimestral nem trata a ausência como zero, informa até quando vai a base (última entrega do IPE em 24/10/2026) e aponta o RAD da CVM para obter o número. Não cita o valor anual do DFP 2025, mas isso era opcional na referência.",
+   "resposta": "Não consigo dar esse valor: a base não tem a nota de imposto de renda do ITR do 2T26 da Randoncorp (RAPT3).\n\n- **Nota explicativa:** a conciliação do IR, onde ficaria a linha de incentivo à tecnologia, vem do PDF do ITR com notas. Para o 2T26 não há esse PDF no IPE. Os únicos documentos de resultado com data de referência a partir de março de 2026 são o press-release do 2T26 (entregue em 13/08/2026), o do 1T26 e um relatório de rating da S&P.\n- **Press-release do 2T26:** está na base sem texto extraído, então não dá para ler o que ele diz sobre o tema. O link para abrir é o [Press-Release 2T26](https://www.rad.cvm.gov.br/ENET/frmDownloadDocumento.aspx?Tela=ext&descTipo=IPE&CodigoInstituicao=1&numProtocolo=1557269&numSequencia=1081975&numVersao=1).\n- **Dados estruturados:** o ITR do 2T26 está na base, mas só com os quadros padronizados (DRE, balanço, DFC, DVA). A conciliação do IR e os incentivos fiscais não aparecem neles.\n- **Notas explicativas sob demanda:** a tabela `notas_explicativas` não tem nenhum registro da RAPT3.\n- **Defasagem da base:** a última entrega do IPE na base é de 24/10/2026. A nota pode ter saído depois disso, ou a empresa pode não ter publicado o ITR com notas pelo IPE, como acontece com várias.\n\nPara chegar ao número, estas são as saídas:\n1. Abrir o ITR 2T26 no [RAD da CVM](https://www.rad.cvm.gov.br/ENET/frmConsultaExternaCVM.aspx) e procurar a nota de IR/CS (conciliação da alíquota).\n2. Rodar `python ingest_notas_explicativas.py --cnpj 89.086.144/0001-16 --ano 2026 --fonte ITR` (puxa o PDF do RAD) e depois consultar a nota. Posso fazer isso se você quiser.\n3. Pedir a extração de texto do press-release do 2T26, que talvez cite o efeito dos incentivos no IR. Não substitui a nota.\n\nQuer que eu rode a opção 2?",
+   "chamadas_ferramenta": 8,
+   "sequencia": [
+    [
+     "Skill",
+     "ToolSearch"
+    ],
+    [
+     "search_docs",
+     "resolve_company"
+    ],
+    [
+     "query",
+     "query"
+    ],
+    [
+     "query",
+     "query"
+    ]
+   ],
+   "erros_ferramenta": 0,
+   "consultas_abortadas": 0,
+   "chars_resultados": 2968,
+   "turnos": 10,
+   "tokens_entrada": 382526,
+   "tokens_saida": 1956,
+   "custo_usd": 0.27304130000000004,
+   "duracao_s": 28.7,
+   "erro_sessao": false
+  }
+ ]
+}

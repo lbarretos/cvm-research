@@ -33,10 +33,14 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
      IR pago, receita, EBIT, CFO): `get_financials(ticker, conceitos?)`. Devolve o valor com `metodo` e `checagem`;
      mostre-os. D&A usa a DVA 7.04.01 como gabarito (`ok_<definição>` = fecha com outra definição). Só plano padrão;
      se vier vazio, caia nas views e em `demonstrativos_trimestrais`;
-  4. **Conteúdo de documentos**: `search_docs(consulta, ticker?, categorias?, desde?, ate?)` devolve os melhores
-     trechos (FR, CM, AVI, RCA, assembleias, press-release; versões vigentes, sem repetição) e `read_doc(protocolo,
-     ordem)` lê a partir do trecho, em até 28 mil caracteres, com `proximo_ordem` para continuar. Prefira-as ao FTS
-     por documento (seção 5) e a `substr(texto_extraido…)`;
+  4. **Conteúdo de documentos**: `search_docs(consulta, ticker?, categorias?, desde?, ate?, camada?, tipos?,
+     ref_desde?, ref_ate?)` e `read_doc`. A `camada` decide onde procurar:
+     - `'quente'` (padrão): trechos de FR, CM, AVI, RCA, assembleias e press-release; abra com `read_doc(protocolo, ordem)`;
+     - **`'df'`: notas explicativas** do DFP e do ITR (conciliação do IR, subvenções e incentivos fiscais,
+       imobilizado, provisões, dívida…). Use `ref_desde`/`ref_ate` para o período (`'2026-06-30'` = ITR do 2T26) e abra
+       com `read_doc(protocolo, offset=<offset>)`, que já cai no trecho;
+     - `'fria'`: prospectos, escrituras, relatórios de agente fiduciário, laudos, estatutos; `'todas'`: as três.
+     Prefira-as ao FTS escrito à mão (seção 5) e a `substr(texto_extraido…)`;
   5. **Renda fixa** (debênture, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)`; ver `references/renda-fixa.md`;
   6. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
   A saída é tabular `{colunas, linhas, aviso?}`; cada resposta cabe em 30 mil caracteres e o `aviso`
@@ -155,10 +159,28 @@ busca FTS vier vazia num tema que deveria existir, tente `assunto LIKE` antes de
 
 ### 5. Análise do conteúdo
 
-**Busca por tema.** Use `search_docs` (trechos de ~2 mil caracteres, só camada quente, só versões vigentes) e
-`read_doc` para ler em volta. O que não está na camada quente (DFs completas, prospectos, agente fiduciário) e
-os documentos substituídos só saem do FTS por documento abaixo; `search_docs(versoes_antigas=True)` inclui as
-substituídas. Sem trecho encontrado, tente menos termos ou prefixo (`aquisi*`) antes de concluir que não há.
+**Busca por tema.** Use `search_docs` e `read_doc`. Camada quente (padrão): trechos de ~2 mil caracteres, só
+versões vigentes. Notas explicativas: `camada='df'`; o resto do IPE: `camada='fria'` (um resultado por documento,
+com o `offset` do termo para o `read_doc`). `versoes_antigas=True` inclui os documentos substituídos. Sem resultado,
+tente menos termos ou prefixo (`aquisi*`) antes de concluir que não há, e leia o `aviso`: ele diz em que camada tentar.
+
+**Notas explicativas: onde estão.** O texto do DFP e do ITR com notas vem do IPE (`categoria = 'Dados
+Econômico-Financeiros'`), em quatro `tipo`s: `Demonstrações Financeiras Anuais Completas` (DFP, 2010–2025),
+`Demonstrações Financeiras Intermediárias` (ITR em português), `Demonstrações Financeiras Adicionais` (quase sempre o
+ITR **em inglês**) e `Demonstrações Financeiras em Padrões Internacionais` (até 2024). Desde 2025, ~80 empresas têm o
+ITR com notas em português, ~30 só em inglês e ~35 nenhum: **num ITR em inglês, busque os termos em inglês** ("tax
+incentives", "government grants", "income tax reconciliation"); o texto extraído às vezes perde letras ("ta" = tax,
+"ra il" = Brazil), então prefira palavras inteiras que sobrevivem e confira o número no `read_doc`. Sem documento no
+período, diga isso (os quadros estruturados do ITR existem, as notas não) e aponte o RAD; não use o número anual como
+se fosse o trimestral. `notas_explicativas` (sob demanda, poucas empresas) é complemento: ver `references/demonstrativos.md`.
+
+**Incentivos fiscais e alíquota efetiva.** Dois efeitos, que não se somam: a **subvenção antes do IR** (crédito
+presumido/estímulo de ICMS, crédito financeiro da Lei das TICs, Mover) entra na receita ou em outras receitas, dentro
+do EBIT; o **efeito no IR** (Lei do Bem, SUDENE/SUDAM lucro da exploração, a linha "incentivos fiscais" da conciliação)
+reduz o imposto. A conciliação do IR traz as colunas Controladora e Consolidado em ordem que muda de empresa para
+empresa: leia o cabeçalho. Quando a nota mostra a **exclusão da base** (não o efeito), o efeito no IR é a exclusão × 34%.
+Alíquota efetiva = IR/CS (DRE 3.08, negativo = despesa) ÷ resultado antes dos tributos (3.07). JCP é dedução, não
+incentivo: mostre à parte.
 
 **Busca por documento — FTS5.** O índice ignora acento e caixa (`aquisição` = `aquisicao`), aceita
 prefixo (`dividend*`), frase (`"juros sobre capital"`), `AND`/`OR`/`NOT`, `NEAR(a b, 10)` e

@@ -26,6 +26,8 @@
 
 set -u
 set -o pipefail
+# launchd/cron têm PATH mínimo: garante /sbin (mount) e /usr/sbin
+export PATH="$PATH:/sbin:/usr/sbin"
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DB="${CVM_DB_PATH:-$PROJECT_DIR/cvm_research.db}"

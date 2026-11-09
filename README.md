@@ -252,12 +252,12 @@ existir ou se a sua cobertura não tem as empresas da amostra.
 | Script | Fonte na CVM | Tabelas |
 |---|---|---|
 | `ingest_ipe.py` | IPE (ZIPs anuais) | `ipe_docs` |
-| `extract_pdf.py` | PDFs dos documentos | `ipe_docs.texto_extraido`, `ipe_docs_fts` |
+| `extract_pdf.py` | PDFs dos documentos (com `--so-df` para DFs) | `ipe_docs.texto_extraido`, `ipe_docs_fts` |
 | `ingest_dfp.py` / `ingest_itr.py` | DFP e ITR | `demonstrativos_contabeis` |
 | `ingest_vlmo.py` | VLMO | `vlmo_posicao`, `vlmo_movimentacoes` |
 | `ingest_fre.py` | FRE | `fre_capital_social`, `fre_posicao_acionaria`, `fre_remuneracao_orgao` |
 | `ingest_recompra.py` | Recompra | `recompra_programas` |
-| `ingest_notas_explicativas.py` | Pacote do filing (rad.cvm.gov.br) | `notas_explicativas` (sob demanda) |
+| `ingest_notas_explicativas.py` | Pacote do filing (rad.cvm.gov.br) | `notas_explicativas` (sob demanda para ITRs fora do IPE) |
 | `scripts/analysis/run_all.py` | — (cruza o que já está no banco) | `consistency_flags`, `cd_conta_ds_timeline`, `demonstrativos_trimestrais` |
 
 Estrutura completa das pastas e dos scripts: [INSTALL.md](INSTALL.md).
@@ -276,6 +276,12 @@ comparar números com outra máquina, cite a data da carga.
 O projeto começou em Supabase/PostgreSQL e migrou para SQLite local em junho de 2026 (um arquivo, zero
 serviços). O MCP passou de `mcp-server-sqlite` (npx) para um servidor Python próprio em setembro de 2026.
 Os workflows de GitHub Actions foram removidos: toda a ingestão roda localmente.
+
+**09/11/2026 — RAG em notas explicativas e busca canônica (Etapa 9).** Preservação de quebra de página
+com `\f`, métricas de qualidade por página (`qualidade` e `texto_qualidade`) e segmentador canônico de
+notas explicativas (`secoes_notas.py`). O MCP `search_docs` agora busca diretamente por seção contábil
+(`secao='ir_csll'`, `'subvencoes'`, `'divida_emprestimos'`, etc.) em 10–15 ms, devolvendo o offset inicial e
+o número exato da página do PDF para o `read_doc`, sem overhead em disco.
 
 **18/09/2026 — casamento de linhas no desacúmulo (Camada 6).** A Camada 6 subtraía acumulados casando as
 linhas por `cd_conta`, que não é estável entre filings. Resultado: 21% das linhas derivadas da DFC no 2T e

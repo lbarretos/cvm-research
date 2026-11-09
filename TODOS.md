@@ -1,30 +1,77 @@
-# TODOS
+# Backlog de Desenvolvimento e Próximos Passos (TODOS)
 
-Backlog do projeto. O que já foi feito está no `git log` e na seção "Histórico" do README.
+Base consolidada em 2026-11-09 (`cvm_research.db`, ~19 GB, 151 empresas cobertas, 428 testes passando).
+Este documento centraliza todas as frentes futuras de trabalho divididas por eixos temáticos objetivos, eliminando o ruído de anotações antigas ou suposições desatualizadas (como quedas temporárias de portal ou branches já mesclados).
 
-**Roadmap atual:** [`docs/proximos-passos/README.md`](docs/proximos-passos/README.md), com as etapas de leitura
-por LLM e padronização dos demonstrativos. Cada etapa tem avaliação, proposta, stress test e critério de pronto.
+---
 
-## Dados
+## 📌 Eixo 1: Leitura RAG & LLM (Conclusão do Bloco D & Operação)
 
-- [ ] **Extrair docs/financials das empresas de Restructuring** — AERI3, PCAR3, BOBR4, LUPA3, PMAM3 entraram no `watchlist.csv` (página "Restructuring" do Notion) mas ainda não foram carregadas. Rodar `python scripts/ingest/ingest_companies.py`, depois `bash bootstrap.sh --sem-pdf` (usa o watchlist.csv como está; ou os ingestores `ingest_ipe/vlmo/recompra/fre/dfp/itr` com `--desde`), o tratamento (`cd scripts/analysis && python run_all.py --layer 1,2,3,5,6 --full`) e `bash bootstrap.sh --so-pdf` para o texto dos PDFs. Conferir `codigo_cvm` de cada uma contra `cad_cia_aberta.csv` (foi preenchido por fonte web; LUPA3 e PMAM3 de fonte única) e o CNPJ da PMAM3 (0004-79). Considerar `ingest_notas_explicativas.py` para os últimos trimestres (planos de RJ/RE ficam em notas e fatos relevantes).
-- [ ] **PDFs com falha de extração** — 5.586 docs em `ipe_docs` com `extracao_falhou=1` (a maioria digitalizados sem camada de texto). Avaliar OCR (`ocrmypdf`/`tesseract`) para os prioritários (Fato Relevante, Assembleia) ou aceitar o gap. `EXTRACT_LIMIT=2000 RETRY_FAILED=1 bash scripts/update_weekly.sh` re-tenta os transitórios.
-- [ ] **`recompra_quantidades` e `recompra_intermediarios`** — existem no schema, 0 linhas, o ingestor não as popula. Popular a partir dos CSVs do ZIP de recompra ou remover do `schema.sql`.
-- [ ] **Notas explicativas** — cobertura mínima (só Frasle 1T26/2T26). Definir critério de ingestão (ex: últimos 8 trimestres das empresas em análise ativa) e um comando de lote por empresa.
-- [ ] **Tickers assumidos** — 34 linhas do `watchlist.csv` com `auto:assumed` (lote de julho/2026). Conferir na B3 e limpar a flag.
-- [ ] **IPE 2009–2014** — os ZIPs da CVM desses anos vêm sem `Protocolo_Entrega` e são descartados. Verificar se há outra chave utilizável ou documentar como limite definitivo.
+Este eixo aprimora a camada de leitura de texto dos documentos pelo MCP e LLM, focando na cobertura de demonstrações financeiras (DFs).
 
-## Operação
+- [ ] **Extração em lote das DFs pendentes da watchlist (Etapa 9.14):**
+  - Agora que o portal RAD está plenamente operacional, rodar a extração das DFs restantes da watchlist:
+    ```bash
+    python scripts/ingest/extract_pdf.py --so-df --sem-fts --limite 100
+    ```
+  - Executar em lotes controlados para respeitar o rate-limit do portal CVM, reconstruindo o índice FTS5 uma única vez ao término (`python scripts/ingest/extract_pdf.py --rebuild-fts`).
+- [ ] **Reextração seletiva e fallback de OCR para fontes corrompidas (Etapa 9.8):**
+  - O backfill de qualidade identificou 1.739 documentos classificados como `ruim`, dos quais cerca de 67 DFs possuem fontes sem ToUnicode/Identity-H (como LEVE3 e MYPK3 gerando `(cid:N)`).
+  - Implementar pipeline com OCR seletivo (ex.: via `ocrmypdf` ou `pytesseract`) restrito apenas às páginas com métrica degradada (`qualidade = 'ruim'`) das DFs das empresas da watchlist.
+- [ ] **Cobertura de notas explicativas trimestrais via RAD (Etapa 9.13):**
+  - Cerca de 37 empresas da watchlist não possuem ITR com notas completas na entrega padrão do IPE.
+  - Executar `scripts/ingest/ingest_notas_explicativas.py` em lote para capturar os relatórios do portal RAD dessas empresas nos trimestres recentes (2025–2026), mantendo compatibilidade direta com `search_docs(camada='df', secao=...)`.
 
-- [x] **Job semanal no launchd** — instalado em 16/09/2026; exigiu Acesso Total ao Disco para `/bin/bash` (projeto em `~/Documents`). Conferir na segunda seguinte com `bash scripts/install_weekly_launchd.sh --status`.
-- [ ] **Claude desktop app** — `claude_desktop_config.json` está sem o MCP `cvm-research` (só o Claude Code está configurado). Adicionar se for usar o app.
-- [ ] **`VACUUM` periódico** — o banco tem ~12 GB; após grandes reextrações vale um `VACUUM` (precisa de espaço livre igual ao tamanho do banco).
+---
 
-## Código
+## 📌 Eixo 2: Renda Fixa & Securitização
 
-- [x] **Fila `par_ambiguo` da Camada 6** — `linha_decisao` + `python linha_economica.py --listar-ambiguos / --decidir` guardam a decisão; `linha_empresa` e, desde 2026-10-30, a Camada 6 a respeitam ('mesma' casa e deriva com `casamento = 'decisao'`, 'diferente' desfaz). Depois de decidir: `linha_economica.py --cnpj X` e `run_all.py --layer 6 --cnpj X`.
-- [ ] **`text_similarity` é assimétrica** — `difflib` dá score diferente conforme a ordem dos argumentos, e em pares reais isso cruza o limiar de 0,75 (0,7532 contra 0,7273). Hoje todas as chamadas usam `(anterior, atual)`, então é consistente, mas frágil. Tornar simétrica (`max` ou média das duas ordens) exigiria re-rodar a Camada 5 inteira e revisar os limiares.
-- [ ] **Camada 5 e o plano de contas dos bancos** — `cd_conta_ds_timeline` ainda marca `estavel` quando uma conta `S` muda de nome no mesmo código, e por isso descreve a re-letragem do plano COSIF de 2017 como se nada tivesse acontecido (ver Itaú, DRE 3.01.02). A Camada 6 já não confia nisso (`codigo_fixo_confiavel=False`); avaliar se a Camada 5 deveria seguir.
+Este eixo expande a modelagem de crédito e a integração entre a dívida contábil das companhias abertas e os ativos de renda fixa emitidos no mercado.
 
-- [ ] **Testes de integração leves** — hoje tudo é mockado; um teste que roda `setup.sh` num banco temporário e valida as views (`vw_dre`, `vw_balanco`) contra fixtures pequenas pegaria regressões de schema.
-- [ ] **`extract_pdf.py` no fluxo semanal** — `EXTRACT_LIMIT` default 1000 pode não acompanhar semanas com muitos docs; medir e ajustar.
+- [ ] **Ingestão e busca de Relatórios de Agente Fiduciário e Ratings:**
+  - Em `ipe_docs`, na categoria `"Dados Econômico-Financeiros"`, existem os tipos `"Relatório de Agente Fiduciário"` e `"Relatório de Agência de Rating"`.
+  - Integrar a extração desses relatórios aos fluxos de consulta (`search_bond_docs` e `search_docs`), possibilitando auditoria de cumprimento de *covenants*, índices financeiros exigidos e ocorrência de pedidos de *waiver*.
+- [ ] **Estruturação de Termos de Securitização CRI/CRA e Escrituras:**
+  - Extrair cronogramas de amortização, taxas de remuneração (spread sobre CDI ou cupom de IPCA) e matriz de garantias reais/fianças diretamente das escrituras baixadas em `rf_docs`.
+  - Conectar ao MCP `get_bond` para retornar não apenas metadados cadastrais, mas a estrutura completa da dívida.
+- [ ] **Reconciliação Passivo Contábil vs. Títulos de Mercado:**
+  - Cruzar a seção canônica `divida_emprestimos` das notas explicativas com a tabela `rf_ativos` (debêntures, CRIs, CRAs), gerando a reconciliação automática da dívida bruta por indexador e prazo.
+
+---
+
+## 📌 Eixo 3: Valuation, Análise Fundamentalista & Régua
+
+Este eixo traduz a riqueza de dados estruturados e notas explicativas em modelos financeiros padronizados e métricas analíticas.
+
+- [ ] **Execução completa da régua de avaliação `golden_v2`:**
+  - Executar `run_eval.py --golden v2` em paralelo para as 94 perguntas (81 do v1 + 13 do bloco de notas explicativas).
+  - Medir e registrar a redução de turnos e tokens por pergunta após a introdução de `search_docs(secao=...)` e a preservação de quebra de página (`\f`).
+- [ ] **Conciliação fiscal e cálculo de alíquota efetiva normalizada:**
+  - Utilizar a nota canônica `ir_csll` para extrair sistematicamente as adições, exclusões e incentivos fiscais (subvenções de ICMS, SUDENE/SUDAM, Lei do Bem), permitindo modelar o Lucro Líquido normalizado e projetar alíquotas futuras confiáveis.
+- [ ] **Automação de planilhas de Valuation / DCF:**
+  - Consolidar os geradores de planilhas financeiras (como os modelos já prototipados para Alpargatas e Axia) consumindo diretamente `vw_dre`, `vw_balanco` e `fato_padronizado`, gerando projeções históricas e fórmulas integradas no Excel.
+
+---
+
+## 📌 Infraestrutura & Manutenção da Base
+
+Tarefas periódicas de governança e integridade do banco SQLite local.
+
+- [ ] **Limpeza de tabelas não populadas no schema:**
+  - As tabelas `recompra_quantidades` e `recompra_intermediarios` constam no schema mas não recebem dados. Popular a partir dos arquivos brutos da CVM ou remover do `schema.sql` para manter o catálogo limpo.
+- [ ] **Auditoria de tickers assumidos (`watchlist.csv`):**
+  - Revisar as 34 linhas do `watchlist.csv` assinaladas com flag temporária `auto:assumed` contra o cadastro oficial da B3 e padronizar as entradas.
+- [ ] **`VACUUM` e manutenção de disco:**
+  - Com o banco em ~19 GB e após grandes batches de extração de texto, planejar execução de `PRAGMA wal_checkpoint(TRUNCATE)` seguido de `VACUUM` quando houver espaço em disco suficiente.
+
+---
+
+## ✅ Histórico Recente de Entregas (Etapa 9 / Eixo 1)
+
+Para referência do que foi finalizado e incorporado à `main` via PR #51:
+- **Páginas preservadas com `\f`:** Extratores `extract_pdf.py` e `ingest_notas_explicativas.py` unem páginas com form-feed (ASCII 12). MCP `search_docs` e `read_doc` agora calculam e devolvem a página original exata do PDF.
+- **Métrica de qualidade por página:** Módulo `qualidade_texto.py` classifica documentos em `ok`, `parcial` ou `ruim` e armazena metadados em `texto_qualidade`.
+- **Segmentador canônico de notas (`secoes_notas.py`):** 13 seções contábeis canônicas (`ir_csll`, `subvencoes`, `divida_emprestimos`, etc.) com taxa de detecção de 91,0% e busca de 10–15 ms sem sobrecarga de espaço em disco.
+- **Parâmetro `secao` no MCP:** `search_docs(secao=...)` roteia diretamente para a camada DF e encontra seções específicas sem necessidade de consulta full-text ad-hoc.
+- **Conexão com portal RAD:** Diagnóstico de rede concluído com sucesso; `www.rad.cvm.gov.br` confirmado operacional para novos downloads.
+- **Flags `--so-df` e `--sem-fts`:** Suporte a ingestão filtrada e eficiente de DFs adicionado a `extract_pdf.py`.

@@ -53,11 +53,7 @@ PDFs às vezes perde letras ("ta able income", "ra il", "UNE 0 0" = JUNE 30 2026
 letras soltas pegam. E o bloco D encolhe: são ~37 empresas sem nota trimestral, não ~78. `notas_explicativas` tem 63
 linhas, todas de uma empresa.
 
-**O RAD está fora do ar a partir desta máquina.** `www.rad.cvm.gov.br` dá timeout; `rad.cvm.gov.br` falha na hora;
-`dados.cvm.gov.br` responde em 0,35 s. Todos os 20.455 `link_download` da categoria "Dados Econômico-Financeiros"
-apontam para `www.rad.cvm.gov.br`. Até isso voltar, ficam bloqueados três trabalhos: reextrair um PDF ruim,
-extrair os pendentes e baixar as notas trimestrais. A base já foi carregada desta máquina (há texto de agosto de
-2026), então o bloqueio é recente: queda, limite de taxa ou bloqueio de IP.
+**Conectividade com o RAD restaurada (2026-11-09):** O portal `www.rad.cvm.gov.br` sofreu uma indisponibilidade temporária anterior que bloqueava novos downloads e reextrações. Diagnóstico em 2026-11-09 confirmou restabelecimento total da conectividade (HTTP 200 OK em 1,8 s). Os 20.455 `link_download` da categoria "Dados Econômico-Financeiros" estão acessíveis, desbloqueando a extração das DFs pendentes (`extract_pdf.py --so-df`) e notas trimestrais via `ingest_notas_explicativas.py`.
 
 **A régua não mede isso.** O `golden_v1` (81 perguntas) não tem nenhuma pergunta respondida por nota explicativa.
 As 5 perguntas do tipo `documento` são da camada quente.
@@ -96,7 +92,7 @@ Quatro blocos, na ordem de execução. O bloco A não depende de nada e resolve 
 
 | # | Ação |
 |---|---|
-| 9.12 | **Diagnóstico do RAD**: testar de outra rede, com IPv4/IPv6 e com outro User-Agent, para separar queda, bloqueio de IP e limite de taxa. Se for limite de taxa, os ingestores que tocam o RAD ganham backoff exponencial e um teto diário |
+| 9.12 | **Diagnóstico do RAD (Concluído em 2026-11-09)**: conectividade restabelecida (HTTP 200 OK em 1,8 s). Portal acessível para downloads e consultas de DFs. |
 | 9.13 | **Notas trimestrais 2025–2026** das ~37 empresas sem ITR com notas no IPE: `ingest_notas_explicativas.py` em lote (~220 documentos), indexados na camada `df` (9.9) como fonte `notas_explicativas`. A busca passa a ter uma única entrada para nota explicativa, venha do IPE ou do RAD |
 | 9.14 | **Fila pendente**: os ~250 DFs nunca extraídos (pendente) e a retentativa dos que falharam, com o extrator do 9.8 |
 

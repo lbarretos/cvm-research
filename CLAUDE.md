@@ -1,7 +1,7 @@
 # CVM Research — Base Local
 
 Base de dados local de documentos e eventos de empresas abertas brasileiras (CVM/B3).
-Banco: SQLite local (`cvm_research.db`) · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (sob demanda)
+Banco: SQLite local (`cvm_research.db`) · fontes IPE (2015+) + VLMO (2018+) + Recompra + FRE (2010+) + DFP (2010+) / ITR (2011+) + Notas Explicativas (DFs no IPE e sob demanda)
 + renda fixa (SND, ofertas CVM, taxas ANBIMA do último mês, escrituras sob demanda).
 Cobertura e período são escolhidos na carga (ver a seção seguinte); nesta instalação, confira com
 `SELECT COUNT(*) FROM companies` e `SELECT MIN(data_referencia) FROM ipe_docs`.
@@ -9,8 +9,8 @@ Montar do zero: `bash bootstrap.sh --universo ibov`. Manter: `bash scripts/updat
 ou job launchd toda segunda 9h, com recuperação no login e a cada 4 h se a segunda foi perdida
 (`scripts/install_weekly_launchd.sh`).
 
-**Roadmap de desenvolvimento:** `docs/proximos-passos/README.md`. São oito etapas numeradas na ordem de
-execução (desempenho → avaliação → MCP → texto/RAG → template CVM → linha econômica → taxonomia → renda fixa), cada uma
+**Roadmap de desenvolvimento:** `docs/proximos-passos/README.md`. São nove etapas numeradas na ordem de
+execução (desempenho → avaliação → MCP → texto/RAG → template CVM → linha econômica → taxonomia → renda fixa → busca em DFs/notas), cada uma
 com avaliação, proposta, stress test e critério de pronto. Ao trabalhar numa etapa, leia o arquivo dela e
 atualize o veredito no README ao terminar.
 
@@ -290,22 +290,12 @@ a versão antiga. Banco anterior à tabela: `sqlite3 cvm_research.db < scripts/m
 `extracao_falhou, chars_extraidos`
 
 Diferença para `demonstrativos_contabeis`: aquela tabela só tem os quadros
-padronizados (BPA/BPP/DRE/DFC_MI/DVA); esta tem o **PDF completo do documento**,
-incluindo notas explicativas (movimentação de Imobilizado/Intangível/Direito de
-Uso, provisões, etc.) — dado que não existe em nenhum feed estruturado da CVM.
-Populada sob demanda via `ingest_notas_explicativas.py` (não faz parte do fluxo
-semanal automático — ver script para detalhes). **Cobertura é mínima**: antes de
-consultar, verifique com `SELECT cnpj_companhia, fonte, data_referencia FROM notas_explicativas`
-se a empresa/período já foi ingerido; se não, informe o comando para ingerir. Busca full-text via
-`notas_explicativas_fts` (mesmo padrão de `ipe_docs_fts`).
+padronizados (BPA/BPP/DRE/DFC_MI/DVA); as notas explicativas completas residem
+em duas fontes:
+1. **`ipe_docs` (principal):** Mais de 13 mil DFs (Anuais Completas, Intermediárias, Padrões Internacionais e Adicionais) com texto integral, quebras de página preservadas (`\f`), métricas de qualidade (`qualidade`/`texto_qualidade`) e busca canônica direta via MCP `search_docs(camada='df', secao=...)`. É a forma recomendada e mais rápida de acessar notas explicativas.
+2. **`notas_explicativas` (sob demanda):** Populada via `ingest_notas_explicativas.py` a partir de `rad.cvm.gov.br` para cobrir os ITRs das ~37 empresas que não publicam notas intermediárias no catálogo padrão do IPE. Busca via `notas_explicativas_fts`.
 
-⚠️ Diferente dos demais ingestores (que baixam ZIPs anuais de `dados.cvm.gov.br`),
-este busca cada documento individualmente em `rad.cvm.gov.br` (o portal de
-consulta de documentos da CVM, não o feed de dados abertos) — mais lento e mais
-sensível a rate limit, por isso o `time.sleep(0.5)` entre documentos e o
-`--limite` default de 20. Além disso, ao contrário de `demonstrativos_contabeis`
-(que guarda as versões presentes no ZIP da CVM no dia da carga — em geral só a mais recente), aqui só a versão mais recente é mantida — uma
-reapresentação (nova `versao`) descarta o `texto_extraido` da versão anterior.
+⚠️ Ao baixar filings individuais via RAD (`rad.cvm.gov.br`), o portal aplica rate limit mais estrito que o portal de dados abertos (`dados.cvm.gov.br`), por isso os ingestores aplicam `time.sleep(0.5)` e devem ser executados em lotes moderados.
 
 ### `consistency_flags` — achados de consistência dos demonstrativos (metadados, não valores)
 `run_id, layer, check_type, classificacao, severity ('info'/'warn'/'error'), cnpj_companhia, tipo_doc,`

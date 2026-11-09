@@ -1,4 +1,4 @@
-# Estado do roadmap e como retomar (2026-10-30)
+# Estado do roadmap e como retomar (2026-11-09)
 
 Documento de passagem para continuar em outra máquina. O que está aqui não está em nenhum outro lugar: o resto vive nos
 arquivos de cada etapa e no `README.md` desta pasta.
@@ -7,26 +7,27 @@ arquivos de cada etapa e no `README.md` desta pasta.
 
 | Item | Situação |
 |---|---|
-| Etapas 1 a 7 | Na `main` (PRs #29 a #37). Vereditos e números em cada `0N-*.md` e na tabela do [README](README.md) |
-| v1 do conjunto de avaliação | Na `main` (PR #38, 2026-10-16): `avaliacao/golden_v1.json` (81 perguntas) e `stress/st2_golden_v1.py`; **baseline não rodada** |
-| Banco `cvm_research.db` | **Fora do git** (~19 GB, ignorado). Está só na máquina de origem |
-| Etapa 8 (renda fixa) | Na `main` (PR #41). Carga real em 2026-10-30; critérios 1–4 ok; garantia real medida em 366 escrituras (falso positivo 35% → 6%) |
+| Etapas 1 a 8 | Na `main` (PRs #29 a #44). Vereditos e números em cada `0N-*.md` e na tabela do [README](README.md) |
+| Etapa 9 (Blocos A, B e C) | Na `main` (PR #51, 2026-11-09). Busca canônica (`secao`), qualidade por página, `\f` preservado |
+| v1/v2 do conjunto de avaliação | Na `main`: `avaliacao/golden_v1.json` (81 perguntas) e `avaliacao/golden_v2.json` (94 perguntas) |
+| Banco `cvm_research.db` | **Fora do git** (~19 GB, ignorado). Está só na máquina de origem (151 empresas cobertas) |
+| Conectividade RAD | `www.rad.cvm.gov.br` confirmado operacional em 2026-11-09 (HTTP 200 OK) |
 | Skill `cvm-research` | Versionada em `skills/cvm-research/`; a cópia sincronizada em `~/.claude/skills/synced/` é outra, e pode divergir |
 
 ## Para continuar em outra máquina
 
-1. `git clone` e `git switch eval-v1` (ou `main`, depois do merge do #38). `bash setup.sh` cria a `.venv`, o schema e o
+1. `git clone` e `git checkout main`. `bash setup.sh` cria a `.venv`, o schema e o
    symlink `.claude/skills/cvm-research -> ../../skills/cvm-research` (o `.claude/` é ignorado pelo git).
 2. **O banco não vem junto.** Duas saídas: copiar o `cvm_research.db` da máquina de origem (checkpoint do WAL antes:
    `sqlite3 cvm_research.db "PRAGMA wal_checkpoint(TRUNCATE)"`), ou montar do zero com `bash bootstrap.sh --universo ibov`
-   (horas; as bases divergem nos períodos reapresentados, ver o aviso do `CLAUDE.md`). A base de origem tem 146 empresas.
+   (horas; as bases divergem nos períodos reapresentados, ver o aviso do `CLAUDE.md`). A base de origem tem 151 empresas.
 3. Registrar o MCP: `claude mcp add cvm-research -s user -- "$(pwd)/.venv/bin/python" "$(pwd)/scripts/mcp/cvm_mcp.py"`.
    Ferramentas: `resolve_company`, `query`, `get_financials`, `search_docs`, `read_doc`, `list_tables`, `describe_table`.
 4. Um banco montado antes das etapas precisa das migrações, nesta ordem (todas idempotentes ou com aviso):
    `2026-10-05_filings_views.sql`, `2026-10-05_ipe_indices.sql`, `2026-10-06_ipe_chunks.sql` (+ `build_chunks.py`),
    `2026-10-14_template_versao.sql` (+ `template_versions.py`), `2026-10-15_linha_economica.sql`
-   (+ `linha_economica.py --full`), `2026-10-16_taxonomia.sql` (+ `taxonomia.py --full`). Banco novo: `bootstrap.sh` já faz tudo.
-5. Conferir: `.venv/bin/python -m pytest tests/ -q` (323 passam) e a pergunta de verificação do `INSTALL.md`.
+   (+ `linha_economica.py --full`), `2026-10-16_taxonomia.sql` (+ `taxonomia.py --full`), `2026-11-09_ipe_docs_qualidade.sql`. Banco novo: `bootstrap.sh` já faz tudo.
+5. Conferir: `.venv/bin/python -m pytest tests/ -q` (428 passam) e a pergunta de verificação do `INSTALL.md`.
 6. Branch protegido: a `main` exige PR. `gh pr merge N --merge`, na ordem quando empilhados.
 
 ## Pendências (em ordem de valor)

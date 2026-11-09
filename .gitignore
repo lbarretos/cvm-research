@@ -10,6 +10,7 @@ cvm_research.db-shm
 cvm_research.db-wal
 .DS_Store
 company_catalog.csv
+*.xlsx
 logs/
 .gstack/
 .claude/

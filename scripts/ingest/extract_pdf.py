@@ -38,6 +38,13 @@ CATEGORIAS_PRIORITARIAS: dict[str, set[str] | None] = {
     "Dados Econômico-Financeiros": {"Press-release"},
 }
 
+DF_TIPOS: set[str] = {
+    "Demonstrações Financeiras Anuais Completas",
+    "Demonstrações Financeiras Intermediárias",
+    "Demonstrações Financeiras em Padrões Internacionais",
+    "Demonstrações Financeiras Adicionais",
+}
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; CVM-Research-Bot/1.0)",
 }
@@ -156,7 +163,8 @@ def _rebuild_fts(conn: sqlite3.Connection) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200,
-         retry_failed=False, rebuild_fts=False, tipo_filter=None, sem_fts=False):
+         retry_failed=False, rebuild_fts=False, tipo_filter=None, sem_fts=False,
+         so_df=False):
     conn = get_db()
 
     if rebuild_fts:
@@ -164,7 +172,9 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
         return
 
     cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
-    if categoria_filter:
+    if so_df:
+        cats = {"Dados Econômico-Financeiros": DF_TIPOS}
+    elif categoria_filter:
         cats = {categoria_filter: {tipo_filter} if tipo_filter else None}
     else:
         cats = CATEGORIAS_PRIORITARIAS
@@ -212,6 +222,8 @@ if __name__ == "__main__":
     p.add_argument("--cnpj",         help="Filtrar por CNPJ")
     p.add_argument("--categoria",    help="Filtrar por categoria")
     p.add_argument("--tipo",         help="Com --categoria: filtrar também por tipo (ex: Press-release)")
+    p.add_argument("--so-df",        action="store_true",
+                   help="Extrai apenas DFs (Anuais Completas, Intermediárias, Internacionais, Adicionais)")
     p.add_argument("--limite",       type=int, default=200,
                    help="Máximo de documentos a processar (default: 200)")
     p.add_argument("--retry-failed", action="store_true",
@@ -223,5 +235,7 @@ if __name__ == "__main__":
     args = p.parse_args()
     if args.tipo and not args.categoria:
         p.error("--tipo exige --categoria")
+    if args.so_df and args.categoria:
+        p.error("--so-df não pode ser combinada com --categoria")
     main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts, args.tipo,
-         args.sem_fts)
+         args.sem_fts, args.so_df)

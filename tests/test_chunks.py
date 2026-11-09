@@ -248,3 +248,42 @@ def test_consulta_fts_tira_stopwords_so_do_texto_livre():
     assert cvm_mcp._consulta_fts("conciliação do imposto de renda") == '"conciliação" AND "imposto" AND "renda"'
     assert cvm_mcp._consulta_fts('"imposto de renda"') == '"imposto de renda"'      # frase fica intacta
     assert cvm_mcp._consulta_fts("de da") == '"de" AND "da"'                          # só stopword: mantém
+
+
+def test_search_docs_e_read_doc_com_pagina(db, monkeypatch):
+    construir(monkeypatch)
+    _com_fts_documentos(db)
+    c = sqlite3.connect(db)
+    # P7 tem 3 páginas separadas por \f; o termo alvo está na página 2 (bem após o início da página)
+    c.execute(
+        "INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL)",
+        ("P7", CNPJ, "Dados Econômico-Financeiros", "Demonstrações Financeiras Anuais Completas",
+         None, "DFP", "2025-12-31", "2026-03-15", "http://x/7",
+         ("Página 1: Introdução e sumário executivo. " * 30) + "\f" + \
+         ("Página 2: Nota explicativa detalhada. " * 30) + "contingências tributárias relevantes. " + ("Detalhes. " * 30) + "\f" + \
+         "Página 3: Outras informações.")
+    )
+    c.execute("INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild')")
+    c.commit()
+    c.close()
+
+    # Documento com \f devolve a página na busca e no read_doc
+    r = cvm_mcp.search_docs("contingências tributárias", ticker="PETR4", camada="df")
+    assert _col(r, "protocolo") == ["P7"]
+    assert _col(r, "pagina") == [2]
+    off = _col(r, "offset")[0]
+    assert off is not None
+    lido = cvm_mcp.read_doc("P7", offset=off)
+    assert lido["pagina"] == 2
+    assert "contingências tributárias" in lido["texto"]
+
+    # Offset no início cai na página 1
+    lido_p1 = cvm_mcp.read_doc("P7", offset=0)
+    assert lido_p1["pagina"] == 1
+
+    # Documento antigo sem \f devolve None na busca e omite página no read_doc
+    r_antigo = cvm_mcp.search_docs("incentivos fiscais", ticker="PETR4", camada="df")
+    assert _col(r_antigo, "protocolo") == ["P4"]
+    assert _col(r_antigo, "pagina") == [None]
+    lido_antigo = cvm_mcp.read_doc("P4", offset=_col(r_antigo, "offset")[0])
+    assert "pagina" not in lido_antigo

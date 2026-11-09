@@ -301,7 +301,7 @@ _PARECE_DF = re.compile(r"\b(nota|notas|explicativ|concilia|al[ií]quota|imposto
                         re.I)
 # as oito primeiras na ordem de antes da Etapa 9 (quem lia por posição não quebra); as novas vão no fim
 _COLS_BUSCA = ["protocolo", "ordem", "data_entrega", "categoria", "tipo", "assunto", "trecho", "link",
-               "data_referencia", "offset", "camada"]
+               "data_referencia", "offset", "camada", "pagina"]
 
 
 def _cnpj_digitos(ticker: str) -> tuple[str | None, str | None, str | None]:
@@ -349,24 +349,37 @@ def _busca_quente(conn, q, cnpj_tok, categorias, desde, ate, ref_desde, ref_ate,
         if h in vistos or chave in vistos:
             continue
         vistos.update((h, chave))
-        linhas.append([proto, ordem, data, cat, tipo, assunto, trecho, link, dref, None, "quente"])
+        linhas.append([proto, ordem, data, cat, tipo, assunto, trecho, link, dref, None, "quente", None])
         if len(linhas) == k:
             break
     return linhas
 
 
-def _offset_do_trecho(conn, proto: str, trecho: str) -> int | None:
-    """Posição (em caracteres) do primeiro termo destacado no texto do documento, para o read_doc abrir ali.
+def _offset_e_pagina_do_trecho(conn, proto: str, trecho: str) -> tuple[int | None, int | None]:
+    """Posição (em caracteres) e página do primeiro termo destacado no texto do documento, para o read_doc abrir ali.
     O snippet do FTS é o texto original com marcadores; sem eles, um pedaço dele é substring exata."""
     i = trecho.find("[")
     if i < 0:
-        return None
+        return None, None
     pedaco = trecho[i:].replace("[", "").replace("]", "").split(" … ")[0][:40]
     if len(pedaco) < 4:
-        return None
-    (pos,) = conn.execute("SELECT instr(texto_extraido, ?) FROM ipe_docs WHERE protocolo_entrega = ?",
-                          (pedaco, proto)).fetchone() or (0,)
-    return max(0, pos - 1 - 400) if pos else None
+        return None, None
+    sql = """
+        SELECT pos,
+               CASE WHEN pos = 0 OR instr(texto_extraido, char(12)) = 0 THEN NULL
+                    ELSE 1 + length(substr(texto_extraido, 1, pos)) -
+                             length(replace(substr(texto_extraido, 1, pos), char(12), ''))
+               END
+        FROM (
+            SELECT instr(texto_extraido, ?) AS pos, texto_extraido
+            FROM ipe_docs WHERE protocolo_entrega = ?
+        )
+    """
+    row = conn.execute(sql, (pedaco, proto)).fetchone()
+    if not row or not row[0]:
+        return None, None
+    pos, pag = row[0], row[1]
+    return max(0, pos - 1 - 400), pag
 
 
 def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_desde, ref_ate, k,
@@ -408,8 +421,9 @@ def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_
            f"WHERE {' AND '.join(where)} ORDER BY ipe_docs_fts.rank LIMIT ?")
     linhas = []
     for proto, data, dref, cat, tipo, assunto, trecho, link in conn.execute(sql, args + [k]).fetchall():
+        offset, pagina = _offset_e_pagina_do_trecho(conn, proto, trecho)
         linhas.append([proto, None, data, cat, tipo, assunto, trecho, link, dref,
-                       _offset_do_trecho(conn, proto, trecho), camada])
+                       offset, camada, pagina])
     return linhas
 
 
@@ -429,6 +443,7 @@ def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] 
     - 'fria': o resto do IPE (prospectos, relatórios de agente fiduciário, escrituras, laudos, estatutos…).
     - 'todas': quente e documentos intercalados.
     Fora da quente, cada linha é um documento: abra com read_doc(protocolo, offset=<offset>), que já cai no trecho.
+    A coluna `pagina` traz a página no PDF (quando o documento tem quebras de página preservadas).
     consulta: termos (AND implícito; acento e caixa não importam; `dividend*` para prefixo) ou sintaxe FTS5
     ("frase exata", OR, NEAR(a b, 10)). ticker: empresa (ticker, nome ou CNPJ). categorias: ipe_docs.categoria.
     tipos: ipe_docs.tipo (ex.: ['Demonstrações Financeiras Intermediárias']). desde/ate: data_entrega;
@@ -493,7 +508,8 @@ def read_doc(protocolo: str, ordem: int = 0, offset: int = 0, max_chars: int = 2
     vem limpo (hifenização e cabeçalhos tratados), do trecho `ordem` em diante, até max_chars (máx. 28.000).
     A resposta traz `proximo_ordem` para continuar e `total_trechos`. Documentos fora da camada quente (DFs com notas
     explicativas, prospectos…) não têm trechos: o texto bruto vem por posição; passe o `offset` que search_docs
-    devolveu (camada='df'/'fria') para cair direto no trecho encontrado, e `proximo_offset` para continuar."""
+    devolveu (camada='df'/'fria') para cair direto no trecho encontrado, `proximo_offset` para continuar e `pagina`
+    (quando disponível) com a página do PDF."""
     max_chars = max(500, min(int(max_chars), 28_000))
     conn = get_db()
     try:
@@ -519,13 +535,29 @@ def read_doc(protocolo: str, ordem: int = 0, offset: int = 0, max_chars: int = 2
             prox = ultimo + 1 if ultimo is not None and ultimo + 1 < total else None
             return {**meta, "texto": texto[:max_chars], "ordem_inicio": chunks[0][0] if chunks else None,
                     "ordem_fim": ultimo, "total_trechos": total, "proximo_ordem": prox}
-        (txt,) = conn.execute("SELECT substr(texto_extraido, ?, ?) FROM ipe_docs WHERE protocolo_entrega = ?",
-                              (max(0, offset) + 1, max_chars, protocolo)).fetchone() or (None,)
+        (txt, pag) = conn.execute(
+            """
+            SELECT txt,
+                   CASE WHEN instr(texto_extraido, char(12)) = 0 THEN NULL
+                        ELSE 1 + length(prefixo) - length(replace(prefixo, char(12), ''))
+                   END AS pagina
+            FROM (
+                SELECT substr(texto_extraido, ?, ?) AS txt,
+                       substr(texto_extraido, 1, ?) AS prefixo,
+                       texto_extraido
+                FROM ipe_docs WHERE protocolo_entrega = ?
+            )
+            """,
+            (max(0, offset) + 1, max_chars, max(0, offset), protocolo),
+        ).fetchone() or (None, None)
         if not txt:
             return {**meta, "texto": None, "aviso": "sem texto extraído (ver link) ou offset além do fim"}
         fim = max(0, offset) + len(txt)
-        return {**meta, "texto": txt, "offset": offset, "chars_total": doc[5], "proximo_offset": fim,
-                "aviso": "documento fora da camada quente: texto bruto, sem limpeza, por posição"}
+        res = {**meta, "texto": txt, "offset": offset, "chars_total": doc[5], "proximo_offset": fim,
+               "aviso": "documento fora da camada quente: texto bruto, sem limpeza, por posição"}
+        if pag is not None:
+            res["pagina"] = pag
+        return res
     finally:
         conn.close()
 

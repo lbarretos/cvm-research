@@ -45,12 +45,14 @@ HEADERS = {
 # ── Download e extração de texto ──────────────────────────────────────────────
 
 def pdf_bytes_text(conteudo: bytes) -> str | None:
-    """Bytes de um PDF → texto reparado (None se não for PDF)."""
+    """Bytes de um PDF → texto reparado com páginas unidas por \f (None se não for PDF ou sem texto)."""
     if not conteudo.startswith(b"%PDF"):
         return None
     with pdfplumber.open(io.BytesIO(conteudo)) as pdf:
         pages = [p.extract_text() or "" for p in pdf.pages]
-    texto = repair_pdf_text("\n\n".join(p for p in pages if p.strip()))
+    if not any(p.strip() for p in pages):
+        return None
+    texto = repair_pdf_text("\f".join(pages))
     # Remove NUL bytes — SQLite rejeita strings com NUL
     return texto.replace("\x00", "")
 

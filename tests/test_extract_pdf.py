@@ -74,3 +74,49 @@ def test_limite_e_entradas_vazias(conn):
     assert _protocolos(_fetch_pendentes(conn, {CNPJ}, CATEGORIAS_PRIORITARIAS, limite=1)) == ["pr"]
     assert _fetch_pendentes(conn, set(), CATEGORIAS_PRIORITARIAS, limite=50) == []
     assert _fetch_pendentes(conn, {CNPJ}, {}, limite=50) == []
+
+
+def test_pdf_bytes_text_une_paginas_com_form_feed(monkeypatch):
+    import extract_pdf
+    from extract_pdf import pdf_bytes_text
+
+    class MockPage:
+        def __init__(self, text):
+            self._text = text
+
+        def extract_text(self):
+            return self._text
+
+    class MockPdf:
+        def __init__(self, pages):
+            self.pages = [MockPage(p) for p in pages]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(extract_pdf.pdfplumber, "open", lambda f: MockPdf(["Página 1", "Página 2", ""]))
+    txt = pdf_bytes_text(b"%PDF-mock")
+    assert txt == "Página 1\x0cPágina 2\x0c"
+
+
+def test_pdf_bytes_text_vazio_ou_sem_texto(monkeypatch):
+    import extract_pdf
+    from extract_pdf import pdf_bytes_text
+
+    assert pdf_bytes_text(b"not a pdf") is None
+
+    class MockPdf:
+        def __init__(self, pages):
+            self.pages = pages
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(extract_pdf.pdfplumber, "open", lambda f: MockPdf([]))
+    assert pdf_bytes_text(b"%PDF-empty") is None

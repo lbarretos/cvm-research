@@ -94,7 +94,9 @@ def fetch_notas_texto(numero_sequencial: int) -> str | None:
             return None
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]
-        texto = repair_pdf_text("\n\n".join(p for p in pages if p.strip()))
+        if not any(p.strip() for p in pages):
+            return None
+        texto = repair_pdf_text("\f".join(pages))
         return texto.replace("\x00", "")
     except Exception as e:
         print(f"    ERRO fetch (doc {numero_sequencial}): {e}")

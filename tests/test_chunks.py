@@ -32,7 +32,7 @@ def db(tmp_path, monkeypatch):
         INSERT INTO companies VALUES ('33.000.167/0001-01','PETR4','PETROBRAS','Petróleo');
         CREATE TABLE ipe_docs (protocolo_entrega TEXT PRIMARY KEY, cnpj_companhia TEXT, categoria TEXT, tipo TEXT,
             especie TEXT, assunto TEXT, data_referencia TEXT, data_entrega TEXT, link_download TEXT,
-            texto_extraido TEXT, chars_extraidos INT);
+            texto_extraido TEXT, chars_extraidos INT, qualidade TEXT, texto_qualidade TEXT);
     """)
     conn.executescript(open(os.path.join(RAIZ, "scripts/migrations/2026-10-06_ipe_chunks.sql")).read())
     docs = [
@@ -44,7 +44,7 @@ def db(tmp_path, monkeypatch):
         ("P4", CNPJ, "Dados Econômico-Financeiros", "Demonstrações Financeiras Anuais Completas", None, "DF", "2026-02-01",
          "2026-02-01", "http://x/4", "fora da camada quente " * 100),
     ]
-    conn.executemany("INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL)", docs)
+    conn.executemany("INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL)", docs)
     conn.commit()
     conn.close()
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{path}")
@@ -168,7 +168,7 @@ def test_atualizar_versoes_escala_linearmente(db):
 def _com_fts_documentos(db):
     """Acrescenta ao banco de teste um DF em inglês, um prospecto e o ipe_docs_fts (mesmo schema do real)."""
     c = sqlite3.connect(db)
-    c.executemany("INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL)", [
+    c.executemany("INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL)", [
         ("P5", CNPJ, "Dados Econômico-Financeiros", "Demonstrações Financeiras Adicionais", None, "ITR", "2026-06-30",
          "2026-08-01", "http://x/5", "Notes. " * 200 + "Reconciliation of income tax: Tax incentives 131,413 143,303. "
          + "Other notes. " * 50),
@@ -256,7 +256,7 @@ def test_search_docs_e_read_doc_com_pagina(db, monkeypatch):
     c = sqlite3.connect(db)
     # P7 tem 3 páginas separadas por \f; o termo alvo está na página 2 (bem após o início da página)
     c.execute(
-        "INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL)",
+        "INSERT INTO ipe_docs VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL)",
         ("P7", CNPJ, "Dados Econômico-Financeiros", "Demonstrações Financeiras Anuais Completas",
          None, "DFP", "2025-12-31", "2026-03-15", "http://x/7",
          ("Página 1: Introdução e sumário executivo. " * 30) + "\f" + \
@@ -287,3 +287,29 @@ def test_search_docs_e_read_doc_com_pagina(db, monkeypatch):
     assert _col(r_antigo, "pagina") == [None]
     lido_antigo = cvm_mcp.read_doc("P4", offset=_col(r_antigo, "offset")[0])
     assert "pagina" not in lido_antigo
+
+
+def test_search_docs_e_read_doc_alerta_qualidade_ruim(db, monkeypatch):
+    construir(monkeypatch)
+    _com_fts_documentos(db)
+    c = sqlite3.connect(db)
+    # P8 tem qualidade ruim
+    c.execute(
+        "INSERT INTO ipe_docs (protocolo_entrega, cnpj_companhia, categoria, tipo, especie, assunto, "
+        "data_referencia, data_entrega, link_download, texto_extraido, qualidade) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("P8", CNPJ, "Dados Econômico-Financeiros", "Demonstrações Financeiras Anuais Completas",
+         None, "DFP", "2025-12-31", "2026-03-15", "http://x/8",
+         "Texto com defeito grave e termo_ruim aqui.", "ruim")
+    )
+    c.execute("INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild')")
+    c.commit()
+    c.close()
+
+    r = cvm_mcp.search_docs("termo_ruim", ticker="PETR4", camada="df")
+    assert _col(r, "protocolo") == ["P8"]
+    trecho = _col(r, "trecho")[0]
+    assert "[TEXTO DEGRADADO — ver original em http://x/8]" in trecho
+
+    lido = cvm_mcp.read_doc("P8", offset=0)
+    assert "qualidade degradada" in lido.get("aviso", "")

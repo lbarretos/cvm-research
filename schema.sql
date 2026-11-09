@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS ipe_docs (
     extraido_em         TEXT,
     extracao_falhou     INTEGER DEFAULT 0,
     chars_extraidos     INTEGER,
+    qualidade           TEXT,
+    texto_qualidade     TEXT,
     created_at          TEXT DEFAULT (datetime('now')),
     updated_at          TEXT DEFAULT (datetime('now'))
 );

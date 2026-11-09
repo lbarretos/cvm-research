@@ -52,6 +52,10 @@ from mcp.server.fastmcp import FastMCP
 
 # ---------- Config ----------
 PROJECT_DIR = Path(__file__).resolve().parents[2]
+if str(PROJECT_DIR / "scripts" / "ingest") not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR / "scripts" / "ingest"))
+
+from qualidade_texto import pagina_esta_degradada
 DB_PATH = Path(os.environ.get("CVM_DB_PATH", PROJECT_DIR / "cvm_research.db"))
 MAX_ROWS = 500
 MAX_CELL_CHARS = 25_000  # ipe_docs.texto_extraido chega a 12 milhões de caracteres; uma célula cabe no orçamento da resposta
@@ -382,6 +386,12 @@ def _offset_e_pagina_do_trecho(conn, proto: str, trecho: str) -> tuple[int | Non
     return max(0, pos - 1 - 400), pag
 
 
+def _tem_coluna_qualidade(conn) -> bool:
+    """Verifica se ipe_docs tem as colunas da Etapa 9.7 (qualidade, texto_qualidade)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(ipe_docs)").fetchall()}
+    return "qualidade" in cols
+
+
 def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_desde, ref_ate, k,
                       versoes_antigas) -> list[list]:
     """Camadas 'df' e 'fria': FTS por documento (ipe_docs_fts), um resultado por documento."""
@@ -414,14 +424,19 @@ def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_
         if val:
             where.append(f"{col} {op} ?")
             args.append(val)
-    sql = ("SELECT i.protocolo_entrega, i.data_entrega, i.data_referencia, i.categoria, i.tipo, i.assunto, "
-           "snippet(ipe_docs_fts, 3, '[', ']', ' … ', 40), i.link_download "
-           "FROM ipe_docs_fts JOIN ipe_docs i ON i.rowid = ipe_docs_fts.rowid "
-           "LEFT JOIN ipe_versoes v ON v.protocolo_entrega = i.protocolo_entrega "
+    tem_qual = _tem_coluna_qualidade(conn)
+    col_qual = "COALESCE(i.qualidade, 'ok'), i.texto_qualidade" if tem_qual else "'ok', NULL"
+    sql = (f"SELECT i.protocolo_entrega, i.data_entrega, i.data_referencia, i.categoria, i.tipo, i.assunto, "
+           f"snippet(ipe_docs_fts, 3, '[', ']', ' … ', 40), i.link_download, "
+           f"{col_qual} "
+           f"FROM ipe_docs_fts JOIN ipe_docs i ON i.rowid = ipe_docs_fts.rowid "
+           f"LEFT JOIN ipe_versoes v ON v.protocolo_entrega = i.protocolo_entrega "
            f"WHERE {' AND '.join(where)} ORDER BY ipe_docs_fts.rank LIMIT ?")
     linhas = []
-    for proto, data, dref, cat, tipo, assunto, trecho, link in conn.execute(sql, args + [k]).fetchall():
+    for proto, data, dref, cat, tipo, assunto, trecho, link, qual, txt_qual in conn.execute(sql, args + [k]).fetchall():
         offset, pagina = _offset_e_pagina_do_trecho(conn, proto, trecho)
+        if qual == "ruim" or (pagina is not None and pagina_esta_degradada(txt_qual, pagina, qual)):
+            trecho = f"[TEXTO DEGRADADO — ver original em {link}] " + trecho
         linhas.append([proto, None, data, cat, tipo, assunto, trecho, link, dref,
                        offset, camada, pagina])
     return linhas
@@ -514,8 +529,11 @@ def read_doc(protocolo: str, ordem: int = 0, offset: int = 0, max_chars: int = 2
     conn = get_db()
     try:
         _com_prazo(conn)
-        doc = conn.execute("SELECT categoria, tipo, assunto, data_entrega, link_download, chars_extraidos, "
-                           "data_referencia FROM ipe_docs WHERE protocolo_entrega = ?", (protocolo,)).fetchone()
+        tem_qual = _tem_coluna_qualidade(conn)
+        col_qual = "COALESCE(qualidade, 'ok'), texto_qualidade" if tem_qual else "'ok', NULL"
+        doc = conn.execute(f"SELECT categoria, tipo, assunto, data_entrega, link_download, chars_extraidos, "
+                           f"data_referencia, {col_qual} "
+                           f"FROM ipe_docs WHERE protocolo_entrega = ?", (protocolo,)).fetchone()
         if doc is None:
             raise ValueError(f"Protocolo '{protocolo}' não existe em ipe_docs.")
         meta = {"protocolo": protocolo, "categoria": doc[0], "tipo": doc[1], "assunto": doc[2],
@@ -557,6 +575,9 @@ def read_doc(protocolo: str, ordem: int = 0, offset: int = 0, max_chars: int = 2
                "aviso": "documento fora da camada quente: texto bruto, sem limpeza, por posição"}
         if pag is not None:
             res["pagina"] = pag
+        qual, txt_qual = doc[7], doc[8]
+        if qual == "ruim" or (pag is not None and pagina_esta_degradada(txt_qual, pag, qual)):
+            res["aviso"] += f"; texto da página com qualidade degradada no PDF (ver original em {doc[4]})"
         return res
     finally:
         conn.close()

@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 import httpx
 import pdfplumber
 from utils import get_db, repair_pdf_text, watchlist_cnpjs
+from qualidade_texto import avaliar_documento
 
 # categoria → tipos aceitos (None = todos os tipos da categoria).
 # Não existe categoria "Resultado": o release de resultados é 'Dados Econômico-Financeiros'
@@ -119,23 +120,26 @@ def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set,
 
 
 def _salvar(conn: sqlite3.Connection, protocolo: str, texto: str | None) -> None:
-    """Persiste texto extraído (ou marca falha) no banco SQLite."""
+    """Persiste texto extraído (ou marca falha) no banco SQLite, com métrica de qualidade."""
     now = datetime.now(timezone.utc).isoformat()
     if texto:
+        qualidade, texto_qualidade = avaliar_documento(texto)
         conn.execute(
             """
             UPDATE ipe_docs
                SET texto_extraido  = ?,
                    chars_extraidos = ?,
+                   qualidade       = ?,
+                   texto_qualidade = ?,
                    extraido_em     = ?,
                    extracao_falhou = 0
              WHERE protocolo_entrega = ?
             """,
-            (texto, len(texto), now, protocolo),
+            (texto, len(texto), qualidade, texto_qualidade, now, protocolo),
         )
     else:
         conn.execute(
-            "UPDATE ipe_docs SET extracao_falhou = 1 WHERE protocolo_entrega = ?",
+            "UPDATE ipe_docs SET extracao_falhou = 1, qualidade = 'ruim' WHERE protocolo_entrega = ?",
             (protocolo,),
         )
     conn.commit()

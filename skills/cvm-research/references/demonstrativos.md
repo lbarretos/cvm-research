@@ -170,7 +170,7 @@ FROM notas_explicativas WHERE cnpj_companhia = '<CNPJ>' ORDER BY data_referencia
 ```
 
 Busca: `notas_explicativas_fts` (mesmo padrão do `ipe_docs_fts`; junte por `n.id = f.rowid`).
-**Antes, procure no IPE com `search_docs(consulta, ticker, camada='df', ref_desde=…)`**: os PDFs da DF
+**Antes, procure no IPE com `search_docs(consulta, ticker, camada='df', ref_desde=…)`** (ou diretamente por seção: `search_docs(secao='ir_csll'|'subvencoes'|…, ticker=…)`): os PDFs da DF
 (`Anuais Completas`, `Intermediárias`, `Adicionais` — esta em inglês —, `Padrões Internacionais`) já
 têm texto na maioria das empresas. Só então ofereça ingerir (comando em `manutencao.md`).
 Só a versão mais recente do documento é mantida.

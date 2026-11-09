@@ -33,11 +33,14 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
      IR pago, receita, EBIT, CFO): `get_financials(ticker, conceitos?)`. Devolve o valor com `metodo` e `checagem`;
      mostre-os. D&A usa a DVA 7.04.01 como gabarito (`ok_<definição>` = fecha com outra definição). Só plano padrão;
      se vier vazio, caia nas views e em `demonstrativos_trimestrais`;
-  4. **Conteúdo de documentos**: `search_docs(consulta, ticker?, categorias?, desde?, ate?, camada?, tipos?,
-     ref_desde?, ref_ate?)` e `read_doc`. A `camada` decide onde procurar:
+  4. **Conteúdo de documentos**: `search_docs(consulta?, ticker?, categorias?, desde?, ate?, camada?, tipos?,
+     ref_desde?, ref_ate?, secao?)` e `read_doc`. A `camada` decide onde procurar:
      - `'quente'` (padrão): trechos de FR, CM, AVI, RCA, assembleias e press-release; abra com `read_doc(protocolo, ordem)`;
      - **`'df'`: notas explicativas** do DFP e do ITR (conciliação do IR, subvenções e incentivos fiscais,
-       imobilizado, provisões, dívida…). Use `ref_desde`/`ref_ate` para o período (`'2026-06-30'` = ITR do 2T26) e abra
+       imobilizado, provisões, dívida…). Use `secao` ('ir_csll', 'subvencoes', 'emprestimos', 'imobilizado',
+       'provisoes', 'partes_relacionadas', 'patrimonio_liquido', 'segmentos'...) para navegar diretamente até
+       a nota desejada (já devolve offset e pagina, sem precisar de consulta de texto).
+       Use `ref_desde`/`ref_ate` para o período (`'2026-06-30'` = ITR do 2T26) e abra
        com `read_doc(protocolo, offset=<offset>)`, que já cai no trecho;
      - `'fria'`: prospectos, escrituras, relatórios de agente fiduciário, laudos, estatutos; `'todas'`: as três.
      Prefira-as ao FTS escrito à mão (seção 5) e a `substr(texto_extraido…)`;

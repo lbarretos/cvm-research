@@ -108,9 +108,9 @@ perguntas gastaram esse turno.
 O Claude consulta o banco pelo MCP `cvm-research` (`scripts/mcp/cvm_mcp.py`, stdio, somente leitura).
 Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 empresas), `query(sql)` (SELECT, até 500 linhas),
 `get_financials(ticker, conceitos?, fonte?, desde?, ate?)` (fatos padronizados com `metodo` e `checagem`; veja `fato_padronizado`),
-`search_docs(consulta, ticker?, categorias?, desde?, ate?, k?, camada?, tipos?, ref_desde?, ref_ate?)` (busca por trecho na camada
+`search_docs(consulta?, ticker?, categorias?, desde?, ate?, k?, camada?, tipos?, ref_desde?, ref_ate?, secao?)` (busca por trecho na camada
 quente do IPE, sem repetição, só versões vigentes; `camada='df'` busca as notas explicativas do DFP/ITR e `'fria'` o resto, por
-documento, com o `offset` do termo para o `read_doc`), `read_doc(protocolo, ordem?)` (lê a partir de um trecho),
+documento, com o `offset` do termo e `pagina` para o `read_doc`; `secao='ir_csll'|'subvencoes'|'emprestimos'|...` busca diretamente a nota explicativa canônica), `read_doc(protocolo, ordem?, offset?)` (lê a partir de um trecho ou offset),
 `resolve_bond(texto)` / `get_bond(codigo)` / `search_bonds(…)` / `search_bond_docs(consulta, codigo?)` / `read_bond_doc(doc_id)`
 (renda fixa, ver `rf_ativos`), `list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. A saída é tabular
 (`{colunas, linhas, aviso?}`), cada resposta cabe em 30 mil caracteres (o excesso é cortado com aviso) e todas abortam em 20 s.

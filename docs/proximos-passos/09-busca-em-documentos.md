@@ -189,3 +189,59 @@ Rodado em duas partes (o limite de uso da conta cortou a primeira na q051): q001
   - q069 (quantidade, 157.368.970): erra igual na `main` e no branch; já falhava antes.
 - As 81 perguntas do v1 não pioraram com a troca de colunas e a remoção de stopwords.
 - Custo total ≈ US$ 25 (parte 1, parcial) + US$ 11 (parte 2).
+
+---
+
+## Resultado dos Blocos B e C (2026-11-09, branch `etapa9-bloco-b`)
+
+### Bloco B: Qualidade do texto (9.6 e 9.7)
+
+- **9.6 (Página preservada):** `scripts/ingest/extract_pdf.py` e `scripts/ingest/ingest_notas_explicativas.py`
+  agora preservam quebras de página originais usando o caractere `\f` (form-feed, ASCII 12).
+  O FTS5 ignora `\f` na tokenização. No MCP (`cvm_mcp.py`), `_offset_e_pagina_do_trecho` calcula a página (1-based)
+  via `instr` e contagem de `char(12)` em SQLite, e `read_doc` devolve a página do offset lido.
+- **9.7 (Métrica de qualidade por página):** Implementado em `scripts/ingest/qualidade_texto.py`:
+  - Detecta fontes com mapeamento corrompido (`(cid:N)`), tokens de uma letra soltos (típicos de tabelas rotacionadas em
+    duas colunas no PDF, como na conciliação do IR da TUPY3 2025) e caracteres fora do padrão latino/português.
+  - Migração `2026-11-09_ipe_docs_qualidade.sql` adicionou `qualidade` (`ok`/`parcial`/`ruim`) e `texto_qualidade` (JSON
+    com as piores páginas e suas métricas) em `ipe_docs`.
+  - Backfill executado em todos os 13.851 documentos de DFP/ITR da base: 9.776 ok (70,6%), 2.336 parcial (16,9%),
+    1.739 ruim (12,6%).
+  - `search_docs` e `read_doc` alertam `[TEXTO DEGRADADO — ver original em <link>]` quando o trecho lido estiver em página
+    ou documento com qualidade degradada.
+
+### Bloco C: Seções canônicas e avaliação da camada DF em chunks (9.9, 9.10, 9.11)
+
+- **9.10 e 9.11 (Segmentador de notas e busca canônica):**
+  - Módulo `scripts/ingest/secoes_notas.py` com dicionário canônico de 13 seções: `ir_csll`, `subvencoes`,
+    `tributos_recuperar`, `imobilizado`, `intangivel`, `provisoes`, `divida_emprestimos`, `partes_relacionadas`,
+    `patrimonio_liquido`, `segmentos`, `arrendamentos`, `eventos_subsequentes`, `instrumentos_financeiros`.
+  - Regex aprimorada com tratamento de numerais romanos estritos (I a XXXIX, excluindo falsos positivos como CVM, CPC, IFRS),
+    descarte de linhas de demonstrativos contábeis com múltiplos números e descarte de linhas de sumário/TOC pontilhadas.
+  - Priorização de notas primárias de contas (ex.: Nota 26 ou 29) sobre itens sob a Nota 2 (práticas contábeis).
+  - Parâmetro `secao` adicionado ao `search_docs` no MCP:
+    - Aceita chave canônica, alias ('emprestimos', 'contingencias', 'pl'...) ou texto descritivo.
+    - Se informado sem camada, direciona automaticamente para `camada='df'`.
+    - Suporta chamada sem termo de busca (`consulta=""`): resolve a nota desejada diretamente, devolvendo o início exato
+      no `offset`, a `pagina` no PDF e a coluna 13 `secao` (ex.: `"Nota 26"`).
+    - Quando combinado com `consulta`, restringe ou prioriza o termo dentro da seção requisitada.
+  - Testes: `tests/test_secoes_notas.py` (8 testes unitários) e novos testes integrados em `tests/test_chunks.py`.
+
+- **Stress test da Camada DF em Chunks (`st9_chunks_df.py`):**
+  - Executado em 1.707 documentos de DFP/ITR de 2024–2026 (416,3 MB brutos):
+    - Total de trechos gerados: 250.066. Trechos únicos: 218.539. Repetidos: 31.527.
+    - Taxa de deduplicação entre trimestres: **12,6%** (muito inferior aos 50%+ da camada quente, pois tabelas e números
+      das notas mudam a cada trimestre).
+    - Trechos com seção identificada: **91,0%** (**meta >= 85% superada com folga**).
+    - Trechos com seção canônica: 16,1% (o restante são as notas das dezenas de outros tópicos contábeis não canônicos).
+    - Tamanho do banco gerado com FTS: 812,2 MB.
+    - Projeção de acréscimo para todas as 7.255 DFs da base: **+3,37 GB** (acima do teto de 3,0 GB).
+
+- **Veredito arquitetural sobre 9.9:**
+  - A indexação das DFs na tabela `ipe_chunks` traria benefício marginal frente ao custo: aumentaria a base em +3,4 GB
+    para uma deduplicação de apenas 12,6%, com risco de quebrar termos contábeis na fronteira de chunks arbitrários.
+  - O segmentador sob demanda em `ipe_docs` (Etapa 9.10 e 9.11) alcançou tempo de resposta de **~10 a 15 ms**,
+    **sem nenhum GB adicional no banco**, encontrando a nota de IR, subvenções e demais seções em 100% das empresas
+    testadas da watchlist com offset e página exatos.
+  - Recomendação: manter as DFs completas em `ipe_docs`/`ipe_docs_fts` com a navegação por seção de 9.10/9.11,
+    dispensando a duplicação em `ipe_chunks` para DFs.

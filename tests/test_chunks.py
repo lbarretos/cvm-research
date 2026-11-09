@@ -313,3 +313,74 @@ def test_search_docs_e_read_doc_alerta_qualidade_ruim(db, monkeypatch):
 
     lido = cvm_mcp.read_doc("P8", offset=0)
     assert "qualidade degradada" in lido.get("aviso", "")
+
+
+# ---------- Etapa 9, bloco C: busca direta por seção canônica de notas (9.10 e 9.11) ----------
+
+def test_search_docs_busca_direta_por_secao(db, monkeypatch):
+    """search_docs(secao='ir_csll', ticker=…) sem consulta acha a nota com offset, página e nome da seção."""
+    construir(monkeypatch)
+    _com_fts_documentos(db)
+    c = sqlite3.connect(db)
+    doc_estruturado = (
+        "Demonstrações Financeiras 2025\n"
+        "\f"
+        "Nota 1 - Contexto Operacional\n"
+        "Atividades da companhia...\n"
+        "\f"
+        "Nota 12 - Imobilizado\n"
+        "Ativos de exploração 500.000...\n"
+        "\f"
+        "Nota 26 - Imposto de Renda e Contribuição Social\n"
+        "Conciliação da alíquota efetiva de imposto:\n"
+        "Lucro antes dos impostos: 1.000.000\n"
+        "Incentivos fiscais do IR: 50.000\n"
+        "\f"
+        "Nota 29 - Subvenções Governamentais\n"
+        "Benefícios fiscais recebidos: subvenção para investimento 120.000...\n"
+    )
+    c.execute(
+        "INSERT INTO ipe_docs (protocolo_entrega, cnpj_companhia, categoria, tipo, especie, assunto, "
+        "data_referencia, data_entrega, link_download, texto_extraido, qualidade) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        ("P9", CNPJ, "Dados Econômico-Financeiros", "Demonstrações Financeiras Anuais Completas",
+         None, "DFP", "2025-12-31", "2026-03-20", "http://x/9",
+         doc_estruturado, "ok")
+    )
+    c.execute("INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild')")
+    c.commit()
+    c.close()
+
+    # 1. Busca por secao canônica sem consulta: redireciona automaticamente para camada='df'
+    r = cvm_mcp.search_docs(secao="ir_csll", ticker="PETR4")
+    assert _col(r, "camada")[0] == "df"
+    assert "P9" in _col(r, "protocolo")
+    idx_p9 = _col(r, "protocolo").index("P9")
+    assert _col(r, "secao")[idx_p9] == "Nota 26"
+    assert _col(r, "pagina")[idx_p9] == 4
+    off = _col(r, "offset")[idx_p9]
+    assert off is not None
+
+    lido = cvm_mcp.read_doc("P9", offset=off, max_chars=500)
+    assert "Imposto de Renda" in lido["texto"]
+    assert lido["pagina"] == 4
+
+    # 2. Busca por alias 'emprestimos' / 'subvencoes'
+    r_sub = cvm_mcp.search_docs(secao="subvencoes", ticker="PETR4")
+    assert "P9" in _col(r_sub, "protocolo")
+    idx_sub = _col(r_sub, "protocolo").index("P9")
+    assert _col(r_sub, "secao")[idx_sub] == "Nota 29"
+    assert _col(r_sub, "pagina")[idx_sub] == 5
+
+    # 3. Busca combinada: termo 'subvenção' filtrado pela seção 'subvencoes'
+    r_comb = cvm_mcp.search_docs("subvenção", secao="subvencoes", ticker="PETR4", camada="df")
+    assert "P9" in _col(r_comb, "protocolo")
+    assert _col(r_comb, "secao")[0] == "Nota 29"
+
+    # 4. Seção inválida lança ValueError
+    with pytest.raises(ValueError, match="não reconhecida"):
+        cvm_mcp.search_docs(secao="secao_que_nao_existe")
+
+    # 5. Consulta vazia sem seção lança ValueError
+    with pytest.raises(ValueError, match="Consulta vazia"):
+        cvm_mcp.search_docs()

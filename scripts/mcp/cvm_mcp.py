@@ -56,6 +56,13 @@ if str(PROJECT_DIR / "scripts" / "ingest") not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR / "scripts" / "ingest"))
 
 from qualidade_texto import pagina_esta_degradada
+from secoes_notas import (
+    CANONICAS,
+    resolver_chave_secao,
+    extrair_secoes_documento,
+    obter_secao_por_chave,
+    encontrar_secao_do_offset,
+)
 DB_PATH = Path(os.environ.get("CVM_DB_PATH", PROJECT_DIR / "cvm_research.db"))
 MAX_ROWS = 500
 MAX_CELL_CHARS = 25_000  # ipe_docs.texto_extraido chega a 12 milhões de caracteres; uma célula cabe no orçamento da resposta
@@ -305,7 +312,7 @@ _PARECE_DF = re.compile(r"\b(nota|notas|explicativ|concilia|al[ií]quota|imposto
                         re.I)
 # as oito primeiras na ordem de antes da Etapa 9 (quem lia por posição não quebra); as novas vão no fim
 _COLS_BUSCA = ["protocolo", "ordem", "data_entrega", "categoria", "tipo", "assunto", "trecho", "link",
-               "data_referencia", "offset", "camada", "pagina"]
+               "data_referencia", "offset", "camada", "pagina", "secao"]
 
 
 def _cnpj_digitos(ticker: str) -> tuple[str | None, str | None, str | None]:
@@ -353,7 +360,7 @@ def _busca_quente(conn, q, cnpj_tok, categorias, desde, ate, ref_desde, ref_ate,
         if h in vistos or chave in vistos:
             continue
         vistos.update((h, chave))
-        linhas.append([proto, ordem, data, cat, tipo, assunto, trecho, link, dref, None, "quente", None])
+        linhas.append([proto, ordem, data, cat, tipo, assunto, trecho, link, dref, None, "quente", None, None])
         if len(linhas) == k:
             break
     return linhas
@@ -393,10 +400,59 @@ def _tem_coluna_qualidade(conn) -> bool:
 
 
 def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_desde, ref_ate, k,
-                      versoes_antigas) -> list[list]:
-    """Camadas 'df' e 'fria': FTS por documento (ipe_docs_fts), um resultado por documento."""
+                      versoes_antigas, secao_can: str | None = None) -> list[list]:
+    """Camadas 'df' e 'fria': FTS por documento (ipe_docs_fts) ou busca direta de seção em 'df'."""
+    where, args = [], []
+    tem_qual = _tem_coluna_qualidade(conn)
+    col_qual = "COALESCE(i.qualidade, 'ok'), i.texto_qualidade" if tem_qual else "'ok', NULL"
+
+    # Caso 1: Busca direta por seção na camada 'df' sem termo de busca (consulta vazia)
+    if camada == "df" and secao_can and not q:
+        where = [f"i.tipo IN ({','.join('?' * len(DF_TIPOS))})", "i.texto_extraido IS NOT NULL"]
+        args = list(DF_TIPOS)
+        if cnpj:
+            where.append("i.cnpj_companhia = ?")
+            args.append(cnpj)
+        if tipos:
+            where.append(f"i.tipo IN ({','.join('?' * len(tipos))})")
+            args += tipos
+        if categorias:
+            where.append(f"i.categoria IN ({','.join('?' * len(categorias))})")
+            args += categorias
+        if not versoes_antigas:
+            where.append("COALESCE(v.is_latest, 1) = 1")
+        for col, op, val in (("i.data_entrega", ">=", desde), ("i.data_entrega", "<=", ate),
+                             ("i.data_referencia", ">=", ref_desde), ("i.data_referencia", "<=", ref_ate)):
+            if val:
+                where.append(f"{col} {op} ?")
+                args.append(val)
+        sql = (f"SELECT i.protocolo_entrega, i.data_entrega, i.data_referencia, i.categoria, i.tipo, i.assunto, "
+               f"i.link_download, i.texto_extraido, {col_qual} "
+               f"FROM ipe_docs i "
+               f"LEFT JOIN ipe_versoes v ON v.protocolo_entrega = i.protocolo_entrega "
+               f"WHERE {' AND '.join(where)} ORDER BY i.data_referencia DESC, i.data_entrega DESC LIMIT ?")
+        linhas = []
+        for proto, data, dref, cat, tipo, assunto, link, txt, qual, txt_qual in conn.execute(sql, args + [max(k * 2, 20)]).fetchall():
+            secoes = extrair_secoes_documento(txt)
+            sec = obter_secao_por_chave(secoes, secao_can)
+            if not sec:
+                continue
+            offset = sec.pos_inicio
+            pagina = sec.pagina_inicio
+            snip = txt[sec.pos_inicio:sec.pos_inicio + 350].replace("\n", " ").strip()
+            trecho = f"[Nota {sec.numero} — {sec.titulo}] {snip} …"
+            if qual == "ruim" or (pagina is not None and pagina_esta_degradada(txt_qual, pagina, qual)):
+                trecho = f"[TEXTO DEGRADADO — ver original em {link}] " + trecho
+            linhas.append([proto, None, data, cat, tipo, assunto, trecho, link, dref,
+                           offset, camada, pagina, f"Nota {sec.numero}"])
+            if len(linhas) == k:
+                break
+        return linhas
+
+    # Caso 2: Busca por FTS (com consulta informada)
     match = f"texto_extraido : ({q})"
-    where, args = ["ipe_docs_fts MATCH ?"], []
+    where = ["ipe_docs_fts MATCH ?"]
+    args = []
     if cnpj:
         # só a raiz do CNPJ no MATCH: os tokens "0001" e o dígito verificador estão em quase todo documento
         raiz = " ".join(re.findall(r"\d+", cnpj)[:3])
@@ -424,8 +480,6 @@ def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_
         if val:
             where.append(f"{col} {op} ?")
             args.append(val)
-    tem_qual = _tem_coluna_qualidade(conn)
-    col_qual = "COALESCE(i.qualidade, 'ok'), i.texto_qualidade" if tem_qual else "'ok', NULL"
     sql = (f"SELECT i.protocolo_entrega, i.data_entrega, i.data_referencia, i.categoria, i.tipo, i.assunto, "
            f"snippet(ipe_docs_fts, 3, '[', ']', ' … ', 40), i.link_download, "
            f"{col_qual} "
@@ -433,20 +487,52 @@ def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_
            f"LEFT JOIN ipe_versoes v ON v.protocolo_entrega = i.protocolo_entrega "
            f"WHERE {' AND '.join(where)} ORDER BY ipe_docs_fts.rank LIMIT ?")
     linhas = []
-    for proto, data, dref, cat, tipo, assunto, trecho, link, qual, txt_qual in conn.execute(sql, args + [k]).fetchall():
+    limite_busca = k * 3 if secao_can else k
+    for proto, data, dref, cat, tipo, assunto, trecho, link, qual, txt_qual in conn.execute(sql, args + [limite_busca]).fetchall():
         offset, pagina = _offset_e_pagina_do_trecho(conn, proto, trecho)
+        secao_nome = None
+        if camada == "df":
+            row_txt = conn.execute("SELECT texto_extraido FROM ipe_docs WHERE protocolo_entrega = ?", (proto,)).fetchone()
+            txt = row_txt[0] if row_txt else ""
+            secoes = extrair_secoes_documento(txt)
+            if secao_can:
+                sec = obter_secao_por_chave(secoes, secao_can)
+                if not sec:
+                    continue  # Documento não possui a seção requerida
+                if offset is not None and sec.pos_inicio <= offset < sec.pos_fim:
+                    secao_nome = f"Nota {sec.numero}"
+                    trecho = f"[{secao_nome} — {sec.titulo}] " + trecho
+                else:
+                    termo_puro = q.split()[0].replace('"', '').lower()
+                    termo_idx = txt.lower().find(termo_puro, sec.pos_inicio, sec.pos_fim)
+                    if termo_idx >= 0:
+                        offset = max(0, termo_idx - 400)
+                        pagina = 1 + txt[:termo_idx].count("\f") if "\f" in txt else None
+                        pedaco = txt[termo_idx:termo_idx + 250].replace("\n", " ").strip()
+                        trecho = f"[Nota {sec.numero} — {sec.titulo}] … [{txt[termo_idx:termo_idx + len(termo_puro)]}] {pedaco} …"
+                        secao_nome = f"Nota {sec.numero}"
+                    else:
+                        continue
+            elif offset is not None:
+                sec = encontrar_secao_do_offset(secoes, offset)
+                if sec:
+                    secao_nome = f"Nota {sec.numero}"
+                    trecho = f"[{secao_nome} — {sec.titulo}] " + trecho
         if qual == "ruim" or (pagina is not None and pagina_esta_degradada(txt_qual, pagina, qual)):
             trecho = f"[TEXTO DEGRADADO — ver original em {link}] " + trecho
         linhas.append([proto, None, data, cat, tipo, assunto, trecho, link, dref,
-                       offset, camada, pagina])
+                       offset, camada, pagina, secao_nome])
+        if len(linhas) == k:
+            break
     return linhas
 
 
 @mcp.tool()
-def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] | None = None,
+def search_docs(consulta: str = "", ticker: str | None = None, categorias: list[str] | None = None,
                 desde: str | None = None, ate: str | None = None, k: int = 10,
                 versoes_antigas: bool = False, camada: str = "quente", tipos: list[str] | None = None,
-                ref_desde: str | None = None, ref_ate: str | None = None) -> dict:
+                ref_desde: str | None = None, ref_ate: str | None = None,
+                secao: str | None = None) -> dict:
     """Busca no texto dos documentos do IPE. `camada` escolhe onde:
     - 'quente' (padrão): trechos de ~2 mil caracteres de Fato Relevante, Comunicado ao Mercado, Aviso aos Acionistas,
       Reunião da Administração, Assembleia (ata, proposta, sumário, edital) e press-release; sem repetir texto
@@ -459,13 +545,25 @@ def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] 
     - 'todas': quente e documentos intercalados.
     Fora da quente, cada linha é um documento: abra com read_doc(protocolo, offset=<offset>), que já cai no trecho.
     A coluna `pagina` traz a página no PDF (quando o documento tem quebras de página preservadas).
+    A coluna `secao` indica a nota explicativa identificada (ex.: "Nota 26").
+    secao: busca direta por seção canônica ('ir_csll', 'subvencoes', 'tributos_recuperar', 'imobilizado',
+    'intangivel', 'provisoes', 'emprestimos', 'partes_relacionadas', 'patrimonio_liquido', 'segmentos',
+    'arrendamentos', 'eventos_subsequentes', 'instrumentos_financeiros') ou texto descritivo.
+    Quando secao é informada, redireciona automaticamente para camada='df' e localiza a nota exata.
     consulta: termos (AND implícito; acento e caixa não importam; `dividend*` para prefixo) ou sintaxe FTS5
     ("frase exata", OR, NEAR(a b, 10)). ticker: empresa (ticker, nome ou CNPJ). categorias: ipe_docs.categoria.
     tipos: ipe_docs.tipo (ex.: ['Demonstrações Financeiras Intermediárias']). desde/ate: data_entrega;
     ref_desde/ref_ate: data_referencia (período do documento: '2026-06-30' = ITR do 2T26), 'YYYY-MM-DD'.
     Só versões vigentes (versoes_antigas=True inclui as substituídas). Lembre da defasagem semanal do IPE."""
-    q = _consulta_fts(consulta)
-    if not q:
+    secao_can = resolver_chave_secao(secao) if secao else None
+    if secao and not secao_can:
+        raise ValueError(f"Seção '{secao}' não reconhecida. Opções canônicas: {', '.join(CANONICAS)}")
+    if secao_can and camada == "quente":
+        camada = "df"
+    if not consulta and not secao_can:
+        raise ValueError("Consulta vazia. Informe ao menos consulta ou secao.")
+    q = _consulta_fts(consulta) if consulta else ""
+    if consulta and not q and not secao_can:
         raise ValueError("Consulta vazia.")
     if camada not in CAMADAS:
         raise ValueError(f"camada deve ser uma de {CAMADAS}.")
@@ -480,14 +578,14 @@ def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] 
                 return {"colunas": [], "linhas": [], "aviso": aviso}
         try:
             linhas: list[list] = []
-            if camada in ("quente", "todas"):
+            if camada in ("quente", "todas") and q:
                 linhas = _busca_quente(conn, q, cnpj_tok, categorias, desde, ate, ref_desde, ref_ate, k,
                                        versoes_antigas)
             if camada != "quente":
                 outras = []
                 for c in (("df", "fria") if camada == "todas" else (camada,)):
                     outras += _busca_documentos(conn, c, q, cnpj, categorias, tipos, desde, ate, ref_desde, ref_ate,
-                                                k, versoes_antigas)
+                                                k, versoes_antigas, secao_can=secao_can)
                 if camada == "todas":   # intercala: os rankings das camadas não são comparáveis
                     mix = [x for par in zip(linhas, outras) for x in par]
                     linhas = (mix + linhas[len(outras):] + outras[len(linhas):])[:k]
@@ -501,7 +599,10 @@ def search_docs(consulta: str, ticker: str | None = None, categorias: list[str] 
             raise
         aviso = None
         if not linhas:
-            if camada == "quente":
+            if secao_can:
+                aviso = (f"nenhuma nota explicativa para a seção '{secao}' encontrada na camada '{camada}'. "
+                         f"Verifique o ticker, intervalo de datas ou se a empresa publica este detalhamento.")
+            elif camada == "quente":
                 aviso = ("nenhum trecho na camada quente (FR, CM, AVI, RCA, assembleias, press-release) em versões "
                          "vigentes. Tente menos termos, prefixo (termo*) ou versoes_antigas=True")
                 if _PARECE_DF.search(consulta) or (categorias and "Dados Econômico-Financeiros" in categorias):

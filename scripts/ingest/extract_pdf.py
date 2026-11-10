@@ -52,20 +52,31 @@ HEADERS = {
 
 # ── Download e extração de texto ──────────────────────────────────────────────
 
-def pdf_bytes_text(conteudo: bytes) -> str | None:
+def pdf_bytes_text(conteudo: bytes, usar_ocr: bool = False, max_ocr_paginas: int = 30) -> str | None:
     """Bytes de um PDF → texto reparado com páginas unidas por \f (None se não for PDF ou sem texto)."""
     if not conteudo.startswith(b"%PDF"):
         return None
     with pdfplumber.open(io.BytesIO(conteudo)) as pdf:
         pages = [p.extract_text() or "" for p in pdf.pages]
     if not any(p.strip() for p in pages):
-        return None
+        if usar_ocr:
+            from ocr_fallback import ocr_pdf_completo
+            pages = ocr_pdf_completo(conteudo, max_paginas=max_ocr_paginas)
+        if not any(p.strip() for p in pages):
+            return None
+    elif usar_ocr:
+        from ocr_fallback import reparar_paginas_com_ocr
+        pages, reparadas = reparar_paginas_com_ocr(conteudo, pages, max_paginas=max_ocr_paginas)
+        if reparadas > 0:
+            print(f"      [OCR] {reparadas} página(s) recuperada(s) via tesseract")
+
     texto = repair_pdf_text("\f".join(pages))
     # Remove NUL bytes — SQLite rejeita strings com NUL
     return texto.replace("\x00", "")
 
 
-def fetch_pdf_text(url: str, dominios: tuple[str, ...] | None = ("cvm.gov.br",)) -> str | None:
+def fetch_pdf_text(url: str, dominios: tuple[str, ...] | None = ("cvm.gov.br",),
+                   usar_ocr: bool = False, max_ocr_paginas: int = 30) -> str | None:
     """`dominios`: onde o PDF pode estar depois dos redirects (o IPE só serve da CVM; os documentos
     de renda fixa também vêm da B3/Fundos.NET, ver ingest_rf_docs.py). None = qualquer host: só para
     link passado à mão pelo usuário."""
@@ -80,7 +91,7 @@ def fetch_pdf_text(url: str, dominios: tuple[str, ...] | None = ("cvm.gov.br",))
         if content_length > 50 * 1024 * 1024:
             print(f"    SKIP: PDF muito grande ({content_length // 1024 // 1024}MB)")
             return None
-        return pdf_bytes_text(r.content)
+        return pdf_bytes_text(r.content, usar_ocr=usar_ocr, max_ocr_paginas=max_ocr_paginas)
     except Exception as e:
         print(f"    ERRO fetch: {e}")
         return None
@@ -90,15 +101,25 @@ def fetch_pdf_text(url: str, dominios: tuple[str, ...] | None = ("cvm.gov.br",))
 
 def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set,
                      categorias: dict[str, set[str] | None],
-                     limite: int, retry_failed: bool = False) -> list[dict]:
-    """Retorna documentos sem texto_extraido para as empresas e categorias fornecidas.
+                     limite: int, retry_failed: bool = False,
+                     protocolo: str | None = None,
+                     reextrair_ruins: bool = False) -> list[dict]:
+    """Retorna documentos para extração/re-extração conforme filtros fornecidos."""
+    if protocolo:
+        cur = conn.execute(
+            """
+            SELECT protocolo_entrega, cnpj_companhia, categoria, assunto, link_download
+            FROM ipe_docs
+            WHERE protocolo_entrega = ?
+            """,
+            (protocolo,),
+        )
+        cols = [d[0] for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
 
-    `categorias` mapeia categoria → tipos aceitos; None aceita todos os tipos.
-    """
     cnpjs_list = list(cnpjs)
     if not cnpjs_list or not categorias:
         return []
-    falhou_val = 1 if retry_failed else 0
 
     cnpj_ph = ",".join("?" * len(cnpjs_list))
     filtros, filtro_params = [], []
@@ -110,17 +131,23 @@ def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set,
             filtros.append(f"(categoria = ? AND tipo IN ({','.join('?' * len(tipos))}))")
             filtro_params.extend([categoria, *sorted(tipos)])
 
+    if reextrair_ruins:
+        cond_filtro = "qualidade = 'ruim' AND texto_extraido IS NOT NULL"
+        params = [*cnpjs_list, *filtro_params, limite]
+    else:
+        cond_filtro = "texto_extraido IS NULL AND extracao_falhou = ?"
+        falhou_val = 1 if retry_failed else 0
+        params = [falhou_val, *cnpjs_list, *filtro_params, limite]
+
     sql = f"""
         SELECT protocolo_entrega, cnpj_companhia, categoria, assunto, link_download
         FROM ipe_docs
-        WHERE texto_extraido IS NULL
-          AND extracao_falhou = ?
+        WHERE {cond_filtro}
           AND cnpj_companhia IN ({cnpj_ph})
           AND ({" OR ".join(filtros)})
         ORDER BY data_entrega DESC
         LIMIT ?
     """
-    params = [falhou_val, *cnpjs_list, *filtro_params, limite]
     cur = conn.execute(sql, params)
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -164,12 +191,19 @@ def _rebuild_fts(conn: sqlite3.Connection) -> None:
 
 def main(cnpj_filter=None, categoria_filter=None, limite=200,
          retry_failed=False, rebuild_fts=False, tipo_filter=None, sem_fts=False,
-         so_df=False):
+         so_df=False, usar_ocr=False, max_ocr_paginas=30, protocolo=None,
+         reextrair_ruins=False):
     conn = get_db()
 
     if rebuild_fts:
         _rebuild_fts(conn)
         return
+
+    if usar_ocr:
+        from ocr_fallback import ocr_disponivel
+        if not ocr_disponivel():
+            print("  AVISO: --ocr solicitado mas tesseract não está pronto. Continuando sem OCR.")
+            usar_ocr = False
 
     cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
     if so_df:
@@ -179,13 +213,20 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
     else:
         cats = CATEGORIAS_PRIORITARIAS
     modo   = " [retry falhas anteriores]" if retry_failed else ""
-    print(f"Backend: SQLite local{modo}")
-    print(f"Empresas: {len(cnpjs)} | Categorias: "
-          + ", ".join(c if t is None else f"{c} ({', '.join(sorted(t))})"
-                      for c, t in sorted(cats.items())))
+    if reextrair_ruins:
+        modo = " [re-extraindo documentos ruins]"
+    ocr_str = " [OCR ativo]" if usar_ocr else ""
+    print(f"Backend: SQLite local{modo}{ocr_str}")
+    if protocolo:
+        print(f"Documento alvo: {protocolo}")
+    else:
+        print(f"Empresas: {len(cnpjs)} | Categorias: "
+              + ", ".join(c if t is None else f"{c} ({', '.join(sorted(t))})"
+                          for c, t in sorted(cats.items())))
 
-    docs = _fetch_pendentes(conn, cnpjs, cats, limite, retry_failed)
-    print(f"Pendentes para extração: {len(docs)}")
+    docs = _fetch_pendentes(conn, cnpjs, cats, limite, retry_failed,
+                            protocolo=protocolo, reextrair_ruins=reextrair_ruins)
+    print(f"Documentos a processar: {len(docs)}")
 
     ok = fail = skip = 0
     for doc in docs:
@@ -196,7 +237,7 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
 
         assunto = (doc.get("assunto") or "")[:60]
         print(f"  [{doc['cnpj_companhia']}] {doc['categoria']} — {assunto}...")
-        texto = fetch_pdf_text(url)
+        texto = fetch_pdf_text(url, usar_ocr=usar_ocr, max_ocr_paginas=max_ocr_paginas)
         time.sleep(0.5)  # respeita rate limit do portal CVM
 
         sucesso = texto and len(texto) > 100
@@ -219,18 +260,25 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(
         description="Extrai texto de PDFs do IPE e popula texto_extraido no banco."
     )
-    p.add_argument("--cnpj",         help="Filtrar por CNPJ")
-    p.add_argument("--categoria",    help="Filtrar por categoria")
-    p.add_argument("--tipo",         help="Com --categoria: filtrar também por tipo (ex: Press-release)")
-    p.add_argument("--so-df",        action="store_true",
+    p.add_argument("--cnpj",            help="Filtrar por CNPJ")
+    p.add_argument("--protocolo",       help="Processar um documento específico por protocolo de entrega")
+    p.add_argument("--categoria",       help="Filtrar por categoria")
+    p.add_argument("--tipo",            help="Com --categoria: filtrar também por tipo (ex: Press-release)")
+    p.add_argument("--so-df",           action="store_true",
                    help="Extrai apenas DFs (Anuais Completas, Intermediárias, Internacionais, Adicionais)")
-    p.add_argument("--limite",       type=int, default=200,
+    p.add_argument("--ocr",             action="store_true",
+                   help="Habilita fallback de OCR (via tesseract) para páginas com fontes corrompidas (Identity-H) ou escaneadas")
+    p.add_argument("--max-ocr-paginas", type=int, default=30,
+                   help="Teto máximo de páginas com OCR por documento (default: 30)")
+    p.add_argument("--reextrair-ruins", action="store_true",
+                   help="Re-extrai documentos com qualidade='ruim' (combinar com --ocr)")
+    p.add_argument("--limite",          type=int, default=200,
                    help="Máximo de documentos a processar (default: 200)")
-    p.add_argument("--retry-failed", action="store_true",
+    p.add_argument("--retry-failed",    action="store_true",
                    help="Re-tentar docs marcados como falha (útil para erros transitórios)")
-    p.add_argument("--rebuild-fts",  action="store_true",
+    p.add_argument("--rebuild-fts",     action="store_true",
                    help="Apenas reconstrói o índice FTS5 sem baixar nenhum PDF")
-    p.add_argument("--sem-fts",      action="store_true",
+    p.add_argument("--sem-fts",         action="store_true",
                    help="Não reconstrói o índice FTS5 ao fim (um laço de lotes reconstrói uma vez só, no fim)")
     args = p.parse_args()
     if args.tipo and not args.categoria:
@@ -238,4 +286,5 @@ if __name__ == "__main__":
     if args.so_df and args.categoria:
         p.error("--so-df não pode ser combinada com --categoria")
     main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts, args.tipo,
-         args.sem_fts, args.so_df)
+         args.sem_fts, args.so_df, args.ocr, args.max_ocr_paginas, args.protocolo,
+         args.reextrair_ruins)

@@ -95,7 +95,17 @@ def fetch_notas_texto(numero_sequencial: int) -> str | None:
         with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
             pages = [p.extract_text() or "" for p in pdf.pages]
         if not any(p.strip() for p in pages):
-            return None
+            from ocr_fallback import ocr_disponivel, ocr_pdf_completo
+            if ocr_disponivel():
+                pages = ocr_pdf_completo(pdf_bytes, max_paginas=30)
+            if not any(p.strip() for p in pages):
+                return None
+        else:
+            from ocr_fallback import ocr_disponivel, reparar_paginas_com_ocr
+            if ocr_disponivel():
+                pages, reparadas = reparar_paginas_com_ocr(pdf_bytes, pages, max_paginas=30)
+                if reparadas > 0:
+                    print(f"      [OCR] {reparadas} página(s) recuperada(s) via tesseract")
         texto = repair_pdf_text("\f".join(pages))
         return texto.replace("\x00", "")
     except Exception as e:

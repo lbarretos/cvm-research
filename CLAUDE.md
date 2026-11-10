@@ -69,6 +69,20 @@ respondem nada, sem erro que explique o porquê. `--sem-pdf` adia a parte longa 
 retoma depois; a base já é pesquisável nos dados estruturados sem ela, só não tem busca
 full-text nem leitura de fatos relevantes.
 
+### Como rodar extrações de PDFs posteriormente (lotes, DFs e OCR)
+
+A extração pode ser executada em background ou em lotes incrementais:
+- **Prioritários da watchlist (FR, CM, Atas de RCA/AGO, Press-releases):**
+  `python scripts/ingest/extract_pdf.py --limite 100`
+- **Demonstrações Financeiras (DFP/ITR) com OCR para fontes corrompidas:**
+  `python scripts/ingest/extract_pdf.py --so-df --ocr --sem-fts --limite 100`
+- **Reextração seletiva de documentos degradados (`qualidade='ruim'`):**
+  `python scripts/ingest/extract_pdf.py --reextrair-ruins --ocr --sem-fts --limite 50`
+- **Documento pontual por protocolo:**
+  `python scripts/ingest/extract_pdf.py --protocolo <PROTOCOLO> --ocr --sem-fts`
+- **Reconstrução do FTS5 (executar uma única vez ao fim dos lotes):**
+  `python scripts/ingest/extract_pdf.py --rebuild-fts`
+
 Ao terminar, confirme com `.venv/bin/python -m pytest tests/ -q`. A suíte inclui testes que
 releem o banco e recalculam o tratamento a partir do dado bruto. Depois, a manutenção é
 `bash scripts/update_weekly.sh` (ou o job semanal do launchd), que cobre só o ano corrente e o
@@ -141,10 +155,11 @@ SELECT cnpj, ticker, nome_cvm FROM companies WHERE nome_cvm LIKE '%fleury%';
 `categoria, tipo, especie, assunto, link_download,`
 `texto_extraido (NULL = não extraído), extracao_falhou, chars_extraidos`
 
-⚠️ Texto com `(cid:N)` que sobrou é de fonte Identity-H (N é índice de glifo, não caractere): ilegível e
-invisível ao FTS; mostre o `link_download`. O `(cid:N)` de fonte WinAnsi e o texto lido como StandardEncoding
-("Relaçıes", "SuperintendŒncia") são reparados na extração por `utils.repair_pdf_text`
-(`repair_text_encoding.py` conserta o que já estava no banco).
+⚠️ Texto com `(cid:N)` de fonte Identity-H (N é índice de glifo, não caractere) agora é curado
+automaticamente em memória pelo módulo `ocr_fallback.py` quando `extract_pdf.py --ocr` é executado
+(renderiza via `pypdfium2` e extrai texto limpo com `tesseract por+eng` sem I/O de disco). Documentos com `(cid:N)`
+de fonte WinAnsi e texto lido como StandardEncoding ("Relaçıes", "SuperintendŒncia") são reparados na extração
+por `utils.repair_pdf_text`. A métrica de integridade é registrada em `qualidade` e `texto_qualidade`.
 
 **Categorias relevantes:**
 - `'Fato Relevante'` — eventos materiais (M&A, guidance, regulatório)

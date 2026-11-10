@@ -27,7 +27,7 @@ arquivos de cada etapa e no `README.md` desta pasta.
    `2026-10-05_filings_views.sql`, `2026-10-05_ipe_indices.sql`, `2026-10-06_ipe_chunks.sql` (+ `build_chunks.py`),
    `2026-10-14_template_versao.sql` (+ `template_versions.py`), `2026-10-15_linha_economica.sql`
    (+ `linha_economica.py --full`), `2026-10-16_taxonomia.sql` (+ `taxonomia.py --full`), `2026-11-09_ipe_docs_qualidade.sql`. Banco novo: `bootstrap.sh` já faz tudo.
-5. Conferir: `.venv/bin/python -m pytest tests/ -q` (428 passam) e a pergunta de verificação do `INSTALL.md`.
+5. Conferir: `.venv/bin/python -m pytest tests/ -q` (433 passam) e a pergunta de verificação do `INSTALL.md`.
 6. Branch protegido: a `main` exige PR. `gh pr merge N --merge`, na ordem quando empilhados.
 
 ## Pendências (em ordem de valor)

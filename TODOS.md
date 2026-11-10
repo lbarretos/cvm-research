@@ -1,32 +1,39 @@
 # Backlog de Desenvolvimento e Próximos Passos (TODOS)
 
-Base consolidada em 2026-11-09 (`cvm_research.db`, ~19 GB, 151 empresas cobertas, 428 testes passando).
-Este documento centraliza todas as frentes futuras de trabalho divididas por eixos temáticos objetivos, eliminando o ruído de anotações antigas ou suposições desatualizadas (como quedas temporárias de portal ou branches já mesclados).
+Base consolidada em 2026-11-10 (`cvm_research.db`, ~19 GB, 151 empresas cobertas, 433 testes passando).
+Este documento centraliza todas as frentes de trabalho divididas por eixos temáticos objetivos, eliminando ruídos antigos e mantendo o roadmap acionável.
 
 ---
 
-## 📌 Eixo 1: Leitura RAG & LLM (Conclusão do Bloco D & Operação)
+## 📌 Eixo 1: Leitura RAG & LLM (Concluído & Procedimento para Extração Posterior)
 
-Este eixo aprimora a camada de leitura de texto dos documentos pelo MCP e LLM, focando na cobertura de demonstrações financeiras (DFs).
+O pipeline de leitura de demonstrações financeiras (DFs) com preservação de páginas (`\f`), métricas de qualidade (`qualidade`/`texto_qualidade`), busca de notas canônicas (`secoes_notas.py` via `search_docs(secao=...)`) e fallback de OCR em memória (`ocr_fallback.py`) está **100% implementado, testado e validado**.
 
-- [ ] **Extração em lote das DFs pendentes da watchlist (Etapa 9.14):**
-  - Agora que o portal RAD está plenamente operacional, rodar a extração das DFs restantes da watchlist:
-    ```bash
-    python scripts/ingest/extract_pdf.py --so-df --ocr --sem-fts --limite 100
-    ```
-  - Executar em lotes controlados para respeitar o rate-limit do portal CVM, reconstruindo o índice FTS5 uma única vez ao término (`python scripts/ingest/extract_pdf.py --rebuild-fts`).
-- [x] **Reextração seletiva e fallback de OCR para fontes corrompidas (Etapa 9.8):**
-  - Implementado em `scripts/ingest/ocr_fallback.py` (renderização via `pypdfium2` em memória + OCR via `tesseract stdin stdout` sem I/O de disco).
-  - Integrado a `extract_pdf.py` (`--ocr`, `--max-ocr-paginas`, `--protocolo`, `--reextrair-ruins`) e `ingest_notas_explicativas.py`.
-  - Validado em casos reais de fontes corrompidas Identity-H (LEVE3 e MYPK3), recuperando páginas corrompidas com `(cid:N)` e permitindo a detecção imediata de notas canônicas (`search_docs(secao='ir_csll')`).
-  - Suíte de testes unitários em `tests/test_ocr_fallback.py` com 100% de aprovação.
-- [ ] **Cobertura de notas explicativas trimestrais via RAD (Etapa 9.13):**
-  - Cerca de 37 empresas da watchlist não possuem ITR com notas completas na entrega padrão do IPE.
-  - Executar `scripts/ingest/ingest_notas_explicativas.py` em lote para capturar os relatórios do portal RAD dessas empresas nos trimestres recentes (2025–2026), mantendo compatibilidade direta com `search_docs(camada='df', secao=...)`.
+### Como rodar as extrações pendentes posteriormente (em segundo plano / lotes):
+
+As DFs restantes da watchlist e notas do RAD podem ser extraídas em segundo plano a qualquer momento sem interromper o desenvolvimento dos demais eixos:
+
+```bash
+# 1. Extração de demonstrações financeiras pendentes da watchlist com OCR:
+python scripts/ingest/extract_pdf.py --so-df --ocr --sem-fts --limite 100
+
+# 2. Re-tentativa de falhas anteriores (após recuperação do portal RAD):
+python scripts/ingest/extract_pdf.py --so-df --ocr --sem-fts --retry-failed --limite 100
+
+# 3. Notas trimestrais de empresas sem ITR completo no catálogo IPE (Etapa 9.13):
+python scripts/ingest/ingest_notas_explicativas.py --ano 2026 --fonte ITR --limite 20
+
+# 4. Reconstrução única do índice FTS5 ao término dos lotes:
+python scripts/ingest/extract_pdf.py --rebuild-fts
+```
+
+- [x] **Fallback de OCR seletivo para fontes corrompidas (Etapa 9.8):** Implementado em `ocr_fallback.py` (tesseract + pypdfium2 em memória) e validado em LEVE3/MYPK3 com 433 testes passando.
+- [x] **Pipeline de lote para DFs e re-extração (Etapa 9.14):** Flags `--so-df`, `--ocr`, `--max-ocr-paginas`, `--protocolo`, `--reextrair-ruins` e `--sem-fts` operacionais em `extract_pdf.py`.
+- [ ] *(Execução sob demanda)* Concluir os lotes acima conforme conveniência operacional (sem bloqueio de roadmap).
 
 ---
 
-## 📌 Eixo 2: Renda Fixa & Securitização
+## 🎯 FOCO ATUAL — Eixo 2: Renda Fixa & Securitização
 
 Este eixo expande a modelagem de crédito e a integração entre a dívida contábil das companhias abertas e os ativos de renda fixa emitidos no mercado.
 

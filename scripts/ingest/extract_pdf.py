@@ -108,7 +108,9 @@ def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set,
                      categorias: dict[str, set[str] | None],
                      limite: int, retry_failed: bool = False,
                      protocolo: str | None = None,
-                     reextrair_ruins: bool = False) -> list[dict]:
+                     reextrair_ruins: bool = False,
+                     reextrair_parciais: bool = False,
+                     reextrair_degradados: bool = False) -> list[dict]:
     """Retorna documentos para extração/re-extração conforme filtros fornecidos."""
     if protocolo:
         cur = conn.execute(
@@ -136,8 +138,13 @@ def _fetch_pendentes(conn: sqlite3.Connection, cnpjs: set,
             filtros.append(f"(categoria = ? AND tipo IN ({','.join('?' * len(tipos))}))")
             filtro_params.extend([categoria, *sorted(tipos)])
 
-    if reextrair_ruins:
-        cond_filtro = "qualidade = 'ruim' AND texto_extraido IS NOT NULL"
+    if reextrair_ruins or reextrair_parciais or reextrair_degradados:
+        status_list = []
+        if reextrair_ruins or reextrair_degradados:
+            status_list.append("'ruim'")
+        if reextrair_parciais or reextrair_degradados:
+            status_list.append("'parcial'")
+        cond_filtro = f"qualidade IN ({','.join(status_list)}) AND texto_extraido IS NOT NULL"
         params = [*cnpjs_list, *filtro_params, limite]
     else:
         cond_filtro = "texto_extraido IS NULL AND extracao_falhou = ?"
@@ -178,7 +185,7 @@ def _salvar(conn: sqlite3.Connection, protocolo: str, texto: str | None) -> None
         )
     else:
         conn.execute(
-            "UPDATE ipe_docs SET extracao_falhou = 1, qualidade = 'ruim' WHERE protocolo_entrega = ?",
+            "UPDATE ipe_docs SET extracao_falhou = 1, qualidade = COALESCE(qualidade, 'ruim') WHERE protocolo_entrega = ?",
             (protocolo,),
         )
     conn.commit()
@@ -197,7 +204,8 @@ def _rebuild_fts(conn: sqlite3.Connection) -> None:
 def main(cnpj_filter=None, categoria_filter=None, limite=200,
          retry_failed=False, rebuild_fts=False, tipo_filter=None, sem_fts=False,
          so_df=False, usar_ocr=False, max_ocr_paginas=30, protocolo=None,
-         reextrair_ruins=False, so_credito=False):
+         reextrair_ruins=False, reextrair_parciais=False, reextrair_degradados=False,
+         so_credito=False):
     conn = get_db()
 
     if rebuild_fts:
@@ -220,8 +228,12 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
     else:
         cats = CATEGORIAS_PRIORITARIAS
     modo   = " [retry falhas anteriores]" if retry_failed else ""
-    if reextrair_ruins:
+    if reextrair_degradados or (reextrair_ruins and reextrair_parciais):
+        modo = " [re-extraindo documentos degradados (ruins e parciais)]"
+    elif reextrair_ruins:
         modo = " [re-extraindo documentos ruins]"
+    elif reextrair_parciais:
+        modo = " [re-extraindo documentos parciais]"
     ocr_str = " [OCR ativo]" if usar_ocr else ""
     print(f"Backend: SQLite local{modo}{ocr_str}")
     if protocolo:
@@ -232,7 +244,9 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
                           for c, t in sorted(cats.items())))
 
     docs = _fetch_pendentes(conn, cnpjs, cats, limite, retry_failed,
-                            protocolo=protocolo, reextrair_ruins=reextrair_ruins)
+                            protocolo=protocolo, reextrair_ruins=reextrair_ruins,
+                            reextrair_parciais=reextrair_parciais,
+                            reextrair_degradados=reextrair_degradados)
     print(f"Documentos a processar: {len(docs)}")
 
     ok = fail = skip = 0
@@ -281,6 +295,10 @@ if __name__ == "__main__":
                    help="Teto máximo de páginas com OCR por documento (default: 30)")
     p.add_argument("--reextrair-ruins", action="store_true",
                    help="Re-extrai documentos com qualidade='ruim' (combinar com --ocr)")
+    p.add_argument("--reextrair-parciais", action="store_true",
+                   help="Re-extrai documentos com qualidade='parcial' (combinar com --ocr)")
+    p.add_argument("--reextrair-degradados", action="store_true",
+                   help="Re-extrai documentos com qualidade='ruim' ou 'parcial' (combinar com --ocr)")
     p.add_argument("--limite",          type=int, default=200,
                    help="Máximo de documentos a processar (default: 200)")
     p.add_argument("--retry-failed",    action="store_true",
@@ -298,4 +316,5 @@ if __name__ == "__main__":
         p.error("--so-credito não pode ser combinada com --categoria ou --so-df")
     main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts, args.tipo,
          args.sem_fts, args.so_df, args.ocr, args.max_ocr_paginas, args.protocolo,
-         args.reextrair_ruins, args.so_credito)
+         args.reextrair_ruins, args.reextrair_parciais, args.reextrair_degradados,
+         args.so_credito)

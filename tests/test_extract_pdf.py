@@ -22,24 +22,26 @@ def conn():
         CREATE TABLE ipe_docs (
             protocolo_entrega TEXT PRIMARY KEY, cnpj_companhia TEXT, data_entrega TEXT,
             categoria TEXT, tipo TEXT, assunto TEXT, link_download TEXT,
-            texto_extraido TEXT, extracao_falhou INTEGER DEFAULT 0
+            texto_extraido TEXT, extracao_falhou INTEGER DEFAULT 0, qualidade TEXT
         )
     """)
     docs = [
-        # protocolo, cnpj, entrega, categoria, tipo, texto, falhou
-        ("fr",    CNPJ, "2026-09-10", "Fato Relevante", None, None, 0),
-        ("rca",   CNPJ, "2026-09-11", "Reunião da Administração", "Conselho de Administração", None, 0),
-        ("pr",    CNPJ, "2026-09-12", "Dados Econômico-Financeiros", "Press-release", None, 0),
-        ("dfi",   CNPJ, "2026-09-13", "Dados Econômico-Financeiros", "Demonstrações Financeiras Intermediárias", None, 0),
-        ("rat",   CNPJ, "2026-09-14", "Dados Econômico-Financeiros", "Relatório de Agência de Rating", None, 0),
-        ("outra", CNPJ, "2026-09-15", "Valores Mobiliários Negociados e Detidos", None, None, 0),
-        ("feito", CNPJ, "2026-09-16", "Fato Relevante", None, "já extraído", 0),
-        ("falha", CNPJ, "2026-09-17", "Fato Relevante", None, None, 1),
-        ("alheio", "99.999.999/0001-99", "2026-09-18", "Fato Relevante", None, None, 0),
+        # protocolo, cnpj, entrega, categoria, tipo, texto, falhou, qualidade
+        ("fr",      CNPJ, "2026-09-10", "Fato Relevante", None, None, 0, None),
+        ("rca",     CNPJ, "2026-09-11", "Reunião da Administração", "Conselho de Administração", None, 0, None),
+        ("pr",      CNPJ, "2026-09-12", "Dados Econômico-Financeiros", "Press-release", None, 0, None),
+        ("dfi",     CNPJ, "2026-09-13", "Dados Econômico-Financeiros", "Demonstrações Financeiras Intermediárias", None, 0, None),
+        ("rat",     CNPJ, "2026-09-14", "Dados Econômico-Financeiros", "Relatório de Agência de Rating", None, 0, None),
+        ("outra",   CNPJ, "2026-09-15", "Valores Mobiliários Negociados e Detidos", None, None, 0, None),
+        ("feito",   CNPJ, "2026-09-16", "Fato Relevante", None, "já extraído", 0, "ok"),
+        ("falha",   CNPJ, "2026-09-17", "Fato Relevante", None, None, 1, None),
+        ("alheio",  "99.999.999/0001-99", "2026-09-18", "Fato Relevante", None, None, 0, None),
+        ("doc_ruim",    CNPJ, "2026-09-19", "Fato Relevante", None, "texto corrompido", 0, "ruim"),
+        ("doc_parcial", CNPJ, "2026-09-20", "Fato Relevante", None, "texto meio ruim", 0, "parcial"),
     ]
     c.executemany(
         "INSERT INTO ipe_docs (protocolo_entrega, cnpj_companhia, data_entrega, categoria, tipo,"
-        " texto_extraido, extracao_falhou, assunto, link_download) VALUES (?,?,?,?,?,?,?,'a','http://x')",
+        " texto_extraido, extracao_falhou, qualidade, assunto, link_download) VALUES (?,?,?,?,?,?,?,?,'a','http://x')",
         docs,
     )
     return c
@@ -68,6 +70,17 @@ def test_categoria_sem_filtro_de_tipo_traz_todos_os_tipos(conn):
 def test_retry_failed_so_traz_falhas(conn):
     docs = _fetch_pendentes(conn, {CNPJ}, CATEGORIAS_PRIORITARIAS, limite=50, retry_failed=True)
     assert _protocolos(docs) == ["falha"]
+
+
+def test_reextrair_ruins_parciais_e_degradados(conn):
+    ruins = _fetch_pendentes(conn, {CNPJ}, CATEGORIAS_PRIORITARIAS, limite=50, reextrair_ruins=True)
+    assert _protocolos(ruins) == ["doc_ruim"]
+
+    parciais = _fetch_pendentes(conn, {CNPJ}, CATEGORIAS_PRIORITARIAS, limite=50, reextrair_parciais=True)
+    assert _protocolos(parciais) == ["doc_parcial"]
+
+    degradados = _fetch_pendentes(conn, {CNPJ}, CATEGORIAS_PRIORITARIAS, limite=50, reextrair_degradados=True)
+    assert set(_protocolos(degradados)) == {"doc_ruim", "doc_parcial"}
 
 
 def test_limite_e_entradas_vazias(conn):

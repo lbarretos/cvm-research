@@ -12,12 +12,14 @@ Este eixo aprimora a camada de leitura de texto dos documentos pelo MCP e LLM, f
 - [ ] **Extração em lote das DFs pendentes da watchlist (Etapa 9.14):**
   - Agora que o portal RAD está plenamente operacional, rodar a extração das DFs restantes da watchlist:
     ```bash
-    python scripts/ingest/extract_pdf.py --so-df --sem-fts --limite 100
+    python scripts/ingest/extract_pdf.py --so-df --ocr --sem-fts --limite 100
     ```
   - Executar em lotes controlados para respeitar o rate-limit do portal CVM, reconstruindo o índice FTS5 uma única vez ao término (`python scripts/ingest/extract_pdf.py --rebuild-fts`).
-- [ ] **Reextração seletiva e fallback de OCR para fontes corrompidas (Etapa 9.8):**
-  - O backfill de qualidade identificou 1.739 documentos classificados como `ruim`, dos quais cerca de 67 DFs possuem fontes sem ToUnicode/Identity-H (como LEVE3 e MYPK3 gerando `(cid:N)`).
-  - Implementar pipeline com OCR seletivo (ex.: via `ocrmypdf` ou `pytesseract`) restrito apenas às páginas com métrica degradada (`qualidade = 'ruim'`) das DFs das empresas da watchlist.
+- [x] **Reextração seletiva e fallback de OCR para fontes corrompidas (Etapa 9.8):**
+  - Implementado em `scripts/ingest/ocr_fallback.py` (renderização via `pypdfium2` em memória + OCR via `tesseract stdin stdout` sem I/O de disco).
+  - Integrado a `extract_pdf.py` (`--ocr`, `--max-ocr-paginas`, `--protocolo`, `--reextrair-ruins`) e `ingest_notas_explicativas.py`.
+  - Validado em casos reais de fontes corrompidas Identity-H (LEVE3 e MYPK3), recuperando páginas corrompidas com `(cid:N)` e permitindo a detecção imediata de notas canônicas (`search_docs(secao='ir_csll')`).
+  - Suíte de testes unitários em `tests/test_ocr_fallback.py` com 100% de aprovação.
 - [ ] **Cobertura de notas explicativas trimestrais via RAD (Etapa 9.13):**
   - Cerca de 37 empresas da watchlist não possuem ITR com notas completas na entrega padrão do IPE.
   - Executar `scripts/ingest/ingest_notas_explicativas.py` em lote para capturar os relatórios do portal RAD dessas empresas nos trimestres recentes (2025–2026), mantendo compatibilidade direta com `search_docs(camada='df', secao=...)`.

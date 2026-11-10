@@ -241,3 +241,23 @@ Rodado em duas partes (o limite de uso da conta cortou a primeira na q051): q001
     testadas da watchlist com offset e página exatos.
   - Recomendação: manter as DFs completas em `ipe_docs`/`ipe_docs_fts` com a navegação por seção de 9.10/9.11,
     dispensando a duplicação em `ipe_chunks` para DFs.
+
+---
+
+## Resultado do Bloco B — Reextração Seletiva e Fallback de OCR (9.8)
+
+Implementado em 2026-11-09:
+- **Módulo `scripts/ingest/ocr_fallback.py`:**
+  - Renderiza páginas problemáticas via `pypdfium2` em memória e aplica `tesseract` diretamente via stdin/stdout (`tesseract stdin stdout -l por+eng`), sem geração de arquivos temporários em disco.
+  - Seletividade: inspeciona métrica de qualidade (`avaliar_pagina`); páginas limpas são preservadas sem custo; páginas com fontes `Identity-H` (`(cid:N)`) ou corrompidas recebem OCR seletivo.
+  - Critério de substituição: só substitui o texto da página se o OCR eliminar o mojibake/`cid` ou obtiver classificação métrica superior (`ok`/`parcial` vs `ruim`).
+- **Validação em caso real (LEVE3):**
+  - Documento ITR 3T22 de MAHLE Metal Leve (`008575IPE300920220104488912-57`), anteriormente 100% ilegível devido a fontes Identity-H gerando sequências de `(cid:1)(cid:2)(cid:3)...`.
+  - Reextração com OCR recuperou 30 páginas degradadas, eliminando os caracteres corrompidos.
+  - A Nota 11 (*Income tax and social contribution*) foi imediatamente detectada pelo segmentador canônico (`secoes_notas.py`) na página 47, no offset 97337, e retornada com sucesso pelo MCP `search_docs(ticker='LEVE3', secao='ir_csll')`.
+- **Integração aos scripts de ingestão:**
+  - `extract_pdf.py`: suporte às flags `--ocr`, `--max-ocr-paginas`, `--protocolo` e `--reextrair-ruins`.
+  - `ingest_notas_explicativas.py`: integrado ao fluxo de extração de filings sob demanda.
+- **Testes:**
+  - Nova suíte `tests/test_ocr_fallback.py` com 5 testes unitários (100% passando).
+

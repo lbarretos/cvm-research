@@ -836,6 +836,264 @@ def _rf_cnpjs_partes(conn, codigo: str) -> list[list]:
           WHERE codigo = ? AND cnpj IS NOT NULL AND papel <> 'agente_fiduciario'""", (codigo,) * 3)
 
 
+def _extrair_fundamentos_devedora(conn, cnpj: str) -> dict:
+    """Métricas contábeis consolidadas da devedora: caixa, dívida CP/LP, dívida líquida, EBITDA e covenants."""
+    if not cnpj:
+        return {"dados_contabeis": False, "aviso": "CNPJ devedor não informado."}
+
+    cur = conn.execute("""
+        SELECT data_referencia, dt_fim_exerc, caixa, divida_curto_prazo, divida_longo_prazo,
+               patrimonio_liquido, ativo_total
+        FROM vw_balanco
+        WHERE cnpj_companhia = ?
+        ORDER BY data_referencia DESC LIMIT 1
+    """, (cnpj,))
+    b = cur.fetchone()
+    if not b:
+        c_nome = conn.execute("SELECT nome_cvm FROM companies WHERE cnpj = ?", (cnpj,)).fetchone()
+        nome_str = f" ({c_nome[0]})" if c_nome else ""
+        return {
+            "cnpj": cnpj,
+            "dados_contabeis": False,
+            "aviso": f"Companhia{nome_str} sem demonstrativos contábeis ingeridos no banco local (capital fechado ou rito restrito)."
+        }
+
+    caixa = b[2] or 0.0
+    div_cp = b[3] or 0.0
+    div_lp = b[4] or 0.0
+    div_bruta = div_cp + div_lp
+    div_liq = div_bruta - caixa
+    pl = b[5] or 0.0
+    ativo = b[6] or 0.0
+
+    cur_dre = conn.execute("""
+        SELECT sum(receita_liquida), sum(ebit), sum(resultado_financeiro), sum(lucro_liquido)
+        FROM (
+            SELECT receita_liquida, ebit, resultado_financeiro, lucro_liquido
+            FROM vw_dre
+            WHERE cnpj_companhia = ?
+            ORDER BY dt_fim_exerc DESC LIMIT 4
+        )
+    """, (cnpj,))
+    dre = cur_dre.fetchone()
+    rec = (dre[0] if dre and dre[0] is not None else 0.0)
+    ebit_val = (dre[1] if dre and dre[1] is not None else 0.0)
+    res_fin = (dre[2] if dre and dre[2] is not None else 0.0)
+    ll = (dre[3] if dre and dre[3] is not None else 0.0)
+
+    cur_da = conn.execute("""
+        SELECT sum(valor)
+        FROM (
+            SELECT valor
+            FROM fato_padronizado
+            WHERE cnpj_companhia = ? AND conceito = 'da_total' AND publicado = 1
+            ORDER BY periodo_fim DESC LIMIT 4
+        )
+    """, (cnpj,))
+    da = cur_da.fetchone()
+    da_val = (da[0] if da and da[0] is not None else 0.0)
+    ebitda = ebit_val + da_val
+
+    return {
+        "cnpj": cnpj,
+        "dados_contabeis": True,
+        "data_balanco": b[1],
+        "caixa_equivalentes": caixa,
+        "divida_curto_prazo": div_cp,
+        "divida_longo_prazo": div_lp,
+        "divida_bruta": div_bruta,
+        "divida_liquida": div_liq,
+        "patrimonio_liquido": pl,
+        "ativo_total": ativo,
+        "receita_liquida_u12m": rec,
+        "ebit_u12m": ebit_val,
+        "da_u12m": da_val,
+        "ebitda_u12m": ebitda,
+        "resultado_financeiro_u12m": res_fin,
+        "lucro_liquido_u12m": ll,
+        "alavancagem_divida_liquida_ebitda": round(div_liq / ebitda, 2) if ebitda > 0 else None,
+        "divida_liquida_pl": round(div_liq / pl, 2) if pl > 0 else None,
+        "cobertura_caixa_cp": round(caixa / div_cp, 2) if div_cp > 0 else None,
+        "cobertura_juros_icr": round(ebitda / abs(res_fin), 2) if res_fin < 0 else None,
+    }
+
+
+def _extrair_covenants_fiduciario(conn, cnpj: str, codigo: str = "") -> list[dict]:
+    """Extrai trechos e status de covenants financeiros do último Relatório de Agente Fiduciário."""
+    if not cnpj:
+        return []
+    try:
+        cur = conn.execute("""
+            SELECT protocolo_entrega, data_entrega, assunto, texto_extraido
+            FROM ipe_docs
+            WHERE cnpj_companhia = ?
+              AND tipo = 'Relatório de Agente Fiduciário'
+              AND texto_extraido IS NOT NULL
+            ORDER BY data_entrega DESC LIMIT 10
+        """, (cnpj,))
+        rows = cur.fetchall()
+    except Exception:
+        return []
+
+    covenants = []
+    cod_lower = (codigo or "").lower()
+    if cod_lower:
+        rows_prioritarias = [r for r in rows if cod_lower in (r[2] or "").lower()]
+        if rows_prioritarias:
+            rows = rows_prioritarias + [r for r in rows if r not in rows_prioritarias]
+
+    for proto, dt, ass, txt in rows:
+        matches = list(re.finditer(r"(?:covenant|índice|limite|apurado|atendido)", txt, re.IGNORECASE))
+        if not matches:
+            continue
+        achou = False
+        for m in matches:
+            start = max(0, m.start() - 60)
+            end = min(len(txt), m.end() + 200)
+            snippet = txt[start:end].replace("\n", " ").strip()
+            low = snippet.lower()
+            if any(term in low for term in ["limite", "apurado", "atendido", "dívida líquida", "ebitda", "imóveis a pagar"]):
+                snippet = re.sub(r"\s+", " ", snippet)
+                covenants.append({
+                    "protocolo": proto,
+                    "data_entrega": dt,
+                    "assunto": ass,
+                    "trecho": snippet
+                })
+                achou = True
+                if len(covenants) >= 3:
+                    break
+        if achou and len(covenants) >= 2:
+            break
+    return covenants
+
+
+def _perfil_divida_empresa(conn, cnpj: str) -> dict:
+    """Agrega o perfil de endividamento da empresa no mercado de capitais."""
+    if not cnpj:
+        return {}
+    cur = conn.execute("""
+        SELECT codigo, tipo, indexador, remuneracao, data_vencimento, valor_emissao, situacao
+        FROM rf_ativos
+        WHERE emissor_cnpj = ? OR devedor_cnpj = ?
+        ORDER BY data_vencimento
+    """, (cnpj, cnpj))
+    rows = cur.fetchall()
+    if not rows:
+        return {"total_ativos": 0, "ativos": []}
+
+    por_tipo = {}
+    por_indexador = {}
+    vencimento_por_ano = {}
+    volume_total = 0.0
+    ativos_resumo = []
+
+    for cod, tipo, idx, rem, venc, vol, sit in rows:
+        por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
+        idx_norm = (idx or "OUTRO").upper()
+        por_indexador[idx_norm] = por_indexador.get(idx_norm, 0) + 1
+        ano = venc[:4] if venc and len(venc) >= 4 else "Sem data"
+        vencimento_por_ano[ano] = vencimento_por_ano.get(ano, 0) + 1
+        if vol:
+            volume_total += vol
+        ativos_resumo.append({
+            "codigo": cod,
+            "tipo": tipo,
+            "indexador": idx,
+            "remuneracao": rem,
+            "data_vencimento": venc,
+            "valor_emissao": vol
+        })
+
+    return {
+        "total_ativos": len(rows),
+        "volume_total_emissao": volume_total if volume_total > 0 else None,
+        "por_tipo": por_tipo,
+        "por_indexador": por_indexador,
+        "cronograma_vencimentos_ano": dict(sorted(vencimento_por_ano.items())),
+        "ativos": ativos_resumo[:25]
+    }
+
+
+def _analise_credito_ativo(conn, a: dict, cod: str) -> dict:
+    """Análise estrutural e holística de crédito de um ativo de renda fixa."""
+    if not a:
+        return {}
+    tipo = a.get("tipo")
+    remuneracao = a.get("remuneracao")
+    especie = a.get("especie_garantia")
+    vencimento = a.get("data_vencimento")
+    pu = a.get("pu")
+    pct_pu_par = a.get("pct_pu_par")
+    duration_du = a.get("duration_du")
+    taxa = a.get("taxa_indicativa")
+    taxa_data = a.get("taxa_data")
+
+    # Se a taxa mais recente for nula, recupera a última cotação não-nula
+    if taxa is None:
+        cur_tx = conn.execute("""
+            SELECT taxa_indicativa, data, pu, pct_pu_par, duration_du
+            FROM rf_taxas
+            WHERE codigo = ? AND taxa_indicativa IS NOT NULL
+            ORDER BY data DESC LIMIT 1
+        """, (cod,))
+        row_tx = cur_tx.fetchone()
+        if row_tx:
+            taxa, taxa_data = row_tx[0], row_tx[1]
+            if pu is None:
+                pu, pct_pu_par, duration_du = row_tx[2], row_tx[3], row_tx[4]
+
+    senioridade_map = {
+        "Real": "Garantia Real (Privilégio especial sobre bens penhorados/alienados)",
+        "Quirografária": "Quirografária (Sem garantia real; concorre pari passu com dívidas comuns)",
+        "Flutuante": "Garantia Flutuante (Privilégio geral sobre o ativo da companhia)",
+        "Subordinada": "Subordinada (Prioridade abaixo dos demais credores)"
+    }
+    if tipo in ("CRI", "CRA"):
+        senioridade = "Securitizado (Patrimônio Separado; lastro imobiliário/agronegócio com garantias do devedor)"
+    else:
+        senioridade = senioridade_map.get(especie, especie or "Quirografária")
+
+    isento_ir_pf = bool(tipo in ("CRI", "CRA") or a.get("incentivada_12431") == 1)
+    gross_up = {}
+    if isento_ir_pf:
+        gross_up["regime"] = "Isento de IR para PF (Lei 12.431 / CRI / CRA)"
+        if taxa is not None:
+            gross_up["equivalente_bruto_ir15"] = round(taxa / 0.85, 2)
+            gross_up["equivalente_bruto_ir22_5"] = round(taxa / 0.775, 2)
+    else:
+        gross_up["regime"] = "Tributado (Tabela Regressiva PF 15% a 22,5%)"
+        if taxa is not None:
+            gross_up["liquido_pf_ir15"] = round(taxa * 0.85, 2)
+            gross_up["liquido_pf_ir22_5"] = round(taxa * 0.775, 2)
+
+    cnpj_devedor = a.get("devedor_cnpj") if tipo in ("CRI", "CRA") else a.get("emissor_cnpj")
+    nome_devedor = a.get("devedor_nome") if tipo in ("CRI", "CRA") else a.get("emissor_nome")
+    fundamentos = _extrair_fundamentos_devedora(conn, cnpj_devedor)
+    if nome_devedor and not fundamentos.get("nome"):
+        fundamentos["nome"] = nome_devedor
+
+    covenants = _extrair_covenants_fiduciario(conn, cnpj_devedor, cod)
+
+    return {
+        "codigo": cod,
+        "tipo": tipo,
+        "senioridade": senioridade,
+        "data_vencimento": vencimento,
+        "duration_du": duration_du,
+        "duration_anos": round(duration_du / 252.0, 2) if duration_du else None,
+        "remuneracao_contratual": remuneracao,
+        "taxa_indicativa_mercado": taxa,
+        "taxa_data": taxa_data,
+        "pu_indicativo": pu,
+        "pct_pu_par": pct_pu_par,
+        "desagio_agio_pct": round(pct_pu_par - 100.0, 2) if pct_pu_par else None,
+        "tributacao_e_gross_up": gross_up,
+        "fundamentos_devedora": fundamentos,
+        "covenants_fiduciario": covenants
+    }
+
+
 @mcp.tool()
 def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
     """Ficha de um título de renda fixa (debênture, CRI, CRA) pelo código (RUMOB6, ERDVB4, CRA024004SB…).
@@ -958,6 +1216,8 @@ def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
             except sqlite3.OperationalError:
                 pass
         out["documentos"] = _tabular(cols, docs, limite=q)
+        if a:
+            out["analise_credito"] = _analise_credito_ativo(conn, a, cod)
         if not any(d[5] for d in docs):
             origem = ("da descrição da oferta na CVM e do cadastro" if out["garantias"]["linhas"] or out["lastro"]["linhas"]
                       else "só do cadastro")
@@ -1026,6 +1286,70 @@ def search_bonds(texto: str | None = None, tipo: str | None = None, indexador: s
                            f"{'WHERE ' + ' AND '.join(where) if where else ''} ORDER BY data_vencimento LIMIT ?",
                      (*args, max(1, min(int(limite), 300))))
         return _tabular(cols, linhas, None if linhas else "nenhum título com esses filtros")
+    finally:
+        conn.close()
+
+
+@mcp.tool()
+def get_credit_summary(termo: str) -> dict:
+    """Análise holística de crédito corporativo para investimento pessoal (por código de título, ticker ou CNPJ).
+
+    Integra a estrutura da dívida (senioridade, maturity, duration, taxa indicativa ANBIMA, ágio/deságio no PU,
+    gross-up tributário da Lei 12.431 e CRI/CRA) com os fundamentos contábeis da devedora (caixa, dívida CP/LP,
+    dívida líquida, EBITDA U12M, Dívida Líquida / EBITDA, ICR cobertura de juros) e status de covenants do Agente Fiduciário.
+    """
+    cod = (termo or "").strip()
+    if not cod:
+        return {"aviso": "Informe um código de título (ex: BCBF16, FSII14, 24I1980390) ou ticker/CNPJ (ex: HAPV3, MRVE3, CRMU)."}
+    conn = get_db()
+    try:
+        _com_prazo(conn)
+        # 1. Tenta como código de título de renda fixa
+        cands = _rf_busca(conn, cod)
+        if cands and (cod.upper() in cands or len(cands) == 1):
+            target_cod = cod.upper() if cod.upper() in cands else cands[0]
+            emis = _rf(conn, f"SELECT {','.join(_ATIVO_COLS)} FROM vw_rf_ativo WHERE codigo = ?", (target_cod,))
+            if emis:
+                a = dict(zip(_ATIVO_COLS, emis[0]))
+                analise = _analise_credito_ativo(conn, a, target_cod)
+                cnpj_devedor = a.get("devedor_cnpj") if a.get("tipo") in ("CRI", "CRA") else a.get("emissor_cnpj")
+                if cnpj_devedor:
+                    analise["perfil_divida_grupo"] = _perfil_divida_empresa(conn, cnpj_devedor)
+                return analise
+
+        # 2. Tenta como companhia (ticker, CNPJ ou razão social)
+        cnpj, ticker, nome = None, None, None
+        cur = conn.execute("SELECT cnpj, ticker, nome_cvm FROM companies WHERE ticker = ? OR cnpj = ?", (cod.upper(), cod))
+        r = cur.fetchone()
+        if r:
+            cnpj, ticker, nome = r[0], r[1], r[2]
+        else:
+            cands_cia = conn.execute("""
+                SELECT cnpj, ticker, nome_cvm FROM companies
+                WHERE nome_cvm LIKE ? LIMIT 5
+            """, (f"%{cod}%",)).fetchall()
+            if len(cands_cia) == 1:
+                cnpj, ticker, nome = cands_cia[0][0], cands_cia[0][1], cands_cia[0][2]
+            elif len(cands_cia) > 1:
+                return {
+                    "aviso": f"'{cod}' retornou múltiplas companhias: " + ", ".join(f"{c[1] or c[0]} ({c[2]})" for c in cands_cia)
+                }
+
+        if cnpj:
+            fundamentos = _extrair_fundamentos_devedora(conn, cnpj)
+            fundamentos["ticker"] = ticker
+            fundamentos["nome"] = nome
+            perfil_div = _perfil_divida_empresa(conn, cnpj)
+            covenants = _extrair_covenants_fiduciario(conn, cnpj)
+            return {
+                "tipo_consulta": "empresa",
+                "empresa": {"cnpj": cnpj, "ticker": ticker, "nome": nome},
+                "fundamentos_credito": fundamentos,
+                "estrutura_divida": perfil_div,
+                "covenants_fiduciario": covenants
+            }
+
+        return {"aviso": f"'{cod}' não encontrado como título de renda fixa nem como companhia na base local."}
     finally:
         conn.close()
 

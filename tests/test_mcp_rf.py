@@ -138,3 +138,48 @@ def test_search_bond_docs_inclui_fiduciario_e_read():
     assert "AGENTE FIDUCIÁRIO" in d["texto"]
     assert d["doc_id"] == "TESTE-FID-RUMOB6"
 
+
+def test_get_bond_analise_credito():
+    r = cvm_mcp.get_bond("RUMOB6")
+    assert "analise_credito" in r
+    ac = r["analise_credito"]
+    assert ac["codigo"] == "RUMOB6"
+    assert "Quirografária" in ac["senioridade"]
+    assert ac["tributacao_e_gross_up"]["regime"].startswith("Isento")
+    assert ac["tributacao_e_gross_up"]["equivalente_bruto_ir15"] is not None
+    assert ac["fundamentos_devedora"]["cnpj"] == M.ALFA
+    # Covenants lidos do relatório de agente fiduciário fictício
+    assert len(ac["covenants_fiduciario"]) >= 1
+    assert "Dívida Líquida / EBITDA" in ac["covenants_fiduciario"][0]["trecho"]
+
+    # ERDVB4 é debênture comum tributada
+    r_deb = cvm_mcp.get_credit_summary("ERDVB4")
+    assert r_deb["tributacao_e_gross_up"]["regime"].startswith("Tributado")
+    assert r_deb["tributacao_e_gross_up"]["liquido_pf_ir15"] is not None
+
+
+def test_get_credit_summary_bond_isento():
+    ac = cvm_mcp.get_credit_summary("CRA024004SB")
+    assert ac["codigo"] == "CRA024004SB"
+    assert ac["tipo"] == "CRA"
+    assert "Securitizado" in ac["senioridade"]
+    assert ac["tributacao_e_gross_up"]["regime"].startswith("Isento")
+    assert ac["tributacao_e_gross_up"]["equivalente_bruto_ir15"] is not None
+    assert ac["fundamentos_devedora"]["cnpj"] == M.DELTA
+
+
+def test_get_credit_summary_empresa():
+    res = cvm_mcp.get_credit_summary("TSTA3")
+    assert res["tipo_consulta"] == "empresa"
+    assert res["empresa"]["ticker"] == "TSTA3"
+    assert res["empresa"]["cnpj"] == M.ALFA
+    assert res["estrutura_divida"]["total_ativos"] >= 1
+    assert "covenants_fiduciario" in res
+
+
+def test_get_credit_summary_nao_encontrado():
+    res = cvm_mcp.get_credit_summary("XYZINEXISTENTE99")
+    assert "aviso" in res
+    assert "não encontrado" in res["aviso"]
+
+

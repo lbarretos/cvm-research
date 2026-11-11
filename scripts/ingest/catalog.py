@@ -31,8 +31,8 @@ CVM_CAD_URL = "https://dados.cvm.gov.br/dados/CIA_ABERTA/CAD/DADOS/cad_cia_abert
 B3_COMPANIES_BASE = "https://sistemaswebb3-listados.b3.com.br/listedCompaniesProxy/CompanyCall/GetInitialCompanies/{payload}"
 B3_INDEX_BASE = "https://sistemaswebb3-listados.b3.com.br/indexProxy/indexCall/GetPortfolioDay/{payload}"
 
-# Segmentos B3 que indicam ação listada em bolsa (marketIndicator values)
-LISTED_SEGMENTS = {"7", "8", "14", "16", "17", "18"}
+# Segmentos B3 que indicam ação listada em bolsa (marketIndicator values: 1=Tradicional, 7=Bovespa Mais, 8=Nível 2/Outros, 14=Balcão, 16=Básico, 17=Nível 1, 18=Novo Mercado)
+LISTED_SEGMENTS = {"1", "7", "8", "14", "16", "17", "18"}
 
 # Mapeamento de índice → payload base64
 INDICES = {

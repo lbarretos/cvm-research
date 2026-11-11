@@ -152,3 +152,8 @@ PCAR3,47.508.411/0001-56,14826,COMPANHIA BRASILEIRA DE DISTRIBUICAO,Varejo,ATIVO
 BOBR4,50.564.053/0001-03,12190,BOMBRIL S.A.,Industrial,ATIVO,manual: Restructuring (Notion); BOBR3 também listada; CNPJ e codigo_cvm via web
 LUPA3,89.463.822/0001-12,20060,LUPATECH S.A.,Industrial,ATIVO,manual: Restructuring (Notion); codigo_cvm de fonte única
 PMAM3,60.398.369/0004-79,9393,PARANAPANEMA S.A.,Industrial,ATIVO,manual: Restructuring (Notion); codigo_cvm de fonte única
+OBTC3,59.693.110/0001-29,27910,ORANJEBTC S.A. - EDUCAÇÃO E INVESTIMENTO,Educacao,ATIVO,auto:assumed
+CRMU,00.080.671/0001-00,26190,CARAMURU ALIMENTOS S.A.,Agro,ATIVO,manual: Cia Aberta Categoria A não listada
+VLIM,42.276.907/0001-28,28045,VLI MULTIMODAL S.A,Mobilidade,ATIVO,manual: Cia Aberta Categoria B (emissora de debêntures)
+MRSA3B,01.417.222/0001-77,17949,MRS LOGISTICA S.A.,Mobilidade,ATIVO,manual: Cia Aberta Categoria A (B3 Balcão / debêntures)
+SALT,17.765.891/0001-70,27820,GRUPO SALTA EDUCAÇÃO S.A.,Educacao,ATIVO,manual: Cia Aberta Categoria A não listada (debêntures)

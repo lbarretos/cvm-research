@@ -1,6 +1,6 @@
 # Backlog de Desenvolvimento e Próximos Passos (TODOS)
 
-Base consolidada em 2026-11-10 (`cvm_research.db`, ~19 GB, 151 empresas cobertas, 433 testes passando).
+Base consolidada em 2026-11-11 (`cvm_research.db`, ~19 GB, 156 empresas cobertas, 437 testes passando).
 Este documento centraliza todas as frentes de trabalho divididas por eixos temáticos objetivos, eliminando ruídos antigos e mantendo o roadmap acionável.
 
 ---
@@ -41,6 +41,10 @@ Este eixo expande a modelagem de crédito e a integração entre a dívida cont�
   - Em `ipe_docs`, na categoria `"Dados Econômico-Financeiros"`, existem os tipos `"Relatório de Agente Fiduciário"` e `"Relatório de Agência de Rating"` (mais de 4,2 mil relatórios disponíveis na base).
   - Integrado suporte a extração seletiva via `extract_pdf.py --so-credito` (suportando `--ocr`, `--reextrair-ruins` e `--sem-fts`).
   - Integrada camada `'credito'` em `search_docs` e busca complementar automática em `search_bond_docs` e `get_bond.documentos`, permitindo pesquisar *covenants*, índices contratuais (DL/EBITDA, ICSD) e pedidos de *waiver* com leitura via `read_bond_doc` ou `read_doc`.
+- [x] **Suporte a empresas não listadas de capital aberto no watchlist:**
+  - `add_companies.py` atualizado com `--cnpj`, `--custom-ticker`, `--observacao` e `--yes` (`-y`), permitindo cadastrar empresas Categoria B e Categoria A não listadas na B3 a partir do cadastro oficial CVM.
+  - Adicionado segmento `'1'` (Mercado Tradicional B3) em `LISTED_SEGMENTS` em `catalog.py`.
+  - Cadastradas e sincronizadas na tabela `companies`: `CRMU` (Caramuru Alimentos, Categoria A), `VLIM` (VLI Multimodal, Categoria B), `MRSA3B` (MRS Logística, Categoria A), `SALT` (Grupo Salta Educação, Categoria A) e `OBTC3` (OranjeBTC, listada B3).
 - [ ] **Estruturação de Termos de Securitização CRI/CRA e Escrituras:**
   - Extrair cronogramas de amortização, taxas de remuneração (spread sobre CDI ou cupom de IPCA) e matriz de garantias reais/fianças diretamente das escrituras baixadas em `rf_docs`.
   - Conectar ao MCP `get_bond` para retornar não apenas metadados cadastrais, mas a estrutura completa da dívida.

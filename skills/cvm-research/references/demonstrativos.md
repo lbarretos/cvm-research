@@ -159,21 +159,43 @@ Uma linha por mudança entre filings consecutivos (`estavel` não é gravada): `
 `ambiguo`, `nova`, `removida`. Para montar série longa de uma conta `st_conta_fixa = 'N'`, siga
 `cd_conta_anterior` em vez de fixar o código.
 
-## Notas explicativas
+## Notas explicativas e seções canônicas
 
-`notas_explicativas`: PDF completo do ITR/DFP com notas, sob demanda, cobertura pequena. Antes
-de consultar:
+O texto completo do DFP e ITR (com notas explicativas) é armazenado no IPE (`categoria = 'Dados Econômico-Financeiros'`).
+O sistema possui segmentador automático e índice canônico de seções contábeis (`secoes_notas.py`).
 
+**1. Busca direta por nota (`search_docs(secao=...)`):**
+Prefira sempre a busca canônica em vez de tentar adivinhar termos no FTS:
+```python
+search_docs(secao="ir_csll", ticker="VALE3", ref_desde="2025-01-01")
+```
+Seções canônicas aceitas:
+- `ir_csll`: Imposto de Renda e Contribuição Social (conciliação da alíquota, adições, exclusões e incentivos fiscais).
+- `subvencoes`: Subvenções e incentivos fiscais governamentais (ICMS, Lei das TICs, Mover, SUDENE/SUDAM).
+- `tributos_recuperar`: Impostos e contribuições a recuperar.
+- `imobilizado`: Ativo imobilizado (abertura por classe, adições, baixas, depreciação acumulada).
+- `intangivel`: Ativo intangível (ágio por expectativa de rentabilidade futura, softwares, patentes).
+- `provisoes`: Provisões para contingências judiciais (cíveis, trabalhistas, tributárias) e depósitos recursais.
+- `divida_emprestimos` (ou `emprestimos`, `divida`): Empréstimos, financiamentos e debêntures (taxas, indexadores, garantias e cronograma de amortização).
+- `partes_relacionadas`: Transações com partes relacionadas e remuneração do pessoal-chave.
+- `patrimonio_liquido`: Composição do capital social, reservas de lucros, dividendos e JCP.
+- `segmentos`: Informações por segmento de negócio ou área geográfica.
+- `arrendamentos`: Operações de arrendamento mercantil / leasing (CPC 06 / IFRS 16).
+- `eventos_subsequentes`: Fatos relevantes ocorridos após a data de encerramento do exercício.
+- `instrumentos_financeiros`: Gerenciamento de riscos de mercado, derivativos e valor justo.
+
+**2. Navegação, páginas e leitura:**
+- O retorno traz `offset`, `secao` (`Nota XX — Titulo`) e a `pagina` exata no PDF (as páginas preservam o delimitador `\f`).
+- Para ler a nota inteira: `read_doc(protocolo, offset=<offset>)`.
+- **Qualidade degradada:** se a página tiver baixa legibilidade de fonte/OCR, `read_doc` alertará via `aviso_qualidade` e `search_docs` marcará `[TEXTO DEGRADADO — ver original em <link>]`. Sinalize essa condição ao usuário.
+
+**3. Tabela sob demanda (`notas_explicativas`):**
+Para casos residuais onde a DF não estiver no IPE, a tabela `notas_explicativas` guarda PDFs baixados pontualmente do RAD:
 ```sql
 SELECT fonte, data_referencia, texto_extraido IS NOT NULL AS tem_texto
 FROM notas_explicativas WHERE cnpj_companhia = '<CNPJ>' ORDER BY data_referencia DESC;
 ```
-
-Busca: `notas_explicativas_fts` (mesmo padrão do `ipe_docs_fts`; junte por `n.id = f.rowid`).
-**Antes, procure no IPE com `search_docs(consulta, ticker, camada='df', ref_desde=…)`** (ou diretamente por seção: `search_docs(secao='ir_csll'|'subvencoes'|…, ticker=…)`): os PDFs da DF
-(`Anuais Completas`, `Intermediárias`, `Adicionais` — esta em inglês —, `Padrões Internacionais`) já
-têm texto na maioria das empresas. Só então ofereça ingerir (comando em `manutencao.md`).
-Só a versão mais recente do documento é mantida.
+Busca: `notas_explicativas_fts` (junte por `n.id = f.rowid`). Consulte primeiro no IPE via `search_docs` antes de recorrer a esta tabela.
 
 ## Visualizador
 

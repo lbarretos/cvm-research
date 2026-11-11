@@ -329,19 +329,27 @@ SELECT i.data_referencia, i.categoria, i.assunto,
        f.rank AS relevancia,
        substr(i.texto_extraido, 1, 300) AS trecho
 FROM ipe_docs_fts f
-JOIN ipe_docs i ON i.protocolo_entrega = f.protocolo_entrega
+JOIN ipe_docs i ON i.rowid = f.rowid
 WHERE f.cnpj_companhia = '<CNPJ>'
   AND ipe_docs_fts MATCH 'aquisicao AND controle'
 ORDER BY rank
 LIMIT 20;
+
+-- Documentos com qualidade de texto degradada (fontes corrompidas / escaneados com OCR necessário):
+SELECT protocolo_entrega, data_entrega, categoria, tipo, assunto, qualidade, chars_extraidos
+FROM ipe_docs
+WHERE cnpj_companhia = '<CNPJ>'
+  AND qualidade = 'ruim'
+ORDER BY data_entrega DESC;
 ```
 
 ---
 
 ## Comportamento esperado ao pesquisar (regras de resposta)
 
-1. **Sempre resolva o CNPJ primeiro** via `companies` antes de qualquer query.
+1. **Com o ticker exato, vá direto aos dados**: nas views (`vw_dre`, `vw_balanco`, `vw_acionistas_diretos`...), use `WHERE ticker = 'PETR4'`; nas tabelas, use subconsulta direta `cnpj_companhia = (SELECT cnpj FROM companies WHERE ticker = 'PETR4')`. Use `resolve_company` quando a pergunta trouxer nome parcial, CNPJ ou o ticker não bater.
 2. **Verifique `texto_extraido`**: se `NULL`, exiba o `link_download` e informe que o conteúdo não foi extraído ainda.
+3. **Páginas e qualidade**: em notas explicativas, cite o número da página no PDF (`pagina`). Se houver aviso de texto degradado, informe que os dados foram obtidos de página com legibilidade comprometida (OCR/fonte).
 3. **Para resumir assembleias**: leia `texto_extraido` e destaque deliberações sobre remuneração, mudanças estatutárias, eleição de conselho, aprovação de contas.
 4. **Para fatos relevantes**: classifique o impacto — M&A, guidance, regulatório, operacional, financeiro.
 5. **Para insider trading**: correlacione compras/vendas com fatos relevantes próximos e recompras vigentes.

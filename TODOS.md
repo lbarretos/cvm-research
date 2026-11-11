@@ -45,6 +45,15 @@ Este eixo expande a modelagem de crédito e a integração entre a dívida cont�
   - `add_companies.py` atualizado com `--cnpj`, `--custom-ticker`, `--observacao` e `--yes` (`-y`), permitindo cadastrar empresas Categoria B e Categoria A não listadas na B3 a partir do cadastro oficial CVM.
   - Adicionado segmento `'1'` (Mercado Tradicional B3) em `LISTED_SEGMENTS` em `catalog.py`.
   - Cadastradas e sincronizadas na tabela `companies`: `CRMU` (Caramuru Alimentos, Categoria A), `VLIM` (VLI Multimodal, Categoria B), `MRSA3B` (MRS Logística, Categoria A), `SALT` (Grupo Salta Educação, Categoria A) e `OBTC3` (OranjeBTC, listada B3).
+- [x] **Resolução automática de devedores de CRI e CRA:**
+  - Módulo `scripts/ingest/rf_devedor_resolucao.py` com dicionário canônico de apelidos corporativos e casamento fonético/estrutural contra `companies`.
+  - 100% dos 272 CRIs e CRAs com `devedor_cnpj` nulo resolvidos e sincronizados com `rf_partes`, ligando o instrumento securitizado ao devedor operacional e ao grupo econômico.
+- [x] **Análise Holística de Risco de Crédito Corporativo para Investimento Pessoal:**
+  - Enriquecimento de `get_bond` e criação da ferramenta MCP `get_credit_summary(termo)` no `scripts/mcp/cvm_mcp.py`.
+  - **Métricas do Instrumento:** senioridade jurídica, maturity, duration (DU e anos), precificação ANBIMA com % PU Par (deságio/ágio de capital) e cálculo automático de **gross-up tributário** da Lei 12.431 e CRI/CRA (equivalente bruto CDB a 15% e 22,5% de IR, e taxa líquida PF para títulos tributados).
+  - **Fundamentos Contábeis da Devedora:** conexão direta com `vw_balanco`, `vw_dre` e `fato_padronizado` para Caixa & Equivalentes, Dívida CP/LP, Dívida Bruta, Dívida Líquida, Receita U12M, EBITDA U12M, Alavancagem Dívida Líquida / EBITDA, Cobertura de Caixa CP (`Caixa / Dívida CP`) e Cobertura de Juros (ICR).
+  - **Covenants & Agente Fiduciário:** extração automática de limites e apurações contratuais a partir dos Relatórios Anuais do Agente Fiduciário em `ipe_docs`.
+  - Suporte tanto a códigos de títulos (`BCBF16`, `FSII14`, `24I1980390`) quanto a empresas (`HAPV3`, `MRVE3`, `VLIM`, `CRMU`), retornando o cronograma de vencimentos e o perfil agregado da dívida.
 - [ ] **Estruturação de Termos de Securitização CRI/CRA e Escrituras:**
   - Extrair cronogramas de amortização, taxas de remuneração (spread sobre CDI ou cupom de IPCA) e matriz de garantias reais/fianças diretamente das escrituras baixadas em `rf_docs`.
   - Conectar ao MCP `get_bond` para retornar não apenas metadados cadastrais, mas a estrutura completa da dívida.

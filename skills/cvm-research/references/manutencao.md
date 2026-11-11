@@ -45,18 +45,39 @@ Peça confirmação antes de qualquer comando que baixe dados: são ZIPs anuais 
 
 ```bash
 cd scripts/ingest
+
+# 1. Extração padrão por empresa / categoria prioritária:
 ../../.venv/bin/python extract_pdf.py --cnpj "<CNPJ>" --categoria "Fato Relevante" --limite 100
-../../.venv/bin/python extract_pdf.py --cnpj "<CNPJ>" --limite 200          # todas as categorias
+../../.venv/bin/python extract_pdf.py --cnpj "<CNPJ>" --limite 200          # todas as categorias prioritárias
 ../../.venv/bin/python extract_pdf.py --cnpj "<CNPJ>" --retry-failed        # tenta de novo as que falharam
-../../.venv/bin/python extract_pdf.py --rebuild-fts                         # obrigatório no fim
+
+# 2. Demonstrações Financeiras (DFP/ITR) com OCR seletivo (para notas explicativas):
+../../.venv/bin/python extract_pdf.py --so-df --ocr --sem-fts --limite 100
+
+# 3. Re-tentativa de PDFs com qualidade degradada (fontes corrompidas / escaneados):
+../../.venv/bin/python extract_pdf.py --reextrair-ruins --ocr --sem-fts --limite 100
+
+# 4. Documento específico por protocolo:
+../../.venv/bin/python extract_pdf.py --protocolo "<PROTOCOLO>" --ocr
+
+# 5. Reconstrução única do índice FTS5 (obrigatório após os lotes):
+../../.venv/bin/python extract_pdf.py --rebuild-fts
 ```
 
 O índice `ipe_docs_fts` é de conteúdo externo e não se atualiza sozinho: sem `--rebuild-fts`, o
 texto novo existe em `ipe_docs.texto_extraido` mas a busca FTS não o encontra.
 
+**Flags principais do extrator (`extract_pdf.py`):**
+- `--so-df`: filtra apenas Demonstrações Financeiras (Anuais Completas, Intermediárias, Adicionais e Internacionais).
+- `--ocr`: habilita fallback de OCR (via `tesseract` + `pypdfium2` em memória) para páginas com fontes Identity-H corrompidas ou escaneadas.
+- `--max-ocr-paginas`: teto máximo de páginas processadas com OCR por documento (padrão: 30).
+- `--reextrair-ruins`: processa novamente documentos classificados como `qualidade = 'ruim'` em `texto_qualidade`.
+- `--sem-fts`: não reconstrói o índice FTS5 a cada execução; use em loops de lote para rodar o `--rebuild-fts` uma única vez no final.
+- `--protocolo`: extrai pontualmente um único documento pelo protocolo de entrega.
+
 Sem `--categoria`, o extrator pega as categorias prioritárias: Fato Relevante, Assembleia,
 Comunicado ao Mercado, Aviso aos Acionistas, Reunião da Administração e os Press-releases de
-Dados Econômico-Financeiros. Para outras (DFs em PDF, laudos), passe `--categoria`; com ela,
+Dados Econômico-Financeiros. Para outras (laudos, estatutos), passe `--categoria`; com ela,
 `--tipo` restringe o tipo (ex.: `--categoria "Dados Econômico-Financeiros" --tipo "Press-release"`).
 Não há filtro por `especie`: para ler só a Proposta e a Ata de uma AGO, use
 `--categoria "Assembleia"` com `--limite` e aceite que virão boletins e mapas junto.

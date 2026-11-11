@@ -21,7 +21,7 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
     em vez de resolver antes; a subconsulta custa ~1 s, um turno custa ~60 mil tokens.
   - Não chame `list_tables`/`describe_table` para o que esta skill já documenta.
   - Se as ferramentas estiverem adiadas, carregue todas de uma vez (`ToolSearch` com
-    `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc`)
+    `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc,mcp__cvm-research__resolve_bond,mcp__cvm-research__get_bond,mcp__cvm-research__search_bonds,mcp__cvm-research__search_bond_docs,mcp__cvm-research__read_bond_doc`)
     e, se der, já na mensagem que carrega esta skill.
 
   As ferramentas, por tema:
@@ -33,18 +33,20 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
      IR pago, receita, EBIT, CFO): `get_financials(ticker, conceitos?)`. Devolve o valor com `metodo` e `checagem`;
      mostre-os. D&A usa a DVA 7.04.01 como gabarito (`ok_<definição>` = fecha com outra definição). Só plano padrão;
      se vier vazio, caia nas views e em `demonstrativos_trimestrais`;
-  4. **Conteúdo de documentos**: `search_docs(consulta?, ticker?, categorias?, desde?, ate?, camada?, tipos?,
-     ref_desde?, ref_ate?, secao?)` e `read_doc`. A `camada` decide onde procurar:
+  4. **Conteúdo de documentos**: `search_docs(consulta?, ticker?, categorias?, desde?, ate?, k=10, versoes_antigas=False, camada?, tipos?, ref_desde?, ref_ate?, secao?)` e `read_doc(protocolo, ordem=0, offset=0, max_chars=20000)`. A `camada` decide onde procurar:
      - `'quente'` (padrão): trechos de FR, CM, AVI, RCA, assembleias e press-release; abra com `read_doc(protocolo, ordem)`;
      - **`'df'`: notas explicativas** do DFP e do ITR (conciliação do IR, subvenções e incentivos fiscais,
-       imobilizado, provisões, dívida…). Use `secao` ('ir_csll', 'subvencoes', 'emprestimos', 'imobilizado',
-       'provisoes', 'partes_relacionadas', 'patrimonio_liquido', 'segmentos'...) para navegar diretamente até
-       a nota desejada (já devolve offset e pagina, sem precisar de consulta de texto).
+       imobilizado, provisões, dívida…). Use `secao` com uma das 13 chaves canônicas ('ir_csll', 'subvencoes',
+       'tributos_recuperar', 'imobilizado', 'intangivel', 'provisoes', 'divida_emprestimos' [ou 'emprestimos'],
+       'partes_relacionadas', 'patrimonio_liquido', 'segmentos', 'arrendamentos', 'eventos_subsequentes',
+       'instrumentos_financeiros') ou texto descritivo. Passar `secao` redireciona automaticamente para `camada='df'`,
+       encontra a nota exata e já devolve o trecho com cabeçalho (`[Nota X — Titulo]`), `offset` e `pagina` no PDF.
        Use `ref_desde`/`ref_ate` para o período (`'2026-06-30'` = ITR do 2T26) e abra
-       com `read_doc(protocolo, offset=<offset>)`, que já cai no trecho;
-     - `'fria'`: prospectos, escrituras, relatórios de agente fiduciário, laudos, estatutos; `'todas'`: as três.
+       com `read_doc(protocolo, offset=<offset>)`, que já cai no trecho com a página correspondente;
+     - `'fria'`: prospectos, escrituras, relatórios de agente fiduciário, laudos, estatutos; `'todas'`: quente e documentos intercalados.
      Prefira-as ao FTS escrito à mão (seção 5) e a `substr(texto_extraido…)`;
-  5. **Renda fixa** (debênture, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)`; ver `references/renda-fixa.md`;
+     - **Qualidade e degradação de texto**: se o trecho trouxer `[TEXTO DEGRADADO — ver original em <link>]` ou `read_doc` devolver `aviso_qualidade`, alerte o usuário sobre a degradação de OCR/fonte e recomende conferir números críticos no link original;
+  5. **Renda fixa** (debêntures, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)`; `search_bonds(...)` para filtros de mercado; `search_bond_docs(consulta, codigo)` e `read_bond_doc(doc_id, offset)` para escrituras e termos de securitização; ver `references/renda-fixa.md`;
   6. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
   A saída é tabular `{colunas, linhas, aviso?}`; cada resposta cabe em 30 mil caracteres e o `aviso`
   diz quando foi cortada. Se as ferramentas não aparecerem, carregue com `ToolSearch`
@@ -167,15 +169,24 @@ versões vigentes. Notas explicativas: `camada='df'`; o resto do IPE: `camada='f
 com o `offset` do termo para o `read_doc`). `versoes_antigas=True` inclui os documentos substituídos. Sem resultado,
 tente menos termos ou prefixo (`aquisi*`) antes de concluir que não há, e leia o `aviso`: ele diz em que camada tentar.
 
-**Notas explicativas: onde estão.** O texto do DFP e do ITR com notas vem do IPE (`categoria = 'Dados
+**Notas explicativas e busca por seção canônica.** O texto do DFP e do ITR com notas vem do IPE (`categoria = 'Dados
 Econômico-Financeiros'`), em quatro `tipo`s: `Demonstrações Financeiras Anuais Completas` (DFP, 2010–2025),
 `Demonstrações Financeiras Intermediárias` (ITR em português), `Demonstrações Financeiras Adicionais` (quase sempre o
-ITR **em inglês**) e `Demonstrações Financeiras em Padrões Internacionais` (até 2024). Desde 2025, ~80 empresas têm o
-ITR com notas em português, ~30 só em inglês e ~35 nenhum: **num ITR em inglês, busque os termos em inglês** ("tax
-incentives", "government grants", "income tax reconciliation"); o texto extraído às vezes perde letras ("ta" = tax,
-"ra il" = Brazil), então prefira palavras inteiras que sobrevivem e confira o número no `read_doc`. Sem documento no
-período, diga isso (os quadros estruturados do ITR existem, as notas não) e aponte o RAD; não use o número anual como
-se fosse o trimestral. `notas_explicativas` (sob demanda, poucas empresas) é complemento: ver `references/demonstrativos.md`.
+ITR **em inglês**) e `Demonstrações Financeiras em Padrões Internacionais` (até 2024).
+- **Busca por `secao`:** prefira sempre `search_docs(secao='...', ticker='...')`. Aceita 13 seções canônicas:
+  `ir_csll`, `subvencoes`, `tributos_recuperar`, `imobilizado`, `intangivel`, `provisoes`, `divida_emprestimos` (ou `emprestimos`/`divida`),
+  `partes_relacionadas`, `patrimonio_liquido`, `segmentos`, `arrendamentos`, `eventos_subsequentes`, `instrumentos_financeiros`.
+  O MCP localiza o cabeçalho da nota, devolve o título real (`[Nota X — Titulo]`), o `offset` de entrada e o número da página no PDF (`pagina`).
+- **Páginas no PDF:** o texto extraído preserva quebras de página por form-feed (`\f`, ASCII 12). `search_docs` e `read_doc`
+  informam a `pagina` do PDF sempre que preservada: cite a página ao referenciar dados de notas explicativas.
+- **Degradação de texto e OCR:** quando o documento foi recuperado via OCR seletivo ou possui fontes corrompidas, o trecho
+  virá com `[TEXTO DEGRADADO — ver original em <link>]` e `read_doc` emitirá `aviso_qualidade`. Nesses casos, alerte o
+  usuário de que números e caracteres podem conter imperfeições e aponte o link para conferência.
+- Desde 2025, ~80 empresas têm o ITR com notas em português, ~30 só em inglês e ~35 nenhum: **num ITR em inglês, busque os termos em inglês**
+  ("tax incentives", "government grants", "income tax reconciliation"); o texto extraído às vezes perde letras ("ta" = tax,
+  "ra il" = Brazil), então prefira palavras inteiras que sobrevivem e confira o número no `read_doc`. Sem documento no
+  período, diga isso (os quadros estruturados do ITR existem, as notas não) e aponte o RAD; não use o número anual como
+  se fosse o trimestral. `notas_explicativas` (sob demanda, poucas empresas) é complemento: ver `references/demonstrativos.md`.
 
 **Incentivos fiscais e alíquota efetiva.** Dois efeitos, que não se somam: a **subvenção antes do IR** (crédito
 presumido/estímulo de ICMS, crédito financeiro da Lei das TICs, Mover) entra na receita ou em outras receitas, dentro

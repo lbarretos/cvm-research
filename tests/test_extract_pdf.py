@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts", "ingest"))
 
-from extract_pdf import CATEGORIAS_PRIORITARIAS, _fetch_pendentes
+from extract_pdf import CATEGORIAS_PRIORITARIAS, CREDITO_TIPOS, _fetch_pendentes
 
 CNPJ = "00.000.000/0001-00"
 
@@ -120,3 +120,10 @@ def test_pdf_bytes_text_vazio_ou_sem_texto(monkeypatch):
 
     monkeypatch.setattr(extract_pdf.pdfplumber, "open", lambda f: MockPdf([]))
     assert pdf_bytes_text(b"%PDF-empty") is None
+
+
+def test_so_credito_filtra_fiduciario_e_rating(conn):
+    cats = {"Dados Econômico-Financeiros": CREDITO_TIPOS}
+    docs = _fetch_pendentes(conn, {CNPJ}, cats, limite=50)
+    assert _protocolos(docs) == ["rat"]
+

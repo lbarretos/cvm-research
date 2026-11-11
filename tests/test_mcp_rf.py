@@ -55,7 +55,9 @@ def test_get_bond_debenture_completo():
     # mesmo grupo: ERDVB4 (BETA, controlada pela HOLDING) e o CRA em que a ALFA é fiadora
     assert {a["codigo"] for a in _linhas(r["ativos_do_grupo"])} == {"ERDVB4", "CRA024004SB"}
     assert len(r["taxas"]["linhas"]) == 22
-    assert [d["doc_id"] for d in _linhas(r["documentos"])] == ["TESTE-ESC-RUMOB6"]
+    doc_ids = [d["doc_id"] for d in _linhas(r["documentos"])]
+    assert "TESTE-ESC-RUMOB6" in doc_ids
+    assert "TESTE-FID-RUMOB6" in doc_ids
     assert "aviso" not in r
     assert len(json.dumps(r, ensure_ascii=False, default=str)) <= cvm_mcp.MAX_RESPONSE_CHARS + 2000
 
@@ -108,3 +110,31 @@ def test_banco_sem_tabelas_de_renda_fixa(tmp_path, monkeypatch):
     monkeypatch.setattr(cvm_mcp, "DB_PATH", path)
     with pytest.raises(ValueError, match="2026-10-30_renda_fixa.sql"):
         cvm_mcp.get_bond("RUMOB6")
+
+
+def test_search_docs_camada_credito():
+    # Busca global na camada credito
+    r = cvm_mcp.search_docs(consulta="covenant", camada="credito")
+    protos = [l[0] for l in r["linhas"]]
+    assert "TESTE-FID-RUMOB6" in protos
+    assert "TESTE-RAT-BETA" in protos
+
+    # Filtro por ticker
+    r_alfa = cvm_mcp.search_docs(consulta="waiver", ticker="TSTA3", camada="credito")
+    assert [l[0] for l in r_alfa["linhas"]] == ["TESTE-FID-RUMOB6"]
+
+    # Rating da BETA
+    r_beta = cvm_mcp.search_docs(consulta="fitch", ticker="TSTB3", camada="credito")
+    assert [l[0] for l in r_beta["linhas"]] == ["TESTE-RAT-BETA"]
+
+
+def test_search_bond_docs_inclui_fiduciario_e_read():
+    # Busca com código da debênture encontra o relatório do agente fiduciário
+    r = cvm_mcp.search_bond_docs("waiver", codigo="RUMOB6")
+    assert any(l[0] == "TESTE-FID-RUMOB6" for l in r["linhas"])
+
+    # Leitura de relatório de crédito via read_bond_doc funciona
+    d = cvm_mcp.read_bond_doc("TESTE-FID-RUMOB6", max_chars=300)
+    assert "AGENTE FIDUCIÁRIO" in d["texto"]
+    assert d["doc_id"] == "TESTE-FID-RUMOB6"
+

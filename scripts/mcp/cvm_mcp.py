@@ -95,17 +95,18 @@ def _authorizer(action, arg1, arg2, dbname, source):
 
 
 def _check_db_accessible() -> tuple[bool, str]:
+    p = Path(DB_PATH)
     try:
-        resolved = DB_PATH.expanduser().resolve()
+        resolved = p.expanduser().resolve()
     except Exception:
-        resolved = DB_PATH
+        resolved = p
     parts = resolved.parts
     if len(parts) >= 3 and parts[1] == "Volumes":
         vol_path = Path("/Volumes") / parts[2]
         if not vol_path.exists() or not os.path.ismount(str(vol_path)):
             return False, f"O disco removível '{vol_path.name}' não está conectado ou montado."
-    if not DB_PATH.exists():
-        return False, f"Banco SQLite não encontrado em {DB_PATH}."
+    if not p.exists():
+        return False, f"Banco SQLite não encontrado em {p}."
     return True, ""
 
 
@@ -302,10 +303,11 @@ def _consulta_fts(consulta: str) -> str:
 # Camadas da busca. A quente tem trechos (ipe_chunks, Etapa 4); as demais só o FTS por documento (ipe_docs_fts).
 DF_TIPOS = ("Demonstrações Financeiras Anuais Completas", "Demonstrações Financeiras Intermediárias",
             "Demonstrações Financeiras em Padrões Internacionais", "Demonstrações Financeiras Adicionais")
+CREDITO_TIPOS = ("Relatório de Agente Fiduciário", "Relatório de Agência de Rating")
 _QUENTE_SQL = ("(i.categoria IN ('Fato Relevante','Comunicado ao Mercado','Aviso aos Acionistas','Reunião da Administração')"
                " OR (i.categoria = 'Assembleia' AND i.especie IN ('Ata','Proposta da Administração','Sumário das Decisões',"
                "'Edital de Convocação')) OR (i.categoria = 'Dados Econômico-Financeiros' AND i.tipo = 'Press-release'))")
-CAMADAS = ("quente", "df", "fria", "todas")
+CAMADAS = ("quente", "df", "fria", "credito", "todas")
 # consulta que parece pedir nota explicativa: o aviso de vazio aponta camada='df' (Etapa 9.3)
 _PARECE_DF = re.compile(r"\b(nota|notas|explicativ|concilia|al[ií]quota|imposto|IRPJ|CSLL|subven|incentivo|"
                         r"imobilizado|intang|provis|deprecia|arrendament|tribut|balan|demonstra|ITR|DFP|tax|income)",
@@ -463,6 +465,10 @@ def _busca_documentos(conn, camada, q, cnpj, categorias, tipos, desde, ate, ref_
     if camada == "df":
         where.append(f"i.tipo IN ({','.join('?' * len(DF_TIPOS))})")
         args += list(DF_TIPOS)
+    elif camada == "credito":
+        where.append("i.categoria = 'Dados Econômico-Financeiros'")
+        where.append(f"i.tipo IN ({','.join('?' * len(CREDITO_TIPOS))})")
+        args += list(CREDITO_TIPOS)
     else:
         where.append(f"NOT {_QUENTE_SQL}")
         where.append(f"COALESCE(i.tipo, '') NOT IN ({','.join('?' * len(DF_TIPOS))})")
@@ -541,6 +547,8 @@ def search_docs(consulta: str = "", ticker: str | None = None, categorias: list[
       inglês, DF Adicionais; até 2024 também DF em Padrões Internacionais). Conciliação do IR, subvenções e
       incentivos fiscais, imobilizado, provisões, dívida, partes relacionadas etc. Muitas empresas só publicam o ITR
       com notas em inglês: busque também os termos em inglês ("tax incentives", "government grants").
+    - 'credito': **crédito corporativo e renda fixa** — Relatório de Agente Fiduciário e Relatório de Agência de Rating
+      (auditoria de covenants contratuais, apuração de índices exigidos como DL/EBITDA, pedidos de waiver e ratings).
     - 'fria': o resto do IPE (prospectos, relatórios de agente fiduciário, escrituras, laudos, estatutos…).
     - 'todas': quente e documentos intercalados.
     Fora da quente, cada linha é um documento: abra com read_doc(protocolo, offset=<offset>), que já cai no trecho.
@@ -923,6 +931,32 @@ def get_bond(codigo: str, dias_taxa: int = 30) -> dict:
         docs = _rf(conn, f"""SELECT {','.join('d.' + c for c in cols)} FROM rf_docs d
                              JOIN rf_doc_ativo x ON x.doc_id = d.doc_id WHERE x.codigo = ?
                              ORDER BY d.data_entrega DESC""", (cod,))
+        if a.get("emissor_cnpj"):
+            doc_ids_vistos = {d[0] for d in docs}
+            try:
+                docs_ipe = conn.execute("""
+                    SELECT protocolo_entrega, 'ipe', data_entrega, tipo, assunto, chars_extraidos, extracao_falhou, link_download
+                    FROM ipe_docs
+                    WHERE cnpj_companhia = ? AND categoria = 'Dados Econômico-Financeiros'
+                      AND tipo IN ('Relatório de Agente Fiduciário', 'Relatório de Agência de Rating')
+                    ORDER BY data_entrega DESC LIMIT 20
+                """, (a["emissor_cnpj"],)).fetchall()
+                emissao_num = re.sub(r"\D", "", str(a.get("emissao") or ""))
+                for r_ipe in docs_ipe:
+                    proto = r_ipe[0]
+                    if proto in doc_ids_vistos:
+                        continue
+                    assunto_ipe = _sem_acento(r_ipe[4] or "")
+                    casa = (cod.lower() in assunto_ipe)
+                    if emissao_num and not casa:
+                        if re.search(rf"(?<!\d)0*{int(emissao_num)}\s*(?:a|o|ª|º)?\.?\s*(?:\([^)]{{0,30}}\)\s*)?emiss", assunto_ipe):
+                            casa = True
+                    if casa:
+                        docs.append(list(r_ipe))
+                        doc_ids_vistos.add(proto)
+                docs.sort(key=lambda d: str(d[2] or ""), reverse=True)
+            except sqlite3.OperationalError:
+                pass
         out["documentos"] = _tabular(cols, docs, limite=q)
         if not any(d[5] for d in docs):
             origem = ("da descrição da oferta na CVM e do cadastro" if out["garantias"]["linhas"] or out["lastro"]["linhas"]
@@ -998,8 +1032,9 @@ def search_bonds(texto: str | None = None, tipo: str | None = None, indexador: s
 
 @mcp.tool()
 def search_bond_docs(consulta: str, codigo: str | None = None, k: int = 10) -> dict:
-    """Busca no texto das escrituras, aditamentos e termos de securitização ingeridos (rf_docs_fts). consulta: termos
-    (AND implícito) ou sintaxe FTS5 ("cessão fiduciária", NEAR(fiança controladora, 10)). codigo: restringe ao título.
+    """Busca no texto das escrituras, aditamentos e termos de securitização (rf_docs_fts) e relatórios
+    de agente fiduciário e rating (ipe_docs_fts). consulta: termos (AND implícito) ou sintaxe FTS5
+    ("cessão fiduciária", NEAR(fiança controladora, 10), "covenant", "waiver"). codigo: restringe ao título.
     Devolve doc_id, os títulos ligados e o trecho; leia em volta com read_bond_doc."""
     q = _consulta_fts(consulta)
     if not q:
@@ -1007,28 +1042,84 @@ def search_bond_docs(consulta: str, codigo: str | None = None, k: int = 10) -> d
     conn = get_db()
     try:
         _com_prazo(conn)
-        where, args = ["rf_docs_fts MATCH ?"], [f"texto_extraido : ({q})"]
-        if codigo:
-            where.append("d.doc_id IN (SELECT doc_id FROM rf_doc_ativo WHERE codigo = ?)")
-            args.append(codigo.strip().upper())
+        k = max(1, min(int(k), 30))
+        cod_clean = codigo.strip().upper() if codigo else None
+
+        # 1. Busca em rf_docs_fts (escrituras e termos de securitização)
+        where_rf, args_rf = ["rf_docs_fts MATCH ?"], [f"texto_extraido : ({q})"]
+        if cod_clean:
+            where_rf.append("d.doc_id IN (SELECT doc_id FROM rf_doc_ativo WHERE codigo = ?)")
+            args_rf.append(cod_clean)
         try:
-            linhas = _rf(conn, f"""
+            linhas_rf = _rf(conn, f"""
                 SELECT d.doc_id, (SELECT group_concat(codigo, ' ') FROM rf_doc_ativo x WHERE x.doc_id = d.doc_id),
-                       d.data_entrega, d.tipo, snippet(rf_docs_fts, 2, '[', ']', ' … ', 48)
+                       d.data_entrega, d.tipo, snippet(rf_docs_fts, 2, '[', ']', ' … ', 48), rf_docs_fts.rank
                 FROM rf_docs_fts JOIN rf_docs d ON d.rowid = rf_docs_fts.rowid
-                WHERE {' AND '.join(where)} ORDER BY rf_docs_fts.rank LIMIT ?""",
-                (*args, max(1, min(int(k), 30))))
+                WHERE {' AND '.join(where_rf)} ORDER BY rf_docs_fts.rank LIMIT ?""",
+                (*args_rf, k))
         except sqlite3.OperationalError as e:
-            raise ValueError(f"Consulta FTS inválida ({e}). Use termos simples ou aspas.") from None
-        return _tabular(["doc_id", "codigos", "data_entrega", "tipo", "trecho"], linhas,
-                        None if linhas else "nenhum trecho (o PDF do título foi ingerido? ver get_bond.documentos)")
+            if "fts5" in str(e).lower():
+                raise ValueError(f"Consulta FTS inválida ({e}). Use termos simples ou aspas.") from None
+            linhas_rf = []
+
+        # 2. Busca complementar em ipe_docs_fts (relatórios de agente fiduciário e rating)
+        linhas_ipe = []
+        if cod_clean:
+            try:
+                r_ativo = conn.execute("SELECT emissor_cnpj, emissao FROM rf_ativos WHERE codigo = ?", (cod_clean,)).fetchone()
+            except sqlite3.OperationalError:
+                r_ativo = None
+            if r_ativo and r_ativo[0]:
+                cnpj_emissor = r_ativo[0]
+                raiz = " ".join(re.findall(r"\d+", cnpj_emissor)[:3])
+                match_ipe = f'texto_extraido : ({q}) AND cnpj_companhia : "{raiz}"'
+                where_ipe = ["ipe_docs_fts MATCH ?", "i.cnpj_companhia = ?",
+                             "i.categoria = 'Dados Econômico-Financeiros'",
+                             f"i.tipo IN ({','.join('?' * len(CREDITO_TIPOS))})"]
+                try:
+                    res_ipe = conn.execute(f"""
+                        SELECT i.protocolo_entrega, '{cod_clean}', i.data_entrega, i.tipo,
+                               snippet(ipe_docs_fts, 3, '[', ']', ' … ', 48), ipe_docs_fts.rank
+                        FROM ipe_docs_fts JOIN ipe_docs i ON i.rowid = ipe_docs_fts.rowid
+                        WHERE {' AND '.join(where_ipe)} ORDER BY ipe_docs_fts.rank LIMIT ?""",
+                        (match_ipe, cnpj_emissor, *CREDITO_TIPOS, k)).fetchall()
+                    linhas_ipe = [list(r) for r in res_ipe]
+                except sqlite3.OperationalError:
+                    linhas_ipe = []
+        else:
+            match_ipe = f'texto_extraido : ({q})'
+            where_ipe = ["ipe_docs_fts MATCH ?", "i.categoria = 'Dados Econômico-Financeiros'",
+                         f"i.tipo IN ({','.join('?' * len(CREDITO_TIPOS))})"]
+            try:
+                res_ipe = conn.execute(f"""
+                    SELECT i.protocolo_entrega, (SELECT group_concat(codigo, ' ') FROM rf_doc_ativo x WHERE x.doc_id = i.protocolo_entrega),
+                           i.data_entrega, i.tipo, snippet(ipe_docs_fts, 3, '[', ']', ' … ', 48), ipe_docs_fts.rank
+                    FROM ipe_docs_fts JOIN ipe_docs i ON i.rowid = ipe_docs_fts.rowid
+                    WHERE {' AND '.join(where_ipe)} ORDER BY ipe_docs_fts.rank LIMIT ?""",
+                    (match_ipe, *CREDITO_TIPOS, k)).fetchall()
+                linhas_ipe = [list(r) for r in res_ipe]
+            except sqlite3.OperationalError:
+                linhas_ipe = []
+
+        todas = []
+        vistos = set()
+        for r in (linhas_rf + linhas_ipe):
+            doc_id = r[0]
+            if doc_id not in vistos:
+                vistos.add(doc_id)
+                todas.append(r)
+        todas.sort(key=lambda r: r[5] if len(r) > 5 and r[5] is not None else 999)
+        linhas_final = [r[:5] for r in todas[:k]]
+        return _tabular(["doc_id", "codigos", "data_entrega", "tipo", "trecho"], linhas_final,
+                        None if linhas_final else "nenhum trecho (o PDF do título foi ingerido? ver get_bond.documentos)")
     finally:
         conn.close()
 
 
 @mcp.tool()
 def read_bond_doc(doc_id: str, offset: int = 0, max_chars: int = 20_000) -> dict:
-    """Lê o texto de um documento de renda fixa (rf_docs) a partir de `offset` (caracteres), até max_chars (máx. 28.000).
+    """Lê o texto de um documento de renda fixa (rf_docs ou relatórios de crédito em ipe_docs)
+    a partir de `offset` (caracteres), até max_chars (máx. 28.000).
     Para achar o ponto, use search_bond_docs e procure o trecho; `proximo_offset` continua a leitura."""
     max_chars = max(500, min(int(max_chars), 28_000))
     conn = get_db()
@@ -1038,7 +1129,14 @@ def read_bond_doc(doc_id: str, offset: int = 0, max_chars: int = 20_000) -> dict
                       "substr(texto_extraido, ?, ?) FROM rf_docs WHERE doc_id = ?",
                 (max(0, offset) + 1, max_chars, doc_id))
         if not r:
-            raise ValueError(f"doc_id '{doc_id}' não existe em rf_docs.")
+            try:
+                r = conn.execute("SELECT tipo, assunto, data_entrega, link_download, chars_extraidos, "
+                                 "substr(texto_extraido, ?, ?) FROM ipe_docs WHERE protocolo_entrega = ?",
+                                 (max(0, offset) + 1, max_chars, doc_id)).fetchall()
+            except sqlite3.OperationalError:
+                r = []
+        if not r:
+            raise ValueError(f"doc_id '{doc_id}' não existe em rf_docs nem em ipe_docs.")
         tipo, assunto, data, link, total, txt = r[0]
         out = {"doc_id": doc_id, "tipo": tipo, "assunto": assunto, "data_entrega": data, "link": link,
                "chars_total": total, "offset": offset, "texto": txt}

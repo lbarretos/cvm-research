@@ -59,6 +59,28 @@ Financeira (“CPR-F”) emitida pela Devedora. Em garantia, será constituída 
 um fundo de reserva equivalente a duas parcelas de juros.
 """
 
+FIDUCIARIO_RUMOB6 = f"""
+RELATÓRIO ANUAL DO AGENTE FIDUCIÁRIO - EXERCÍCIO DE 2025 [TESTE]
+ALFA LOGÍSTICA S.A. [TESTE]
+6ª Emissão de Debêntures - Série 1 (RUMOB6)
+Agente Fiduciário: AGENTE TESTE DTVM LTDA. (CNPJ {AGENTE})
+1. CARACTERÍSTICAS DA EMISSÃO:
+Código RUMOB6, Vencimento 15/06/2032. Remuneração IPCA + 6,0000%.
+6. INDICADORES ECONÔMICOS E FINANCEIROS (COVENANT / COVENANTS):
+Índice: Dívida Líquida / EBITDA. Limite contratual: <= 3,50x.
+Apurado em 31/12/2025: 2,85x. Situação: Adimplente / Atendido.
+5. ASSEMBLEIAS E WAIVERS:
+Em AGD realizada em 15/10/2025, os titulares de debêntures aprovaram waiver para alteração do cronograma.
+"""
+
+RATING_BETA = f"""
+RELATÓRIO DE AGÊNCIA DE RATING - FITCH RATINGS [TESTE]
+BETA RODOVIAS S.A. [TESTE] (CNPJ {BETA})
+Rating Nacional de Longo Prazo afirmado em 'AA+(bra)'; Perspectiva Estável.
+Fundamentos: Alavancagem controlada, forte geração de caixa operacional.
+Covenant / Covenants: O índice Dívida Líquida / EBITDA manteve-se abaixo do teto contratual de 3,00x.
+"""
+
 
 def _dias(n: int) -> list[str]:
     out, d = [], date.today()
@@ -125,6 +147,21 @@ def montar(path) -> sqlite3.Connection:
                      (doc_id, tipo, assunto, txt, len(txt)))
         conn.execute("INSERT INTO rf_doc_ativo VALUES (?, ?)", (doc_id, cod))
     conn.execute("INSERT INTO rf_docs_fts(rf_docs_fts) VALUES ('rebuild')")
+
+    # Inserção de documentos de crédito em ipe_docs (relatórios de agente fiduciário e agências de rating)
+    conn.execute("INSERT INTO ipe_docs (protocolo_entrega, cnpj_companhia, data_entrega, data_referencia, "
+                 "categoria, tipo, assunto, link_download, texto_extraido, chars_extraidos) "
+                 "VALUES ('TESTE-FID-RUMOB6', ?, '2026-04-30', '2025-12-31', 'Dados Econômico-Financeiros', "
+                 "'Relatório de Agente Fiduciário', 'Relatório Anual do Agente Fiduciário - 6ª Emissão de Debêntures', "
+                 "'https://exemplo.invalido/fiduciario.pdf', ?, ?)",
+                 (ALFA, FIDUCIARIO_RUMOB6, len(FIDUCIARIO_RUMOB6)))
+    conn.execute("INSERT INTO ipe_docs (protocolo_entrega, cnpj_companhia, data_entrega, data_referencia, "
+                 "categoria, tipo, assunto, link_download, texto_extraido, chars_extraidos) "
+                 "VALUES ('TESTE-RAT-BETA', ?, '2025-11-20', '2025-11-15', 'Dados Econômico-Financeiros', "
+                 "'Relatório de Agência de Rating', 'Relatório de Rating Fitch', "
+                 "'https://exemplo.invalido/rating.pdf', ?, ?)",
+                 (BETA, RATING_BETA, len(RATING_BETA)))
+    conn.execute("INSERT INTO ipe_docs_fts(ipe_docs_fts) VALUES ('rebuild')")
     conn.commit()
 
     import extrai_rf

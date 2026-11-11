@@ -9,7 +9,9 @@ Módulo da Etapa 8. Ferramentas do MCP: `resolve_bond`, `get_bond`, `search_bond
 2. `get_bond('<código>')` → ficha em seções. Leia o `aviso` antes de responder: ele diz quando o PDF não foi lido,
    quando falta taxa e quando o grupo não pôde ser calculado.
 3. Para detalhe de cláusula (covenants, vencimento antecipado, cronograma de amortização, condições da garantia):
-   `search_bond_docs('<termos>', codigo=...)` e `read_bond_doc(doc_id, offset)`.
+   `search_bond_docs('<termos>', codigo=...)` e `read_bond_doc(doc_id, offset)`. A busca cobre tanto as escrituras
+   e termos (em `rf_docs`) quanto os relatórios de agente fiduciário e agências de rating (em `ipe_docs`).
+   Para buscar diretamente relatórios de crédito por empresa: `search_docs(consulta='waiver OR covenant', ticker=..., camada='credito')`.
 4. Comparação entre títulos: `search_bonds(tipo, indexador, vence_de, vence_ate, incentivada, grupo_de, so_com_taxa)`.
 
 ## De onde vem cada dado

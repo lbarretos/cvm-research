@@ -161,6 +161,55 @@ def map_setor(setor_cvm: str) -> str:
     return SETOR_MAP.get(setor_cvm.strip(), "Outros")
 
 
+def normalize_cnpj(cnpj_raw: str) -> str:
+    """Normaliza CNPJ para o formato XX.XXX.XXX/XXXX-XX."""
+    digits = "".join(filter(str.isdigit, str(cnpj_raw or "")))
+    if len(digits) != 14:
+        return cnpj_raw
+    return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}"
+
+
+def fetch_from_cvm_cad(identifier: str) -> dict | None:
+    """Busca empresa no cadastro de companhias abertas da CVM por CNPJ, cód CVM ou nome."""
+    from catalog import fetch_cvm_catalog, _format_cnpj
+
+    digits = "".join(filter(str.isdigit, identifier))
+    is_cnpj = (len(digits) == 14)
+    clean_id = identifier.strip().upper()
+
+    try:
+        df = fetch_cvm_catalog()
+    except Exception as e:
+        print(f"Erro ao consultar cadastro CVM: {e}", file=sys.stderr)
+        return None
+
+    for _, row in df.iterrows():
+        c_raw = str(row.get("CNPJ_CIA", "")).strip()
+        c_fmt = normalize_cnpj(c_raw)
+        c_dig = "".join(filter(str.isdigit, c_raw))
+        nome = str(row.get("DENOM_SOCIAL", "")).strip().upper()
+        cd_cvm = str(row.get("CD_CVM", "")).strip()
+
+        match = False
+        if is_cnpj and c_dig == digits:
+            match = True
+        elif clean_id == cd_cvm:
+            match = True
+        elif not is_cnpj and len(clean_id) >= 4 and (clean_id in nome or clean_id == nome):
+            match = True
+
+        if match:
+            return {
+                "cnpj": c_fmt,
+                "codigo_cvm": cd_cvm,
+                "nome_cvm": row.get("DENOM_SOCIAL", ""),
+                "setor_cvm": row.get("SETOR_ATIV", ""),
+                "categ_reg": row.get("CATEG_REG", ""),
+                "status_cvm": row.get("SIT", "ATIVO"),
+            }
+    return None
+
+
 def candidates_from_catalog(
     catalog: pd.DataFrame,
     watchlist: dict,
@@ -243,29 +292,100 @@ def main():
     group.add_argument("--ibrx",   action="store_true", help="Empresas do IBRX-100")
     group.add_argument("--all",    action="store_true", help="Todas as empresas B3 ativas")
     group.add_argument("--ticker", metavar="TICKER",    help="Uma empresa por ticker")
+    group.add_argument("--cnpj",   metavar="CNPJ",      help="Uma empresa por CNPJ (ex: 00.080.671/0001-00 ou só dígitos)")
+    parser.add_argument("--custom-ticker", metavar="TICKER", help="Ticker manual/sintético caso a empresa não tenha ação na B3 (ex: VLIM, CRMU)")
+    parser.add_argument("--observacao",    metavar="OBS",    help="Observação opcional para o watchlist.csv")
     parser.add_argument("--setor",        metavar="SETOR", help="Filtrar por setor (parcial)")
     parser.add_argument("--dry-run",      action="store_true", help="Preview sem gravar")
     parser.add_argument("--skip-assumed", action="store_true", help="Pula tickers com sufixo assumido")
+    parser.add_argument("--yes", "-y",    action="store_true", help="Confirma adição sem prompt interativo")
     args = parser.parse_args()
 
     catalog   = load_catalog()
     watchlist = load_watchlist()
 
-    candidates = candidates_from_catalog(
-        catalog, watchlist,
-        ibov=args.ibov,
-        ibrx=args.ibrx,
-        all_b3=args.all,
-        ticker=args.ticker,
-        setor=args.setor,
-        skip_assumed=args.skip_assumed,
-    )
+    if args.cnpj:
+        cnpj_fmt = normalize_cnpj(args.cnpj)
+        if cnpj_fmt in watchlist:
+            print(f"Empresa com CNPJ {cnpj_fmt} já está no watchlist.csv ({watchlist[cnpj_fmt]['ticker']}).")
+            return
 
-    if candidates.empty:
-        print("Nenhuma empresa nova encontrada (todas já estão no watchlist).")
-        return
+        # 1. Tenta achar no catálogo B3+CVM
+        cands_df = catalog[catalog["cnpj"] == cnpj_fmt]
+        if not cands_df.empty:
+            r = cands_df.iloc[0]
+            ticker_val = (args.custom_ticker or r["ticker"]).strip().upper()
+            obs = args.observacao or (f"auto:{r.get('ticker_confidence','')}" if r.get("ticker_confidence") == "assumed" else "")
+            rows = [{
+                "ticker":     ticker_val,
+                "cnpj":       r["cnpj"],
+                "codigo_cvm": r["codigo_cvm"],
+                "nome_cvm":   r["nome_cvm"] or r["nome_b3"],
+                "setor":      map_setor(r.get("setor_cvm", "")),
+                "status_cvm": "ATIVO",
+                "observacao": obs,
+            }]
+        else:
+            # 2. Busca direto no cadastro CVM de companhias abertas
+            cvm_info = fetch_from_cvm_cad(args.cnpj)
+            if not cvm_info:
+                print(f"CNPJ '{args.cnpj}' não encontrado no catálogo B3 nem no cadastro CVM de cias abertas.")
+                return
+            ticker_val = (args.custom_ticker or args.ticker or "").strip().upper()
+            if not ticker_val:
+                print(f"\nEmpresa encontrada na CVM: {cvm_info['nome_cvm']} (Cód CVM {cvm_info['codigo_cvm']}, {cvm_info['categ_reg']})")
+                print("Para empresas sem ação listada na B3, informe um ticker sintético usando --custom-ticker (ex: --custom-ticker VLIM).")
+                return
+            obs = args.observacao or f"manual: {cvm_info.get('categ_reg', 'CVM')}"
+            rows = [{
+                "ticker":     ticker_val,
+                "cnpj":       cvm_info["cnpj"],
+                "codigo_cvm": cvm_info["codigo_cvm"],
+                "nome_cvm":   cvm_info["nome_cvm"],
+                "setor":      map_setor(cvm_info.get("setor_cvm", "")),
+                "status_cvm": cvm_info.get("status_cvm", "ATIVO"),
+                "observacao": obs,
+            }]
+    else:
+        candidates = candidates_from_catalog(
+            catalog, watchlist,
+            ibov=args.ibov,
+            ibrx=args.ibrx,
+            all_b3=args.all,
+            ticker=args.ticker,
+            setor=args.setor,
+            skip_assumed=args.skip_assumed,
+        )
 
-    rows = to_watchlist_rows(candidates)
+        if candidates.empty:
+            if args.ticker:
+                # Tenta buscar pelo nome/ticker no cadastro CVM
+                cvm_info = fetch_from_cvm_cad(args.ticker)
+                if cvm_info:
+                    if cvm_info["cnpj"] in watchlist:
+                        print(f"Empresa '{cvm_info['nome_cvm']}' ({cvm_info['cnpj']}) já está no watchlist.csv.")
+                        return
+                    obs = args.observacao or f"manual: CVM {cvm_info.get('categ_reg','')}"
+                    rows = [{
+                        "ticker":     args.ticker.strip().upper(),
+                        "cnpj":       cvm_info["cnpj"],
+                        "codigo_cvm": cvm_info["codigo_cvm"],
+                        "nome_cvm":   cvm_info["nome_cvm"],
+                        "setor":      map_setor(cvm_info.get("setor_cvm", "")),
+                        "status_cvm": cvm_info.get("status_cvm", "ATIVO"),
+                        "observacao": obs,
+                    }]
+                else:
+                    print(f"Ticker '{args.ticker}' não encontrado no catálogo nem no cadastro CVM.")
+                    return
+            else:
+                print("Nenhuma empresa nova encontrada (todas já estão no watchlist).")
+                return
+        else:
+            rows = to_watchlist_rows(candidates)
+            if args.observacao:
+                for r in rows:
+                    r["observacao"] = args.observacao
 
     assumed = sum(1 for r in rows if "assumed" in r.get("observacao", ""))
     print(f"\n{len(rows)} empresa(s) para adicionar ({assumed} com ticker assumido)")
@@ -280,10 +400,11 @@ def main():
         print("   Verifique e corrija antes de rodar os ingestores.")
         print("   Use --skip-assumed para excluí-los, ou --dry-run para revisar primeiro.")
 
-    confirm = input(f"\nAdicionar {len(rows)} empresa(s) ao watchlist.csv? [s/N] ").strip().lower()
-    if confirm != "s":
-        print("Cancelado.")
-        return
+    if not args.yes:
+        confirm = input(f"\nAdicionar {len(rows)} empresa(s) ao watchlist.csv? [s/N] ").strip().lower()
+        if confirm != "s":
+            print("Cancelado.")
+            return
 
     append_to_watchlist(rows)
     print(f"\n✓ {len(rows)} empresa(s) adicionadas ao watchlist.csv")

@@ -28,7 +28,7 @@ python scripts/ingest/extract_pdf.py --rebuild-fts
 ```
 
 - [x] **Fallback de OCR seletivo para fontes corrompidas (Etapa 9.8):** Implementado em `ocr_fallback.py` (tesseract + pypdfium2 em memória) e validado em LEVE3/MYPK3 com 433 testes passando.
-- [x] **Pipeline de lote para DFs e re-extração (Etapa 9.14):** Flags `--so-df`, `--ocr`, `--max-ocr-paginas`, `--protocolo`, `--reextrair-ruins` e `--sem-fts` operacionais em `extract_pdf.py`.
+- [x] **Pipeline de lote para DFs e re-extração (Etapa 9.14):** Flags `--so-df`, `--ocr`, `--max-ocr-paginas`, `--protocolo`, `--reextrair-ruins`, `--reextrair-parciais`, `--reextrair-degradados` e `--sem-fts` operacionais em `extract_pdf.py`.
 - [ ] *(Execução sob demanda)* Concluir os lotes acima conforme conveniência operacional (sem bloqueio de roadmap).
 
 ---

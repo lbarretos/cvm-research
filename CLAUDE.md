@@ -76,8 +76,9 @@ A extração pode ser executada em background ou em lotes incrementais:
   `python scripts/ingest/extract_pdf.py --limite 100`
 - **Demonstrações Financeiras (DFP/ITR) com OCR para fontes corrompidas:**
   `python scripts/ingest/extract_pdf.py --so-df --ocr --sem-fts --limite 100`
-- **Reextração seletiva de documentos degradados (`qualidade='ruim'`):**
-  `python scripts/ingest/extract_pdf.py --reextrair-ruins --ocr --sem-fts --limite 50`
+- **Reextração seletiva de documentos degradados (`qualidade='ruim'` ou `'parcial'`):**
+  `python scripts/ingest/extract_pdf.py --so-df --reextrair-degradados --ocr --sem-fts --limite 50`
+  *(ou use `--reextrair-ruins` / `--reextrair-parciais` individualmente)*
 - **Documento pontual por protocolo:**
   `python scripts/ingest/extract_pdf.py --protocolo <PROTOCOLO> --ocr --sem-fts`
 - **Reconstrução do FTS5 (executar uma única vez ao fim dos lotes):**

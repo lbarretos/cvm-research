@@ -45,6 +45,11 @@ DF_TIPOS: set[str] = {
     "Demonstrações Financeiras Adicionais",
 }
 
+CREDITO_TIPOS: set[str] = {
+    "Relatório de Agente Fiduciário",
+    "Relatório de Agência de Rating",
+}
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; CVM-Research-Bot/1.0)",
 }
@@ -192,7 +197,7 @@ def _rebuild_fts(conn: sqlite3.Connection) -> None:
 def main(cnpj_filter=None, categoria_filter=None, limite=200,
          retry_failed=False, rebuild_fts=False, tipo_filter=None, sem_fts=False,
          so_df=False, usar_ocr=False, max_ocr_paginas=30, protocolo=None,
-         reextrair_ruins=False):
+         reextrair_ruins=False, so_credito=False):
     conn = get_db()
 
     if rebuild_fts:
@@ -208,6 +213,8 @@ def main(cnpj_filter=None, categoria_filter=None, limite=200,
     cnpjs  = {cnpj_filter} if cnpj_filter else watchlist_cnpjs()
     if so_df:
         cats = {"Dados Econômico-Financeiros": DF_TIPOS}
+    elif so_credito:
+        cats = {"Dados Econômico-Financeiros": CREDITO_TIPOS}
     elif categoria_filter:
         cats = {categoria_filter: {tipo_filter} if tipo_filter else None}
     else:
@@ -266,6 +273,8 @@ if __name__ == "__main__":
     p.add_argument("--tipo",            help="Com --categoria: filtrar também por tipo (ex: Press-release)")
     p.add_argument("--so-df",           action="store_true",
                    help="Extrai apenas DFs (Anuais Completas, Intermediárias, Internacionais, Adicionais)")
+    p.add_argument("--so-credito",      action="store_true",
+                   help="Extrai apenas documentos de crédito (Relatório de Agente Fiduciário e Relatório de Agência de Rating)")
     p.add_argument("--ocr",             action="store_true",
                    help="Habilita fallback de OCR (via tesseract) para páginas com fontes corrompidas (Identity-H) ou escaneadas")
     p.add_argument("--max-ocr-paginas", type=int, default=30,
@@ -285,6 +294,8 @@ if __name__ == "__main__":
         p.error("--tipo exige --categoria")
     if args.so_df and args.categoria:
         p.error("--so-df não pode ser combinada com --categoria")
+    if args.so_credito and (args.categoria or args.so_df):
+        p.error("--so-credito não pode ser combinada com --categoria ou --so-df")
     main(args.cnpj, args.categoria, args.limite, args.retry_failed, args.rebuild_fts, args.tipo,
          args.sem_fts, args.so_df, args.ocr, args.max_ocr_paginas, args.protocolo,
-         args.reextrair_ruins)
+         args.reextrair_ruins, args.so_credito)

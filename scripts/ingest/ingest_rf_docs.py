@@ -102,7 +102,9 @@ def relevante(doc: dict, ativo: dict) -> str | None:
     if codigo in t:
         return "certo"
     if ativo["tipo"] == "DEB":
-        if not ("escritura" in t or ("debentur" in t and ("emiss" in t or "aditamento" in t))):
+        is_emissao = ("escritura" in t or ("debentur" in t and ("emiss" in t or "aditamento" in t)))
+        is_credito = ("agente fiduciario" in t or "fiduciari" in t or "rating" in t)
+        if not (is_emissao or is_credito):
             return None
         return "certo" if _cita_numero(t, ativo.get("emissao"), "emiss") else "talvez"
     if not ("securitiza" in t or "termo" in t or re.search(r"\bcr[ai]\b", t)):
@@ -160,10 +162,13 @@ def _abertura_cita_emissao(texto: str | None, ativo: dict) -> bool:
 def candidatos(conn, ativo: dict) -> tuple[list[dict], list[dict]]:
     """(certos, talvez) entre os documentos do IPE do emissor/securitizadora."""
     certos, talvez = [], []
+    codigo = (ativo.get("codigo") or "").lower()
     for d in documentos_ipe(conn, ativo):
         r = relevante(d, ativo)
-        if r == "talvez" and _abertura_cita_emissao(d.get("texto_extraido"), ativo):
-            r = "certo"   # assunto genérico ("Emissão de Valores Mobiliários"), mas a capa diz qual emissão
+        txt = d.get("texto_extraido") or ""
+        if r == "talvez":
+            if _abertura_cita_emissao(txt, ativo) or (txt and codigo and codigo in txt[:3000].lower()):
+                r = "certo"   # assunto genérico ("Emissão de Valores Mobiliários"), mas a capa diz qual emissão ou código
         (certos if r == "certo" else talvez if r == "talvez" else []).append(d)
     return certos, talvez
 

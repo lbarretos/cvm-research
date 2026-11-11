@@ -37,9 +37,10 @@ python scripts/ingest/extract_pdf.py --rebuild-fts
 
 Este eixo expande a modelagem de crédito e a integração entre a dívida contábil das companhias abertas e os ativos de renda fixa emitidos no mercado.
 
-- [ ] **Ingestão e busca de Relatórios de Agente Fiduciário e Ratings:**
-  - Em `ipe_docs`, na categoria `"Dados Econômico-Financeiros"`, existem os tipos `"Relatório de Agente Fiduciário"` e `"Relatório de Agência de Rating"`.
-  - Integrar a extração desses relatórios aos fluxos de consulta (`search_bond_docs` e `search_docs`), possibilitando auditoria de cumprimento de *covenants*, índices financeiros exigidos e ocorrência de pedidos de *waiver*.
+- [x] **Ingestão e busca de Relatórios de Agente Fiduciário e Ratings:**
+  - Em `ipe_docs`, na categoria `"Dados Econômico-Financeiros"`, existem os tipos `"Relatório de Agente Fiduciário"` e `"Relatório de Agência de Rating"` (mais de 4,2 mil relatórios disponíveis na base).
+  - Integrado suporte a extração seletiva via `extract_pdf.py --so-credito` (suportando `--ocr`, `--reextrair-ruins` e `--sem-fts`).
+  - Integrada camada `'credito'` em `search_docs` e busca complementar automática em `search_bond_docs` e `get_bond.documentos`, permitindo pesquisar *covenants*, índices contratuais (DL/EBITDA, ICSD) e pedidos de *waiver* com leitura via `read_bond_doc` ou `read_doc`.
 - [ ] **Estruturação de Termos de Securitização CRI/CRA e Escrituras:**
   - Extrair cronogramas de amortização, taxas de remuneração (spread sobre CDI ou cupom de IPCA) e matriz de garantias reais/fianças diretamente das escrituras baixadas em `rf_docs`.
   - Conectar ao MCP `get_bond` para retornar não apenas metadados cadastrais, mas a estrutura completa da dívida.

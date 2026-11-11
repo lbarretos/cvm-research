@@ -43,10 +43,11 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
        encontra a nota exata e já devolve o trecho com cabeçalho (`[Nota X — Titulo]`), `offset` e `pagina` no PDF.
        Use `ref_desde`/`ref_ate` para o período (`'2026-06-30'` = ITR do 2T26) e abra
        com `read_doc(protocolo, offset=<offset>)`, que já cai no trecho com a página correspondente;
-     - `'fria'`: prospectos, escrituras, relatórios de agente fiduciário, laudos, estatutos; `'todas'`: quente e documentos intercalados.
+     - **`'credito'`**: relatórios de agente fiduciário e agências de rating (auditoria de *covenants*, índices contratuais como DL/EBITDA, pedidos de *waiver*, assembleias de debenturistas e notas de rating);
+     - `'fria'`: prospectos, escrituras, laudos, estatutos; `'todas'`: quente e documentos intercalados.
      Prefira-as ao FTS escrito à mão (seção 5) e a `substr(texto_extraido…)`;
      - **Qualidade e degradação de texto**: se o trecho trouxer `[TEXTO DEGRADADO — ver original em <link>]` ou `read_doc` devolver `aviso_qualidade`, alerte o usuário sobre a degradação de OCR/fonte e recomende conferir números críticos no link original;
-  5. **Renda fixa** (debêntures, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)`; `search_bonds(...)` para filtros de mercado; `search_bond_docs(consulta, codigo)` e `read_bond_doc(doc_id, offset)` para escrituras e termos de securitização; ver `references/renda-fixa.md`;
+  5. **Renda fixa** (debêntures, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)`; `search_bonds(...)` para filtros de mercado; `search_bond_docs(consulta, codigo)` e `read_bond_doc(doc_id, offset)` para escrituras, termos de securitização e relatórios de agente fiduciário / agências de rating; ver `references/renda-fixa.md`;
   6. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
   A saída é tabular `{colunas, linhas, aviso?}`; cada resposta cabe em 30 mil caracteres e o `aviso`
   diz quando foi cortada. Se as ferramentas não aparecerem, carregue com `ToolSearch`

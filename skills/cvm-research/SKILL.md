@@ -1,6 +1,6 @@
 ---
 name: cvm-research
-description: Pesquisa em documentos, eventos e demonstrações financeiras de empresas abertas brasileiras (B3/CVM) numa base SQLite local acessada pelo MCP cvm-research. Use esta skill para QUALQUER pergunta sobre fatos relevantes, assembleias (AGO/AGE), atas de conselho, comunicados ao mercado, releases de resultado, dividendos/JCP, insider trading (VLMO), programas de recompra, composição acionária, remuneração de administradores, DRE/balanço/fluxo de caixa (DFP/ITR), série trimestral com 4T, reapresentações de balanço, notas explicativas ou renda fixa (debêntures, CRI, CRA: emissão, garantias, lastro, garantidores, grupo econômico, taxa indicativa ANBIMA). Acione sempre que o usuário citar um ticker brasileiro (PETR4, WEGE3…), um código de debênture/CRI/CRA (RUMOB6, CRA024004SB…), o nome de uma companhia aberta, "CVM", "RAD", "B3", ou pedir para exportar esses dados para Excel, mesmo que não diga "CVM" e mesmo que a empresa ainda não esteja na base (a skill faz o onboarding).
+description: Pesquisa em documentos, eventos e demonstrações financeiras de empresas abertas brasileiras (B3/CVM) numa base SQLite local acessada pelo MCP cvm-research. Use esta skill para QUALQUER pergunta sobre fatos relevantes, assembleias (AGO/AGE), atas de conselho, comunicados ao mercado, releases de resultado, dividendos/JCP, insider trading (VLMO), programas de recompra, composição acionária, remuneração de administradores, DRE/balanço/fluxo de caixa (DFP/ITR), série trimestral com 4T, reapresentações de balanço, notas explicativas ou renda fixa e crédito corporativo (debêntures, CRI, CRA: senioridade, maturity, duration, taxa indicativa ANBIMA, gross-up tributário Lei 12.431 e CRI/CRA, emissão, garantias, lastro, garantidores, grupo econômico, alavancagem financeira e covenants do agente fiduciário). Acione sempre que o usuário citar um ticker brasileiro (PETR4, WEGE3…), um código de debênture/CRI/CRA (RUMOB6, BCBF16, CRA024004SB…), o nome de uma companhia aberta, "CVM", "RAD", "B3", ou pedir para exportar esses dados para Excel, mesmo que não diga "CVM" e mesmo que a empresa ainda não esteja na base (a skill faz o onboarding).
 ---
 
 # CVM Research
@@ -21,7 +21,7 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
     em vez de resolver antes; a subconsulta custa ~1 s, um turno custa ~60 mil tokens.
   - Não chame `list_tables`/`describe_table` para o que esta skill já documenta.
   - Se as ferramentas estiverem adiadas, carregue todas de uma vez (`ToolSearch` com
-    `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc,mcp__cvm-research__resolve_bond,mcp__cvm-research__get_bond,mcp__cvm-research__search_bonds,mcp__cvm-research__search_bond_docs,mcp__cvm-research__read_bond_doc`)
+    `select:mcp__cvm-research__query,mcp__cvm-research__resolve_company,mcp__cvm-research__get_financials,mcp__cvm-research__search_docs,mcp__cvm-research__read_doc,mcp__cvm-research__resolve_bond,mcp__cvm-research__get_bond,mcp__cvm-research__get_credit_summary,mcp__cvm-research__search_bonds,mcp__cvm-research__search_bond_docs,mcp__cvm-research__read_bond_doc`)
     e, se der, já na mensagem que carrega esta skill.
 
   As ferramentas, por tema:
@@ -47,7 +47,7 @@ com texto dos PDFs), VLMO (insiders), Recompra, FRE (capital, acionistas, remune
      - `'fria'`: prospectos, escrituras, laudos, estatutos; `'todas'`: quente e documentos intercalados.
      Prefira-as ao FTS escrito à mão (seção 5) e a `substr(texto_extraido…)`;
      - **Qualidade e degradação de texto**: se o trecho trouxer `[TEXTO DEGRADADO — ver original em <link>]` ou `read_doc` devolver `aviso_qualidade`, alerte o usuário sobre a degradação de OCR/fonte e recomende conferir números críticos no link original;
-  5. **Renda fixa** (debêntures, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)`; `search_bonds(...)` para filtros de mercado; `search_bond_docs(consulta, codigo)` e `read_bond_doc(doc_id, offset)` para escrituras, termos de securitização e relatórios de agente fiduciário / agências de rating; ver `references/renda-fixa.md`;
+  5. **Renda fixa e crédito corporativo** (debêntures, CRI, CRA): `resolve_bond(texto)` → `get_bond(codigo)` (traz metadados cadastrais, garantias, lastro, histórico de taxas e o bloco `analise_credito`); `get_credit_summary(termo)` para resumo holístico imediato por título ou por empresa (senioridade, maturity, duration, PU com ágio/deságio, gross-up tributário da Lei 12.431 e CRI/CRA, alavancagem DL/EBITDA, cobertura de caixa CP e covenants do fiduciário); `search_bonds(...)` para filtros de mercado; `search_bond_docs(consulta, codigo)` e `read_bond_doc(doc_id, offset)` para escrituras, termos de securitização e relatórios de agente fiduciário / agências de rating; ver `references/renda-fixa.md`;
   6. `list_tables()`/`describe_table(nome)` só se faltar saber uma coluna.
   A saída é tabular `{colunas, linhas, aviso?}`; cada resposta cabe em 30 mil caracteres e o `aviso`
   diz quando foi cortada. Se as ferramentas não aparecerem, carregue com `ToolSearch`

@@ -1,24 +1,31 @@
 # Renda fixa: debêntures, CRI e CRA
 
-Módulo da Etapa 8. Ferramentas do MCP: `resolve_bond`, `get_bond`, `search_bonds`, `search_bond_docs`, `read_bond_doc`.
+Módulo da Etapa 8 / Eixo 2. Ferramentas do MCP: `resolve_bond`, `get_bond`, `get_credit_summary`, `search_bonds`, `search_bond_docs`, `read_bond_doc`.
 
 ## Fluxo
 
 1. `resolve_bond('<código, ISIN, CNPJ ou nome>')` → código. Um CNPJ devolve tudo em que a empresa aparece
    (emissora, devedora, fiadora…).
-2. `get_bond('<código>')` → ficha em seções. Leia o `aviso` antes de responder: ele diz quando o PDF não foi lido,
+2. `get_bond('<código>')` → ficha em seções (inclui a seção `analise_credito`). Leia o `aviso` antes de responder: ele diz quando o PDF não foi lido,
    quando falta taxa e quando o grupo não pôde ser calculado.
-3. Para detalhe de cláusula (covenants, vencimento antecipado, cronograma de amortização, condições da garantia):
+3. **Análise Holística de Crédito Corporativo:** `get_credit_summary('<código ou ticker/CNPJ>')`
+   - **Por título:** devolve senioridade jurídica, maturity, duration, PU indicativo, deságio/ágio (% do par), gross-up tributário
+     da Lei 12.431 e CRI/CRA (equivalente CDB bruto a 15% e 22,5% de IR, e taxa líquida PF para tributados), métricas contábeis da devedora
+     (Caixa, Dívida CP/LP, Dívida Líquida, EBITDA U12M, Dívida Líquida / EBITDA, Cobertura Caixa/CP, ICR) e status de covenants do Agente Fiduciário.
+   - **Por empresa:** consolida os fundamentos de crédito da devedora, o perfil de endividamento no mercado de capitais (quantidade de ativos,
+     volume total emitido, indexadores preponderantes e cronograma anual de vencimentos) e os relatórios do fiduciário.
+4. Para detalhe de cláusula (covenants, vencimento antecipado, cronograma de amortização, condições da garantia):
    `search_bond_docs('<termos>', codigo=...)` e `read_bond_doc(doc_id, offset)`. A busca cobre tanto as escrituras
    e termos (em `rf_docs`) quanto os relatórios de agente fiduciário e agências de rating (em `ipe_docs`).
    Para buscar diretamente relatórios de crédito por empresa: `search_docs(consulta='waiver OR covenant', ticker=..., camada='credito')`.
-4. Comparação entre títulos: `search_bonds(tipo, indexador, vence_de, vence_ate, incentivada, grupo_de, so_com_taxa)`.
+5. Comparação entre títulos: `search_bonds(tipo, indexador, vence_de, vence_ate, incentivada, grupo_de, so_com_taxa)`.
 
 ## De onde vem cada dado
 
 | Seção | Fonte | Confiável para |
 |---|---|---|
 | `emissao` | SND (`fonte = 'snd'`, debêntures) ou oferta da CVM (`cvm_oferta`, CRI/CRA) | datas, volume, remuneração, espécie (debênture), Lei 12.431 |
+| `analise_credito` | `rf_ativos` + `rf_taxas` + `vw_balanco` + `vw_dre` + `fato_padronizado` + `ipe_docs` | senioridade, duration, gross-up IR, Dívida Líq/EBITDA, cobertura de caixa CP e covenants |
 | `ofertas` | CVM dados abertos (ritos 400/476 e Resolução 160) | registro, rito, público-alvo, líder; na 160, descrição oficial de garantias, lastro e devedores, agência de rating |
 | `partes` `fonte='cadastro'` | campo publicado (confianca 1) | emissor/securitizadora, devedor (se a CVM informa), agente fiduciário |
 | `partes`/`garantias`/`lastro` `fonte='pdf'` ou `'cvm_oferta'` | regra sobre o texto da escritura/termo ou da descrição da oferta na CVM (confianca 0,6–0,8) | indicar o que o documento diz; **citar `evidencia`** |

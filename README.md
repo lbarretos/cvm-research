@@ -277,6 +277,12 @@ O projeto começou em Supabase/PostgreSQL e migrou para SQLite local em junho de
 serviços). O MCP passou de `mcp-server-sqlite` (npx) para um servidor Python próprio em setembro de 2026.
 Os workflows de GitHub Actions foram removidos: toda a ingestão roda localmente.
 
+**11/11/2026 — Renda Fixa & Análise Holística de Risco de Crédito Corporativo (Eixo 2).**
+- Adição da ferramenta MCP `get_credit_summary(termo)` e enriquecimento de `get_bond` com a seção `analise_credito`.
+- Conexão holística entre métricas do título (senioridade jurídica, maturity, duration, PU com ágio/deságio, gross-up tributário da Lei 12.431 e CRI/CRA para IR 15% e 22,5%) e fundamentos contábeis consolidados da devedora (Caixa, Dívida CP/LP, Dívida Líquida, EBITDA U12M, Alavancagem Dívida Líquida / EBITDA, Cobertura de Caixa CP e Cobertura de Juros ICR).
+- Extração de limites contratuais e auditoria de covenants a partir dos Relatórios Anuais do Agente Fiduciário em `ipe_docs`.
+- Resolução cadastral de 100% dos devedores de CRI/CRA (`rf_devedor_resolucao.py`) e suporte completo a companhias abertas não listadas na B3 e emissoras Categoria B (`CRMU`, `VLIM`, `MRSA3B`, `SALT`, `OBTC3`).
+
 **09/11/2026 — RAG em notas explicativas e busca canônica (Etapa 9).** Preservação de quebra de página
 com `\f`, métricas de qualidade por página (`qualidade` e `texto_qualidade`) e segmentador canônico de
 notas explicativas (`secoes_notas.py`). O MCP `search_docs` agora busca diretamente por seção contábil

@@ -175,6 +175,13 @@ def main():
         sys.exit(1)   # nenhuma fonte leu: o job semanal registra a falha
     print(f"  rf_ativos da rf_watchlist.csv (sem SND): {cadastrar_manuais(conn, ler_manuais())}")
     print(f"  rf_ativos completados pela oferta CVM: {completar_com_ofertas(conn)}")
+    try:
+        from rf_devedor_resolucao import executar_resolucao
+        res, tot = executar_resolucao(conn)
+        if tot:
+            print(f"  devedores de CRI/CRA resolvidos: {res}/{tot}")
+    except Exception as e:
+        print(f"AVISO resolucao de devedores: {e}", file=sys.stderr)
 
     upsert(conn, "rf_partes", partes_de_cadastro(conn), conflict="chave")
 

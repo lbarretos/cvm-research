@@ -125,8 +125,8 @@ Ferramentas: `resolve_company(texto)` (ticker, nome parcial ou CNPJ → até 5 e
 `search_docs(consulta?, ticker?, categorias?, desde?, ate?, k?, camada?, tipos?, ref_desde?, ref_ate?, secao?)` (busca por trecho na camada
 quente do IPE, sem repetição, só versões vigentes; `camada='df'` busca as notas explicativas do DFP/ITR e `'fria'` o resto, por
 documento, com o `offset` do termo e `pagina` para o `read_doc`; `secao='ir_csll'|'subvencoes'|'emprestimos'|...` busca diretamente a nota explicativa canônica), `read_doc(protocolo, ordem?, offset?)` (lê a partir de um trecho ou offset),
-`resolve_bond(texto)` / `get_bond(codigo)` / `search_bonds(…)` / `search_bond_docs(consulta, codigo?)` / `read_bond_doc(doc_id)`
-(renda fixa, ver `rf_ativos`), `list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. A saída é tabular
+`resolve_bond(texto)` / `get_bond(codigo)` / `get_credit_summary(termo)` / `search_bonds(…)` / `search_bond_docs(consulta, codigo?)` / `read_bond_doc(doc_id)`
+(renda fixa e análise holística de crédito, ver `rf_ativos`), `list_tables()` (contagem só nas tabelas; `rows` é null nas views), `describe_table(nome)`. A saída é tabular
 (`{colunas, linhas, aviso?}`), cada resposta cabe em 30 mil caracteres (o excesso é cortado com aviso) e todas abortam em 20 s.
 Setup e troubleshooting: ver `INSTALL.md`. Verificação rápida: *"Quantas linhas tem a tabela ipe_docs?"* deve responder um número acima de 160.000.
 

@@ -56,7 +56,12 @@ if [ ! -x "$PROJECT_DIR/.venv/bin/python" ] || [ ! -f "$PROJECT_DIR/cvm_research
   exit 1
 fi
 
-mkdir -p "$HOME/Library/LaunchAgents" "$PROJECT_DIR/logs"
+mkdir -p "$HOME/Library/LaunchAgents" "$PROJECT_DIR/logs" "$HOME/Library/Logs/cvm-research"
+touch "$HOME/Library/Logs/cvm-research/launchd.out.log" "$HOME/Library/Logs/cvm-research/launchd.err.log"
+
+# Mantém symlinks na pasta logs/ do projeto para retrocompatibilidade
+ln -sf "$HOME/Library/Logs/cvm-research/launchd.out.log" "$PROJECT_DIR/logs/launchd.out.log"
+ln -sf "$HOME/Library/Logs/cvm-research/launchd.err.log" "$PROJECT_DIR/logs/launchd.err.log"
 
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -76,7 +81,7 @@ cat > "$PLIST" <<PLIST
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>HOME</key>
     <string>$HOME</string>
     <key>CVM_DIA_SEMANA</key>
@@ -98,9 +103,9 @@ cat > "$PLIST" <<PLIST
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>$PROJECT_DIR/logs/launchd.out.log</string>
+  <string>$HOME/Library/Logs/cvm-research/launchd.out.log</string>
   <key>StandardErrorPath</key>
-  <string>$PROJECT_DIR/logs/launchd.err.log</string>
+  <string>$HOME/Library/Logs/cvm-research/launchd.err.log</string>
 </dict>
 </plist>
 PLIST

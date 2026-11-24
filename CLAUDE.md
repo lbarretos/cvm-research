@@ -627,6 +627,11 @@ tabelas derivadas ficam desatualizadas em relação à cobertura nova.
 Checar coluna `observacao` no watchlist.csv para linhas com `auto:assumed` e corrigir
 o ticker se necessário antes de rodar `ingest_companies.py`.
 
+## Notificações via Telegram
+Ao finalizar `update_weekly.sh` (sucesso ou falha), o script chama `scripts/notify_telegram.py`.
+Configuração via `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID` no `.env` ou em `~/.telegram_notifier.env`.
+Teste: `python scripts/notify_telegram.py --test`
+
 ## Skill routing
 
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.

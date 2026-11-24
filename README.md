@@ -226,6 +226,23 @@ bash scripts/install_weekly_launchd.sh --status     # estado + último sucesso +
 O job semanal cobre o ano corrente e o anterior. Para refazer o histórico ou mudar a cobertura, rode o
 `bootstrap.sh` de novo. Logs em `logs/update_*.log`, os 12 mais recentes.
 
+### Notificações via Telegram (opcional)
+
+Ao término de cada execução de atualização semanal (sucesso ou falha), uma notificação é enviada para o Telegram.
+
+1. Crie um bot com o [@BotFather](https://t.me/BotFather) e obtenha o **Token**.
+2. Obtenha seu **Chat ID** (ex: via [@userinfobot](https://t.me/userinfobot)).
+3. Configure as credenciais no `.env` do projeto ou globalmente em `~/.telegram_notifier.env`:
+   ```bash
+   TELEGRAM_BOT_TOKEN="123456789:ABCdefGHI..."
+   TELEGRAM_CHAT_ID="12345678"
+   ```
+4. Teste a conexão:
+   ```bash
+   .venv/bin/python scripts/notify_telegram.py --test
+   ```
+*(Caso as variáveis não estejam configuradas, a notificação é ignorada em silêncio sem impactar a rotina de atualização).*
+
 Confira o tratamento a qualquer momento:
 
 ```bash

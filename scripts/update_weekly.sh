@@ -284,7 +284,8 @@ if [ -d "$SHARE_DIR" ]; then
   fi
 fi
 if command -v sqlite3 >/dev/null; then
-  log "Resumo: $(sqlite3 "$DB" "SELECT 'ipe_docs='||COUNT(*)||' com_texto='||SUM(texto_extraido IS NOT NULL)||' max_entrega='||MAX(data_entrega) FROM ipe_docs")"
+  RESUMO=$(sqlite3 "$DB" "SELECT 'ipe_docs='||COUNT(*)||' com_texto='||SUM(texto_extraido IS NOT NULL)||' max_entrega='||MAX(data_entrega) FROM ipe_docs")
+  log "Resumo: $RESUMO"
   # A CVM publica o IPE toda semana: documento mais novo com mais de 9 dias quer
   # dizer que a ingestão não está trazendo nada novo (job parado ou fonte travada).
   DIAS_IPE=$(sqlite3 "$DB" "SELECT CAST(julianday('now') - julianday(MAX(data_entrega)) AS INTEGER) FROM ipe_docs")
@@ -297,13 +298,16 @@ fi
 ls -1t "$LOG_DIR"/update_*.log 2>/dev/null | tail -n +13 | xargs -I{} rm -f "{}"
 
 ELAPSED=$(( $(date +%s) - START ))
+DURACAO="$((ELAPSED/60)) min"
 if [ ${#FAILED[@]} -eq 0 ]; then
   # Vale o início: os ZIPs baixados são os disponíveis naquele momento
   echo "$INICIO $(data_de "$INICIO" '+%F %T')" >"$STAMP_FILE"
   rm -f "$TENTATIVAS_FILE"
-  log "===== Concluído sem erros em $((ELAPSED/60)) min ====="
+  log "===== Concluído sem erros em $DURACAO ====="
+  "$VENV_PY" "$PROJECT_DIR/scripts/notify_telegram.py" --projeto "CVM" --status "sucesso" --duracao "$DURACAO" --detalhes "${RESUMO:-}" 2>/dev/null || true
   exit 0
 else
-  log "===== Concluído com falhas (${FAILED[*]}) em $((ELAPSED/60)) min ====="
+  log "===== Concluído com falhas (${FAILED[*]}) em $DURACAO ====="
+  "$VENV_PY" "$PROJECT_DIR/scripts/notify_telegram.py" --projeto "CVM" --status "falha" --duracao "$DURACAO" --erros "${FAILED[*]}" --detalhes "Ver log recente" --log-file "$LOG_FILE" 2>/dev/null || true
   exit 1
 fi
